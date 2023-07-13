@@ -396,3 +396,4 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+/src/CardboardBox.Manga.Api/Properties/launchSettings.json
