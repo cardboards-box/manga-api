@@ -7,6 +7,12 @@ global using CardboardBox.Setup;
 
 global using HtmlAgilityPack;
 
+global using MangaDexSharp;
+
+global using Microsoft.Extensions.Configuration;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Logging;
+
 global using System.Net;
 
 global using System.Text;
@@ -16,7 +22,3 @@ global using System.Text.RegularExpressions;
 
 global using System.Xml.Serialization;
 global using System.Xml.Linq;
-
-global using Microsoft.Extensions.Configuration;
-global using Microsoft.Extensions.DependencyInjection;
-global using Microsoft.Extensions.Logging;

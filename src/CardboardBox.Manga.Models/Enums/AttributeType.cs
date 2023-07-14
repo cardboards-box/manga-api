@@ -1,7 +1,5 @@
 ﻿namespace CardboardBox.Manga.Models;
 
-using Types;
-
 /// <summary>
 /// Represents the different type of <see cref="DbMangaAttribute"/>s"/>
 /// </summary>

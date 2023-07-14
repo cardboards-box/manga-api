@@ -1,7 +1,5 @@
 ﻿namespace CardboardBox.Manga.Models;
 
-using Tables;
-
 /// <summary>
 /// Represents the state of a manga in the context of a user
 /// </summary>

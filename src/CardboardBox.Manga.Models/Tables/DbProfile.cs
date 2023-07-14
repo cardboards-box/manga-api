@@ -1,4 +1,4 @@
-﻿namespace CardboardBox.Manga.Models.Tables;
+﻿namespace CardboardBox.Manga.Models;
 
 [Table("profiles")]
 public class DbProfile : DbObject

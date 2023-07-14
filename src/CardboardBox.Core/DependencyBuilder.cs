@@ -1,9 +1,11 @@
 ﻿using Dapper;
+using MangaDexSharp;
 using System.Data;
 
 namespace CardboardBox;
 
 using Core;
+using Json;
 
 public interface IDependencyBuilder
 {
@@ -98,7 +100,20 @@ public class DependencyBuilder : IDependencyBuilder
         return AddServices(x => x.AddSingleton(instance));
     }
 
-    public async Task Build(IServiceCollection services, IConfiguration config)
+    public async Task RegisterServices(IServiceCollection services, IConfiguration config)
+    {
+        services
+            .AddJson()
+            .AddCardboardHttp()
+            .AddFileCache()
+            .AddSerilog()
+            .AddMangaDex(string.Empty);
+
+        foreach (var action in _services)
+            await action(services, config);
+    }
+
+    public void RegisterDatabase(IServiceCollection services)
     {
         static async Task ExecuteFiles(IDbConnection con, string extension)
         {
@@ -134,12 +149,12 @@ public class DependencyBuilder : IDependencyBuilder
                  });
 
                 c.AddPostgres<SqlConfig>(a => a.OnInit(con => ExecuteFiles(con, "*.sql")));
-            })
-            .AddCardboardHttp()
-            .AddFileCache()
-            .AddSerilog();
+            });
+    }
 
-        foreach (var action in _services)
-            await action(services, config);
+    public async Task Build(IServiceCollection services, IConfiguration config)
+    {
+        RegisterDatabase(services);
+        await RegisterServices(services, config);
     }
 }

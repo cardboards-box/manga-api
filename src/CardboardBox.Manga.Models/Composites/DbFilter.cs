@@ -1,4 +1,4 @@
-﻿namespace CardboardBox.Manga.Models.Composites;
+﻿namespace CardboardBox.Manga.Models;
 
 [Composite]
 public class DbFilter

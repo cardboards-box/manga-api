@@ -1,17 +1,24 @@
 ﻿namespace CardboardBox;
 
-using Core;
-
 public static class Extensions
 {
-    public static IDependencyBuilder AddCore(this IDependencyBuilder services)
+    public static IEnumerable<T[]> Split<T>(this IEnumerable<T> data, int count)
     {
-        return services
-            .AddServices(c =>
+        var total = (int)Math.Ceiling((decimal)data.Count() / count);
+        var current = new List<T>();
+
+        foreach (var item in data)
+        {
+            current.Add(item);
+
+            if (current.Count == total)
             {
-                c.AddSerilog()
-                 .AddCardboardHttp();
-            });
+                yield return current.ToArray();
+                current.Clear();
+            }
+        }
+
+        if (current.Count > 0) yield return current.ToArray();
     }
 
     public static Task AddCardboardServices(this IServiceCollection services, 
@@ -19,7 +26,6 @@ public static class Extensions
         Action<IDependencyBuilder> configure)
     {
         var bob = new DependencyBuilder();
-        bob.AddCore();
         configure(bob);
         return bob.Build(services, config);
     }

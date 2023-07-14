@@ -1,4 +1,4 @@
-﻿namespace CardboardBox.Manga.Models.Tables;
+﻿namespace CardboardBox.Manga.Models;
 
 [Table("manga_bookmarks")]
 public class DbMangaBookmark : DbObject

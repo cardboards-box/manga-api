@@ -1,6 +1,4 @@
-﻿using CardboardBox.Manga.Models.Tables;
-
-namespace CardboardBox.Manga.Database;
+﻿namespace CardboardBox.Manga.Database;
 
 public interface IMangaExtendedDbService
 {

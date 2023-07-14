@@ -7,13 +7,14 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="CardboardBox.Database" Version="2.0.3" />
-        <PackageReference Include="CardboardBox.Database.Postgres" Version="1.0.0" />
-        <PackageReference Include="CardboardBox.Http" Version="1.0.3" />
-        <PackageReference Include="CardboardBox.Http.Files" Version="1.0.1" />
-        <PackageReference Include="CardboardBox.Http.Html" Version="1.0.1" />
+        <PackageReference Include="CardboardBox.Database" Version="2.0.4" />
+        <PackageReference Include="CardboardBox.Database.Postgres" Version="1.0.1" />
+        <PackageReference Include="CardboardBox.Http" Version="2.0.0" />
+        <PackageReference Include="CardboardBox.Http.Files" Version="2.0.0" />
+        <PackageReference Include="CardboardBox.Http.Html" Version="2.0.0" />
         <PackageReference Include="CardboardBox.Setup" Version="1.0.8" />
         <PackageReference Include="HtmlAgilityPack" Version="1.11.49" />
+        <PackageReference Include="MangaDexSharp" Version="1.0.15" />
     </ItemGroup>
 
     <ItemGroup>

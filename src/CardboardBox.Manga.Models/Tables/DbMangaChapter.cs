@@ -1,6 +1,4 @@
-﻿namespace CardboardBox.Manga.Models.Tables;
-
-using Types;
+﻿namespace CardboardBox.Manga.Models;
 
 [Table("manga_chapter")]
 public class DbMangaChapter : DbObject

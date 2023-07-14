@@ -1,4 +1,4 @@
-﻿namespace CardboardBox.Manga.Models.Types;
+﻿namespace CardboardBox.Manga.Models;
 
 public class DbMangaAttribute
 {

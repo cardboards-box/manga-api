@@ -1,6 +1,4 @@
-﻿namespace CardboardBox.Manga.Models.Composites;
-
-using Tables;
+﻿namespace CardboardBox.Manga.Models;
 
 [CompositeTuple]
 public class MangaExtended

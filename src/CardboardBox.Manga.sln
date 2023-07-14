@@ -5,11 +5,17 @@ VisualStudioVersion = 17.6.33815.320
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CardboardBox.Manga.Api", "CardboardBox.Manga.Api\CardboardBox.Manga.Api.csproj", "{CBC603EA-57A6-4F8D-A0D9-44FE841B8222}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CardboardBox.Core", "CardboardBox.Core\CardboardBox.Core.csproj", "{E44BEBA8-CF56-4C39-88D6-AB5D2E01B815}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CardboardBox.Core", "CardboardBox.Core\CardboardBox.Core.csproj", "{E44BEBA8-CF56-4C39-88D6-AB5D2E01B815}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CardboardBox.Manga.Database", "CardboardBox.Manga.Database\CardboardBox.Manga.Database.csproj", "{10821EAE-DCCB-41FF-863A-7EB913B74ECB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CardboardBox.Manga.Database", "CardboardBox.Manga.Database\CardboardBox.Manga.Database.csproj", "{10821EAE-DCCB-41FF-863A-7EB913B74ECB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CardboardBox.Manga.Models", "CardboardBox.Manga.Models\CardboardBox.Manga.Models.csproj", "{C2C84630-EE58-4D75-8BA6-5458EA0694C3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CardboardBox.Manga.Models", "CardboardBox.Manga.Models\CardboardBox.Manga.Models.csproj", "{C2C84630-EE58-4D75-8BA6-5458EA0694C3}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CardboardBox.Manga.Sources", "CardboardBox.Manga.Sources\CardboardBox.Manga.Sources.csproj", "{6CFC474F-1D77-43A8-A444-B35BEC9D57CA}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CardboardBox.Manga.Tests", "CardboardBox.Manga.Tests\CardboardBox.Manga.Tests.csproj", "{2AC98F49-2D60-4C02-9893-0E7DB9C33F97}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CardboardBox.Manga.ReverseImageSearch", "CardboardBox.Manga.ReverseImageSearch\CardboardBox.Manga.ReverseImageSearch.csproj", "{48263B0E-1FBF-4DA7-BDF7-429F0487E973}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +39,18 @@ Global
 		{C2C84630-EE58-4D75-8BA6-5458EA0694C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C2C84630-EE58-4D75-8BA6-5458EA0694C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C2C84630-EE58-4D75-8BA6-5458EA0694C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6CFC474F-1D77-43A8-A444-B35BEC9D57CA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6CFC474F-1D77-43A8-A444-B35BEC9D57CA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6CFC474F-1D77-43A8-A444-B35BEC9D57CA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6CFC474F-1D77-43A8-A444-B35BEC9D57CA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2AC98F49-2D60-4C02-9893-0E7DB9C33F97}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2AC98F49-2D60-4C02-9893-0E7DB9C33F97}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2AC98F49-2D60-4C02-9893-0E7DB9C33F97}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2AC98F49-2D60-4C02-9893-0E7DB9C33F97}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48263B0E-1FBF-4DA7-BDF7-429F0487E973}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48263B0E-1FBF-4DA7-BDF7-429F0487E973}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48263B0E-1FBF-4DA7-BDF7-429F0487E973}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48263B0E-1FBF-4DA7-BDF7-429F0487E973}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

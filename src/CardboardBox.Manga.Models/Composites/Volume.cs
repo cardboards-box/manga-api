@@ -1,6 +1,6 @@
-﻿namespace CardboardBox.Manga.Models.Composites;
+﻿namespace CardboardBox.Manga.Models;
 
-[CompositeCodeAttribute]
+[CompositeCode]
 public class Volume
 {
     [JsonPropertyName("name")]

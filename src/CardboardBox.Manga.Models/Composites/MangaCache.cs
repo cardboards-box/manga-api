@@ -1,6 +1,4 @@
-﻿namespace CardboardBox.Manga.Models.Composites;
-
-using Tables;
+﻿namespace CardboardBox.Manga.Models;
 
 public record class MangaCache(
     DbMangaCache Manga, 
