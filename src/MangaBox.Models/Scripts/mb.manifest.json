@@ -1,0 +1,22 @@
+{
+  "paths": [
+    "extensions.sql",
+
+    "Types/external_link.sql",
+
+    "Tables/roles.sql",
+    "Tables/profiles.sql",
+    "Tables/logins.sql",
+    "Tables/request_log.sql",
+    "Tables/content_ratings.sql",
+    "Tables/providers.sql",
+    "Tables/images.sql",
+    "Tables/people.sql",
+    "Tables/tags.sql",
+    "Tables/series.sql",
+    "Tables/series_people.sql",
+    "Tables/volumes.sql",
+    "Tables/chapters.sql",
+    "Tables/pages.sql"
+  ]
+}
