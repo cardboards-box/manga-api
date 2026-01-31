@@ -399,3 +399,4 @@ FodyWeavers.xsd
 launchSettings.json
 creds.json
 fcm_creds.json
+image-cache/

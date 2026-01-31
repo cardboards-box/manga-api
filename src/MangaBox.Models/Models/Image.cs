@@ -4,7 +4,7 @@
 /// Represents an image to be resolved from a URL
 /// </summary>
 [Table("mb_images")]
-public class Image : DbObject
+public class Image : Auditable
 {
     /// <summary>
     /// The ID of the provider the image came from
@@ -46,7 +46,7 @@ public class Image : DbObject
     /// The size of the image in bytes (only resolved after the image is fetched)
     /// </summary>
     [Column("bytes")]
-    public int? Bytes { get; set; }
+    public long? Bytes { get; set; }
 
     /// <summary>
     /// The width of the image (only resolved after the image is fetched)

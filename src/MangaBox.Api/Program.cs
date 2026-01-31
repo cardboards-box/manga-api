@@ -38,11 +38,12 @@ builder.Services.AddSwaggerGen(c =>
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
-await builder.Services.AddServices(builder.Configuration, 
-    c =>
-        c.AddCore()
-         .AddDatabase()
-         .AddOAuth());
+await builder.Services.AddServices(builder.Configuration, c => c
+    .AddCore()
+    .AddDatabase()
+    .AddOAuth()
+    .AddProviders()
+    .AddCaching());
 
 var app = builder.Build();
 
@@ -82,6 +83,11 @@ app.UseCors(c =>
      .AllowAnyOrigin()
      .WithExposedHeaders("Content-Disposition");
 });
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseResponseCaching();
+}
 
 app.UseHttpsRedirection();
 app.UseAuthorization();

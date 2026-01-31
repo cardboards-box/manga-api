@@ -45,6 +45,12 @@ public class BaseController(
     }
 
     [NonAction]
+    public IActionResult Do(Boxed boxed)
+    {
+        return StatusCode(boxed.Code, boxed);
+    }
+
+    [NonAction]
     public async Task<IActionResult> Handle<T>(Func<Guid?, Task<Boxed>> action, T? body)
     {
         var start = DateTime.Now;
@@ -73,8 +79,8 @@ public class BaseController(
             StackTrace = exception?.ToString(),
             EndTime = DateTime.Now,
         };
-        result.Id = await _db.RequestLogs.Insert(log);
-        return StatusCode(result.Code, result);
+        result.RequestId = await _db.RequestLogs.Insert(log);
+        return Do(result);
     }
 
     [NonAction]
@@ -114,5 +120,11 @@ public class BaseController(
     public Task<IActionResult> Mods(Func<Guid, Task<Boxed>> action) => Mods(action, (object?)null);
 
     [NonAction]
-    public Task<IActionResult> Mods<T>(Func<Guid, Task<Boxed>> action, T? body) => Roles(action, body, Role.ADMIN, Role.MODERATOR);
+    public Task<IActionResult> Mods<T>(Func<Guid, Task<Boxed>> action, T? body) => Roles(action, body, Role.ADMIN, Role.MODERATOR, Role.AGENT);
+
+    [NonAction]
+    public Task<IActionResult> Bot(Func<Guid, Task<Boxed>> action) => Bot(action, (object?)null);
+
+    [NonAction]
+    public Task<IActionResult> Bot<T>(Func<Guid, Task<Boxed>> action, T? body) => Roles(action, body, Role.ADMIN, Role.AGENT);
 }

@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS mb_tags (
 	explicit BOOLEAN NOT NULL DEFAULT FALSE,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	created_by UUID NOT NULL REFERENCES mb_people(id),
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	deleted_at TIMESTAMP
+	updated_by UUID NOT NULL REFERENCES mb_people(id),
+	deleted_at TIMESTAMP,
+	deleted_by UUID REFERENCES mb_people(id)
 );

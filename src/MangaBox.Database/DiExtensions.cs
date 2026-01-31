@@ -34,7 +34,8 @@ public static class DiExtensions
                 .Enum<PersonRelationship>()
                 .Enum<SeriesStatus>()
                 .Enum<SourceType>()
-                .Enum<TagType>());
+                .Enum<TagType>()
+                .TypeHandler<Guid[], GuidArrayHandler>());
     }
 
     private static IDependencyResolver Add<TInterface, TConcrete, TModel>(this IDependencyResolver resolver)

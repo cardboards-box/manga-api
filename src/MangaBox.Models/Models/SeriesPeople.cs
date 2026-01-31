@@ -4,7 +4,7 @@
 /// Represents the relationship between a series and a person
 /// </summary>
 [Table("mb_series_people")]
-public class SeriesPeople : DbObject
+public class SeriesPeople : Auditable
 {
     /// <summary>
     /// The ID of the <see cref="Series"/> that this person is involved in

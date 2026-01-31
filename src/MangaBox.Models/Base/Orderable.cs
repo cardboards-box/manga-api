@@ -3,7 +3,7 @@
 /// <summary>
 /// Represents an orderable object in the database
 /// </summary>
-public abstract class Orderable : DbObject
+public abstract class Orderable : Auditable
 {
     /// <summary>
     /// The order this item appears

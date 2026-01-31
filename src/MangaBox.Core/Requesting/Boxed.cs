@@ -33,8 +33,8 @@ public class Boxed
     /// <summary>
     /// Request ID (useful for debugging)
     /// </summary>
-    [JsonPropertyName("id")]
-    public Guid Id { get; set; }
+    [JsonPropertyName("requestId")]
+    public Guid RequestId { get; set; }
 
     /// <summary>
     /// The boxed code for the result
@@ -47,6 +47,12 @@ public class Boxed
     /// </summary>
     [JsonPropertyName("code")]
     public int Code { get; set; }
+
+    /// <summary>
+    /// Whether or not the result was successful
+    /// </summary>
+    [JsonIgnore]
+    public bool Success => Code >= 200 && Code < 300;
 
     /// <summary>
     /// Represents the base return result for all API calls
@@ -182,10 +188,11 @@ public class Boxed
     /// Something is missing
     /// </summary>
     /// <param name="resource">The resource that was missing</param>
+    /// <param name="errors">Any other issues that occurred</param>
     /// <returns>The returned error result</returns>
-    public static BoxedError NotFound(string resource)
+    public static BoxedError NotFound(string resource, params string[] errors)
     {
-        return new BoxedError(HttpStatusCode.NotFound, "404 - Something is missing", $"The requested resource '{resource}' was not found");
+        return new BoxedError(HttpStatusCode.NotFound, "404 - Something is missing", [$"The requested resource '{resource}' was not found", ..errors]);
     }
 
     /// <summary>

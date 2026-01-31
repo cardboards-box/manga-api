@@ -16,7 +16,8 @@ WITH roles_base
 (name,			description,								icon,									ordinal) AS (VALUES
 ('Admin',		'User is a system administrator',			'<a:sparkleEyes:1150466426084270223>',	1),
 ('Moderator',	'User is special but not the specialest',	'<a:sip:1150466101323501588>',			2),
-('User',		'A general user of the platform',			'<:meguuutehe:1109943802510184530>',	3))
+('User',		'A general user of the platform',			'<:meguuutehe:1109943802510184530>',	3),
+('Agent',		'User is a queue agent account',			'<a:HuTaoMoneyRain:967965230086885446>',4))
 INSERT INTO mb_roles (name, description, icon, ordinal)
 SELECT s.name, s.description, s.icon, s.ordinal
 FROM roles_base s

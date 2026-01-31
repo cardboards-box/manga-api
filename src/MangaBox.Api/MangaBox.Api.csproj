@@ -16,7 +16,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\MangaBox.Auth\MangaBox.Auth.csproj" />
+		<ProjectReference Include="..\MangaBox.Auth\MangaBox.Auth.csproj" />
+		<ProjectReference Include="..\MangaBox.Caching\MangaBox.Caching.csproj" />
+		<ProjectReference Include="..\MangaBox.Providers\MangaBox.Providers.csproj" />
 	</ItemGroup>
 
 </Project>

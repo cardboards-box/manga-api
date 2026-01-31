@@ -4,7 +4,7 @@
 /// Represents a person who is involved in a series
 /// </summary>
 [Table("mb_people")]
-public class Person : DbObject
+public class Person : Auditable
 {
     /// <summary>
     /// The ID of the provider that this person is from
@@ -36,3 +36,7 @@ public class Person : DbObject
     [Column("type")]
     public required PersonRelationship Type { get; set; }
 }
+
+public record class PersonMap(
+    Person Person,
+    SeriesPeople Relationship);

@@ -4,7 +4,7 @@
 /// Represents a tag for a series
 /// </summary>
 [Table("mb_tags")]
-public class Tag : DbObject
+public class Tag : Auditable
 {
     /// <summary>
     /// The lower case version of the tag name

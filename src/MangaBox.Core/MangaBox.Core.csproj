@@ -8,6 +8,8 @@
 
 	<ItemGroup>
 		<PackageReference Include="CardboardBox.Database.Postgres.Standard" Version="1.0.1" />
+		<PackageReference Include="CardboardBox.Http.Files" Version="2.0.1" />
+		<PackageReference Include="CardboardBox.Http.Html" Version="2.0.1" />
 		<PackageReference Include="CardboardBox.Redis" Version="2.0.4" />
 		<PackageReference Include="MangaDexSharp" Version="1.1.1" />
 		<PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.0" />

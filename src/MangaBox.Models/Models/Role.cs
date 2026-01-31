@@ -22,6 +22,11 @@ public class Role : Orderable
     public const string USER = "User";
 
     /// <summary>
+    /// User is a queue agent account
+    /// </summary>
+    public const string AGENT = "Agent";
+
+    /// <summary>
     /// The unique name of the role
     /// </summary>
     [Column("name", Unique = true)]

@@ -7,7 +7,7 @@ public interface ITagDbService : IOrmMap<Tag>
 
 }
 
-internal class TagDbService(IOrmService orm) : Orm<Tag>(orm), ITagDbService
+internal class TagDbService(IOrmService orm) : CacheOrm<Tag>(orm), ITagDbService
 {
 
 }
