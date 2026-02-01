@@ -1,17 +1,48 @@
-﻿namespace MangaBox;
+﻿using MangaDexSharp;
+using WeebDexSharp;
 
-using Providers;
-using Providers.ThirdParty.MangaDex;
+namespace MangaBox.Providers;
+
+using Sources;
+using Sources.MD;
 
 public static class DiExtensions
 {
-    public static IDependencyResolver AddProviders(this IDependencyResolver resolver)
-    {
-        return resolver
-            .Transient<IImportService, ImportService>()
-            .Transient<ISourceProviderService, SourceProviderService>()
+	private static IServiceCollection AddSource<TService, TImplementation>(this IServiceCollection services)
+		where TService : class, IMangaSource
+		where TImplementation : class, TService
+	{
+		return services
+			.AddTransient<IMangaSource, TImplementation>()
+			.AddTransient<TService, TImplementation>();
+	}
 
-            .Transient<IMangaSource, MangaDexImporter>()
-            .Transient<IMangaDexInteropService, MangaDexInteropService>();
-    }
+	public static IServiceCollection AddSources(this IServiceCollection services)
+	{
+		return services
+			//Register everything MangaDex related
+			.AddMangaDex(c => c.WithApiConfig(userAgent: "mb-api"))
+			.AddTransient<IMangaDexService, MangaDexService>()
+			.AddSource<IMangaDexSource, MangaDexSource>()
+
+			//Register everything WeebDex related
+			.AddWeebDex(c => c.WithCredentialsApiKey(string.Empty, string.Empty))
+			.AddSource<IWeebDexSource, WeebDexSource>()
+
+			//Register everything Comix related
+			.AddTransient<ComixApiService>()
+			.AddSource<IComixSource, ComixSource>()
+
+			//Register other sources
+			.AddSource<IMangakakalotTvSource, MangakakalotTvSource>()
+			.AddSource<IMangakakalotComSource, MangakakalotComSource>()
+			.AddSource<IMangakakalotComAltSource, MangakakalotComAltSource>()
+			.AddSource<IMangaClashSource, MangaClashSource>()
+			.AddSource<INhentaiSource, NhentaiSource>()
+			//.AddSource<IBattwoSource, BattwoSource>()
+			.AddSource<IMangaKatanaSource, MangaKatanaSource>()
+			.AddSource<IDarkScansSource, DarkScansSource>()
+			.AddSource<IChapmanganatoSource, ChapmanganatoSource>()
+			.AddSource<ILikeMangaSource, LikeMangaSource>();
+	}
 }

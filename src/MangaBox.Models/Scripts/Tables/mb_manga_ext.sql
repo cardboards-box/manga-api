@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS mb_manga_ext (
+	id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+	manga_id UUID NOT NULL UNIQUE NULLS NOT DISTINCT REFERENCES mb_manga(id),
+	chapter_count INTEGER NOT NULL,
+	unique_chapter_count INTEGER NOT NULL,
+	last_chapter_ordinal NUMERIC NOT NULL,
+	first_chapter_ordinal NUMERIC NOT NULL,
+	last_chapter_created TIMESTAMP NOT NULL,
+	first_chapter_created TIMESTAMP NOT NULL,
+	last_chapter_id UUID NULL REFERENCES mb_chapters(id),
+	first_chapter_id UUID NULL REFERENCES mb_chapters(id),
+	volume_count INTEGER NOT NULL,
+	days_between_updates NUMERIC NOT NULL,
+	views INTEGER NOT NULL,
+	favorites INTEGER NOT NULL,
+	display_title TEXT NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	deleted_at TIMESTAMP NULL
+);

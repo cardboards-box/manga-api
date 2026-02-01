@@ -400,3 +400,5 @@ launchSettings.json
 creds.json
 fcm_creds.json
 image-cache/
+jwt-key/
+test-env/

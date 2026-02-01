@@ -1,0 +1,113 @@
+﻿namespace MangaBox.Cli.Verbs;
+
+using Database;
+using Models;
+using Models.Composites;
+using Services;
+
+[Verb("test", HelpText = "Run tests.")]
+internal class TestOption
+{
+	[Value(0, Required = true, HelpText = "The test method to run.")]
+	public string Method { get; set; } = string.Empty;
+}
+
+internal class TestVerb(
+	IDbService _db,
+	IMangaLoaderService _loader,
+	ILogger<TestVerb> logger) : BooleanVerb<TestOption>(logger)
+{
+	private static readonly JsonSerializerOptions _options = new()
+	{
+		WriteIndented = true,
+		AllowTrailingCommas = true,
+	};
+
+	public static string Serialize<T>(T item)
+	{
+		return JsonSerializer.Serialize(item, _options);
+	}
+
+	public void PrintDbMethods()
+	{
+		string[] skips =
+		[
+			"Insert",
+			"Update",
+			"Upsert",
+			"Delete",
+			"Create",
+			"Add",
+			"Remove"
+		];
+
+		var output = new List<string>();
+		var services = _db.GetType().GetProperties();
+		foreach (var service in services)
+		{
+			var methods = service.PropertyType.GetMethods();
+			foreach (var method in methods)
+			{
+				if (skips.Contains(method.Name)) continue;
+
+				var parameters = method.GetParameters();
+
+				var name = $"\"{service.Name}.{method.Name}({string.Join(", ", parameters.Select(t => $"{t.ParameterType.Name} {t.Name}"))})\"";
+
+				var pars = new List<string>();
+				foreach (var parameter in parameters)
+				{
+					var value = parameter.ParameterType switch
+					{
+						Type t when t == typeof(string) => "\"value\"",
+						Type t when t == typeof(int) || t == typeof(long) || t == typeof(short) => "1",
+						Type t when t == typeof(Guid) => "Guid.NewGuid()",
+						Type t when t == typeof(Guid[]) => "[Guid.NewGuid()]",
+						Type t when t == typeof(bool) => "true",
+						Type t when t.IsEnum => $"({parameter.ParameterType.Name})0",
+						Type t when t == typeof(DateTime) => "DateTime.UtcNow",
+						Type t when t == typeof(DateTime?) => "DateTime.UtcNow",
+						Type t when t == typeof(CancellationToken) => "CancellationToken.None",
+						_ => "default"
+					};
+					pars.Add(value);
+				}
+
+				var invocation = $"() => _db.{service.Name}.{method.Name}({string.Join(", ", pars)})";
+				output.Add($"({name}, {invocation})");
+			}
+		}
+
+		_logger.LogInformation("Output:\r\n{Output}", string.Join(",\r\n", output));
+	}
+
+	public async Task LoadManga()
+	{
+		const string URL = "https://mangadex.org/title/fc0a7b86-992e-4126-b30f-ca04811979bf/the-unrivaled-mememori-kun";
+		var result = await _loader.Load(null, URL, false);
+		_logger.LogInformation("Result: {Result}", Serialize((Boxed<MangaBoxType<MbManga>>) result));
+	}
+
+	public override async Task<bool> Execute(TestOption options, CancellationToken token)
+	{
+		var methods = GetType().GetMethods();
+		var method = methods.FirstOrDefault(t => t.Name.EqualsIc(options.Method));
+
+		if (method is null)
+		{
+			_logger.LogError("The method {Method} does not exist", options.Method);
+			return false;
+		}
+
+		object[] parameters = method.GetParameters().Length <= 0 ? [] : [token];
+		var result = method.Invoke(this, parameters);
+		if (result is null) { }
+		else if (result is Task task)
+			await task;
+		else if (result is ValueTask vTask)
+			await vTask;
+
+		_logger.LogInformation("Method execution complete");
+		return true;
+	}
+}

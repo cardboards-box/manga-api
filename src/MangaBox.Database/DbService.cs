@@ -1,79 +1,103 @@
-﻿namespace MangaBox;
+﻿namespace MangaBox.Database;
 
-using Database.Services;
+using Services;
 
+/// <summary>
+/// The service for interacting with the database
+/// </summary>
 public interface IDbService
 {
-    IChapterDbService Chapters { get; }
+	/// <summary>
+	/// The service for interacting with the mb_chapters table
+	/// </summary>
+	IMbChapterDbService Chapter { get; }
 
-    IContentRatingDbService ContentRatings { get; }
+	/// <summary>
+	/// The service for interacting with the mb_chapter_progress table
+	/// </summary>
+	IMbChapterProgressDbService ChapterProgress { get; }
 
-    IImageDbService Images { get; }
+	/// <summary>
+	/// The service for interacting with the mb_images table
+	/// </summary>
+	IMbImageDbService Image { get; }
 
-    IPageDbService Pages { get; }
+	/// <summary>
+	/// The service for interacting with the mb_manga table
+	/// </summary>
+	IMbMangaDbService Manga { get; }
 
-    IPersonDbService People { get; }
+	/// <summary>
+	/// The service for interacting with the mb_manga_ext table
+	/// </summary>
+	IMbMangaExtDbService MangaExt { get; }
 
-    IProviderDbService Providers { get; }
+	/// <summary>
+	/// The service for interacting with the mb_manga_progress table
+	/// </summary>
+	IMbMangaProgressDbService MangaProgress { get; }
 
-    ISeriesDbService Series { get; }
+	/// <summary>
+	/// The service for interacting with the mb_manga_relationships table
+	/// </summary>
+	IMbMangaRelationshipDbService MangaRelationship { get; }
 
-    ISeriesPeopleDbService SeriesPeople { get; }
+	/// <summary>
+	/// The service for interacting with the mb_manga_tags table
+	/// </summary>
+	IMbMangaTagDbService MangaTag { get; }
 
-    ITagDbService Tags { get; }
+	/// <summary>
+	/// The service for interacting with the mb_people table
+	/// </summary>
+	IMbPersonDbService Person { get; }
 
-    IVolumeDbService Volumes { get; }
+	/// <summary>
+	/// The service for interacting with the mb_profiles table
+	/// </summary>
+	IMbProfileDbService Profile { get; }
 
-    IRequestLogDbService RequestLogs { get; }
+	/// <summary>
+	/// The service for interacting with the mb_sources table
+	/// </summary>
+	IMbSourceDbService Source { get; }
 
-    IProfileDbService Profiles { get; }
-
-    IRoleDbService Roles { get; }
-
-    ILoginDbService Logins { get; }
+	/// <summary>
+	/// The service for interacting with the mb_tags table
+	/// </summary>
+	IMbTagDbService Tag { get; }
 }
 
-internal class DbService(
-    IChapterDbService chapters,
-    IContentRatingDbService contentRatings,
-    IImageDbService images,
-    IPageDbService pages,
-    IPersonDbService people,
-    IProviderDbService providers,
-    ISeriesDbService series,
-    ISeriesPeopleDbService seriesPeople,
-    ITagDbService tags,
-    IVolumeDbService volumes,
-    IRequestLogDbService requestLog,
-    IProfileDbService profiles,
-    IRoleDbService roles,
-    ILoginDbService logins) : IDbService
+internal class DbService(IServiceProvider _provider) : IDbService
 {
-    public IChapterDbService Chapters => chapters;
+	#region Lazy Loaded Service Caches
+	private IMbChapterDbService? _chapter;
+	private IMbChapterProgressDbService? _chapterProgress;
+	private IMbImageDbService? _image;
+	private IMbMangaDbService? _manga;
+	private IMbMangaExtDbService? _mangaExt;
+	private IMbMangaProgressDbService? _mangaProgress;
+	private IMbMangaRelationshipDbService? _mangaRelationship;
+	private IMbMangaTagDbService? _mangaTag;
+	private IMbPersonDbService? _person;
+	private IMbProfileDbService? _profile;
+	private IMbSourceDbService? _source;
+	private IMbTagDbService? _tag;
+	#endregion
 
-    public IContentRatingDbService ContentRatings => contentRatings;
-
-    public IImageDbService Images => images;
-
-    public IPageDbService Pages => pages;
-
-    public IPersonDbService People => people;
-
-    public IProviderDbService Providers => providers;
-
-    public ISeriesDbService Series => series;
-
-    public ISeriesPeopleDbService SeriesPeople => seriesPeople;
-
-    public ITagDbService Tags => tags;
-
-    public IVolumeDbService Volumes => volumes;
-
-    public IRequestLogDbService RequestLogs => requestLog;
-
-    public IProfileDbService Profiles => profiles;
-
-    public IRoleDbService Roles => roles;
-
-    public ILoginDbService Logins => logins;
+	#region Service Implementations
+	public IMbChapterDbService Chapter => _chapter ??= _provider.GetRequiredService<IMbChapterDbService>();
+	public IMbChapterProgressDbService ChapterProgress => _chapterProgress ??= _provider.GetRequiredService<IMbChapterProgressDbService>();
+	public IMbImageDbService Image => _image ??= _provider.GetRequiredService<IMbImageDbService>();
+	public IMbMangaDbService Manga => _manga ??= _provider.GetRequiredService<IMbMangaDbService>();
+	public IMbMangaExtDbService MangaExt => _mangaExt ??= _provider.GetRequiredService<IMbMangaExtDbService>();
+	public IMbMangaProgressDbService MangaProgress => _mangaProgress ??= _provider.GetRequiredService<IMbMangaProgressDbService>();
+	public IMbMangaRelationshipDbService MangaRelationship => _mangaRelationship ??= _provider.GetRequiredService<IMbMangaRelationshipDbService>();
+	public IMbMangaTagDbService MangaTag => _mangaTag ??= _provider.GetRequiredService<IMbMangaTagDbService>();
+	public IMbPersonDbService Person => _person ??= _provider.GetRequiredService<IMbPersonDbService>();
+	public IMbProfileDbService Profile => _profile ??= _provider.GetRequiredService<IMbProfileDbService>();
+	public IMbSourceDbService Source => _source ??= _provider.GetRequiredService<IMbSourceDbService>();
+	public IMbTagDbService Tag => _tag ??= _provider.GetRequiredService<IMbTagDbService>();
+	#endregion
 }
+

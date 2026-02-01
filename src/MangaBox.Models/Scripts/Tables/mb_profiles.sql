@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS mb_profiles (
+	id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+	username TEXT NOT NULL,
+	avatar TEXT NULL,
+	platform_id TEXT NOT NULL UNIQUE,
+	provider TEXT NOT NULL,
+	provider_id TEXT NOT NULL,
+	settings_blob TEXT NULL,
+	email TEXT NOT NULL,
+	admin BOOLEAN NOT NULL,
+	can_read BOOLEAN NOT NULL,
+	legacy_id INTEGER NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	deleted_at TIMESTAMP NULL
+);

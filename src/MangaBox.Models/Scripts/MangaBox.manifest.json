@@ -1,0 +1,20 @@
+{
+  "paths": [
+    "extensions.sql",
+    "Functions/text_array_join.sql",
+    "Types/mb_attribute.sql",
+    "Functions/attributes_array_join.sql",
+    "Tables/mb_sources.sql",
+    "Tables/mb_profiles.sql",
+    "Tables/mb_tags.sql",
+    "Tables/mb_manga.sql",
+    "Tables/mb_people.sql",
+    "Tables/mb_chapters.sql",
+    "Tables/mb_manga_ext.sql",
+    "Tables/mb_manga_tags.sql",
+    "Tables/mb_manga_progress.sql",
+    "Tables/mb_chapter_progress.sql",
+    "Tables/mb_manga_relationships.sql",
+    "Tables/mb_images.sql"
+  ]
+}

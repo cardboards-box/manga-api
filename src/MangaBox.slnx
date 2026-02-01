@@ -1,0 +1,26 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="../.github/workflows/build-api.yaml" />
+    <File Path="../.github/workflows/build-cli.yaml" />
+    <File Path="../.gitignore" />
+    <File Path="../api.Dockerfile" />
+    <File Path="../cli.Dockerfile" />
+    <File Path="../icon.jpg" />
+    <File Path="../init-env.sh" />
+    <File Path="../LICENSE" />
+    <File Path="../README.md" />
+    <File Path=".editorconfig" />
+    <File Path="global.cs" />
+  </Folder>
+  <Folder Name="/Utilities/">
+    <Project Path="MangaBox.Core/MangaBox.Core.csproj" Id="c3e119c1-5e51-4470-9609-76ec49100ca1" />
+    <Project Path="MangaBox.Database.Generation/MangaBox.Database.Generation.csproj" Id="5a6d5332-7e65-4954-a092-74c3eb66cb4a" />
+    <Project Path="MangaBox.Jwt/MangaBox.Jwt.csproj" Id="ac902022-2bd8-44bc-85c3-74d0eb9c9c20" />
+  </Folder>
+  <Project Path="MangaBox.Api/MangaBox.Api.csproj" />
+  <Project Path="MangaBox.Cli/MangaBox.Cli.csproj" Id="ab43be56-774c-4675-a513-ed2b69f13af3" />
+  <Project Path="MangaBox.Database/MangaBox.Database.csproj" Id="84e1e62a-b9c2-4b61-b073-c0f856d9eb81" />
+  <Project Path="MangaBox.Models/MangaBox.Models.csproj" Id="a6ae4190-433a-47a1-82f2-e706a30fe1b3" />
+  <Project Path="MangaBox.Providers/MangaBox.Providers.csproj" Id="666940c2-dfa6-4df1-984c-8eb7363645c7" />
+  <Project Path="MangaBox.Services/MangaBox.Services.csproj" Id="e7629490-9781-4f0f-9637-d867007b4838" />
+</Solution>
