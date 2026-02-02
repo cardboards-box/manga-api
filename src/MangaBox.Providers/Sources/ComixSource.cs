@@ -15,10 +15,16 @@ internal class ComixSource(
 
 	public string Provider => "comix-to";
 
+	public string? Referer => HomeUrl;
+
+	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+
+	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+
 	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
 	{
 		var chapter = await _api.Chapter(chapterId);
-		if (chapter is null)
+		if (chapter?.Result?.Images is null)
 		{
 			_logger.LogWarning("Chapter not found: {ChapterId}", chapterId);
 			return [];
@@ -69,7 +75,6 @@ internal class ComixSource(
 			Chapters = await GetChapters(manga).OrderBy(t => t.Number).ToListA(),
 			Nsfw = manga.Result.IsNsfw,
 			Attributes = [],
-			Referer = HomeUrl,
 			SourceCreated = DateTimeOffset.FromUnixTimeSeconds(manga.Result.CreatedAt).DateTime,
 			OrdinalVolumeReset = false,
 		};

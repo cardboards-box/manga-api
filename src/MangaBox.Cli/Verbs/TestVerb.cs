@@ -83,40 +83,54 @@ internal class TestVerb(
 
 	public async Task LoadManga()
 	{
-		const bool FORCE = true;
-		const string URL = "https://mangadex.org/title/fc0a7b86-992e-4126-b30f-ca04811979bf/the-unrivaled-mememori-kun";
-		var result = await _loader.Load(null, URL, FORCE);
-		if (result is not Boxed<MangaBoxType<MbManga>> manga)
+		const bool FORCE = false;
+		string[] urls = 
+		[
+			//"https://mangadex.org/title/129c90ca-b997-4789-a748-e8765bc67a65/ichinichi-goto-ni-tsun-ga-hetteku-tsuntsuntsuntsuntsuntsuntsuntsuntsuntsuntsundere-joshi",
+			//"https://mangadex.org/title/fc0a7b86-992e-4126-b30f-ca04811979bf/the-unrivaled-mememori-kun",
+			//"https://weebdex.org/title/b1e1fv77hs",
+			//"https://comix.to/title/772k0-tensei-shitara-ponkotsu-maid-to-yobarete-imashita-zense-no-arekore-wo-mochikomi-wo-yashiki-kaikaku-shimasu",
+			//"https://mangaclash.com/manga/last-boss-yametemita-shujinkou-ni-taosareta-furi-shite-jiyuu-ni-ikitemita",
+			//"https://mangakatana.com/manga/the-great-saints-carefree-journey-to-another-world.27345",
+			"https://www.natomanga.com/manga/the-great-saint-s-carefree-journey-to-another-world",
+			//"https://likemanga.in/manga/i-got-my-wish-and-reincarnated-as-the-villainess-last-boss",
+		];
+
+		await Parallel.ForEachAsync(urls, async (url, token) =>
 		{
-			_logger.LogWarning("Failed to load manga for {URL}: {Result}", URL, Serialize(result));
-			return;
-		}
+			var result = await _loader.Load(null, url, FORCE);
+			if (result is not Boxed<MangaBoxType<MbManga>> manga)
+			{
+				_logger.LogWarning("Failed to load manga for {URL}: {Result}", url, Serialize(result));
+				return;
+			}
 
-		_logger.LogInformation("Result: {Result}", Serialize(manga));
+			_logger.LogInformation("Result: {Result}", Serialize(manga));
 
-		var mid = manga.Data?.Entity.Id;
-		if (!mid.HasValue)
-		{
-			_logger.LogWarning("Manga ID is null for {URL}: {Result}", URL, Serialize(result));
-			return;
-		}
+			var mid = manga.Data?.Entity.Id;
+			if (!mid.HasValue)
+			{
+				_logger.LogWarning("Manga ID is null for {URL}: {Result}", url, Serialize(result));
+				return;
+			}
 
-		var chapters = await _db.Chapter.ByManga(mid.Value);
-		if (chapters.Length == 0)
-		{
-			_logger.LogWarning("No chapters found for manga ID {MangaId}", mid.Value);
-			return;
-		}
+			var chapters = await _db.Chapter.ByManga(mid.Value);
+			if (chapters.Length == 0)
+			{
+				_logger.LogWarning("No chapters found for manga ID {MangaId}", mid.Value);
+				return;
+			}
 
-		_logger.LogInformation("Chapters: {Chapters}", Serialize(chapters));
-		var pages = await _loader.Pages(chapters.First().Id, FORCE);
-		if (pages is not Boxed<MangaBoxType<MbChapter>> fullChapter)
-		{
-			_logger.LogWarning("Failed to load chapter pages for {ChapterId}: {Result}", chapters.First().Id, Serialize(pages));
-			return;
-		}
+			_logger.LogInformation("Chapters: {Chapters}", Serialize(chapters));
+			var pages = await _loader.Pages(chapters.First().Id, FORCE);
+			if (pages is not Boxed<MangaBoxType<MbChapter>> fullChapter)
+			{
+				_logger.LogWarning("Failed to load chapter pages for {ChapterId}: {Result}", chapters.First().Id, Serialize(pages));
+				return;
+			}
 
-		_logger.LogInformation("Pages: {Pages}", Serialize(fullChapter));
+			_logger.LogInformation("Pages: {Pages}", Serialize(fullChapter));
+		});
 	}
 
 	public override async Task<bool> Execute(TestOption options, CancellationToken token)

@@ -35,7 +35,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CardboardBox.Database.Postgres.Standard" Version="1.0.6" />
+		<PackageReference Include="CardboardBox.Database.Postgres.Standard" Version="1.0.7" />
 		<PackageReference Include="CardboardBox.Extensions" Version="2.0.3" />
 		<PackageReference Include="CardboardBox.Redis" Version="2.0.6" />
 		<PackageReference Include="CardboardBox.Setup" Version="2.0.0" />

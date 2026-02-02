@@ -10,6 +10,8 @@ using Services;
 /// </summary>
 public static class DiExtensions
 {
+	private static int _initialized;
+
 	/// <summary>
 	/// Adds the database services
 	/// </summary>
@@ -17,11 +19,19 @@ public static class DiExtensions
 	/// <returns>The resolver fluent method chaining</returns>
 	public static IDependencyResolver AddDatabase(this IDependencyResolver resolver)
 	{
+		if (Interlocked.Exchange(ref _initialized, 1) == 1)
+			return resolver; // already initialized
+
+		DefaultTypeMap.MatchNamesWithUnderscores = true;
+
 		return resolver
+			.SetDefaultConvention(t => t.CaseConvention<NoChangeConvention>())
+			
 			.Transient<IDbService, DbService>()
 			.Transient<IMangaPublishService, MangaPublishService>()
 
 			.AddType<MbAttribute>()
+			.AddType<MbHeader>()
 
 			.Add<IMbTagDbService, MbTagDbService, MbTag>()
 			.Add<IMbImageDbService, MbImageDbService, MbImage>()

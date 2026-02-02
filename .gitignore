@@ -402,3 +402,4 @@ fcm_creds.json
 image-cache/
 jwt-key/
 temp-env/
+file-cache/

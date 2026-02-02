@@ -180,7 +180,7 @@ public class FlareSolverInstance(
 	/// <param name="cache">Whether or not to cache the page</param>
 	/// <returns>The HTML document retrieved from the URL</returns>
 	/// <remarks>This does not use <see cref="LimitCheck(CancellationToken)"/></remarks>
-	public virtual async Task<HtmlDocument> Get(string url, bool cache = false)
+	public virtual async Task<HtmlDocument> GetHtml(string url, bool cache = false)
 	{
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;
@@ -198,7 +198,7 @@ public class FlareSolverInstance(
 	/// <param name="cache">Whether or not to cache the page</param>
 	/// <returns>The HTML document retrieved from the URL</returns>
 	/// <remarks>This does not use <see cref="LimitCheck(CancellationToken)"/></remarks>
-	public virtual async Task<HtmlDocument> Post(string url, NameValueCollection? body = null, bool cache = false)
+	public virtual async Task<HtmlDocument> PostHtml(string url, NameValueCollection? body = null, bool cache = false)
 	{
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;

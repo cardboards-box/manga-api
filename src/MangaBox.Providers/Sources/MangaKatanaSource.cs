@@ -13,12 +13,18 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 
 	public string Provider => "mangakatana";
 
+	public string? Referer => HomeUrl;
+
+	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+
+	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}";
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
@@ -45,7 +51,7 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return null;
 
 		var manga = new Manga
@@ -55,8 +61,7 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 			Provider = Provider,
 			HomePage = url,
 			Cover = doc.Attribute("//div[@class='d-cell-medium media']/div[@class='cover']/img", "src") ?? string.Empty,
-			Description = doc.InnerHtml("//div[@class='summary']/p") ?? string.Empty,
-			Referer = HomeUrl
+			Description = doc.InnerHtml("//div[@class='summary']/p") ?? string.Empty
 		};
 
 		var meta = doc.DocumentNode.SelectNodes("//ul[@class='meta d-table']/li[@class='d-row-small']");

@@ -15,11 +15,17 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 
 	public string Provider => "mangakakalot";
 
+	public string? Referer => null;
+
+	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+
+	public Dictionary<string, string>? Headers => null;
+
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string url)
 	{
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return [];
 
 		return doc
@@ -38,7 +44,7 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return null;
 
 		var manga = new Manga

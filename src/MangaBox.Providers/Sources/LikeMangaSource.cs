@@ -17,11 +17,17 @@ internal class LikeMangaSource(
 
 	public string MangaBaseUri => $"{HomeUrl}/manga/";
 
+	public string? Referer => HomeUrl + "/";
+
+	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+
+	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string url)
 	{
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc is null) return [];
 
 		return Parse(doc, url);
@@ -41,7 +47,7 @@ internal class LikeMangaSource(
 		const string CoverImgXPath = "//div[contains(@class,'summary_image')]//img";
 
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return null;
 
 		var title = SelectText(doc, TitleXPath);
@@ -69,11 +75,10 @@ internal class LikeMangaSource(
 			Cover = imageUrl ?? string.Empty,
 			Description = summary,
 			Tags = genres,
-			Referer = HomeUrl + "/",
 		};
 
 		//https://likemanga.in/manga/i-got-my-wish-and-reincarnated-as-the-villainess-last-boss/ajax/chapters/
-		var chapters = await _api.Post($"{url.TrimEnd('/')}/ajax/chapters/");
+		var chapters = await _api.PostHtml($"{url.TrimEnd('/')}/ajax/chapters/");
 		if (chapters is null)
 		{
 			_logger.LogWarning("Could not get chapters for manga: {url}", url);

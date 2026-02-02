@@ -35,6 +35,13 @@ public interface IMbMangaExtDbService
 	/// <param name="ids">The IDs of the manga to update</param>
 	/// <returns>The updated records</returns>
 	Task<MbMangaExt[]> Update(params Guid[] ids);
+
+    /// <summary>
+    /// Mass updates all extension records
+    /// </summary>
+    /// <returns>The updated records</returns>
+    /// <remarks>USE SPARINGLY</remarks>
+    Task<MbMangaExt[]> MassUpdate();
 }
 
 internal class MbMangaExtDbService(
@@ -47,6 +54,13 @@ internal class MbMangaExtDbService(
         var query = await _cache.Required("update_manga_ext");
         return await Get(query, new { ids });
     }
+
+    public async Task<MbMangaExt[]> MassUpdate()
+    {
+		var query = await _cache.Required("update_manga_ext");
+        query = query.Replace("m.id = ANY( :ids ) AND", "");
+		return await Get(query);
+	}
 
     public async Task<MangaBoxType<MbMangaExt>?> FetchWithRelationships(Guid id)
     {

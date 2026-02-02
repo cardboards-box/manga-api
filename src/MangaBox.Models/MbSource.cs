@@ -1,5 +1,7 @@
 ﻿namespace MangaBox.Models;
 
+using Types;
+
 using static Constants;
 
 /// <summary>
@@ -53,4 +55,11 @@ public class MbSource : MbDbObject, IDbCacheTable
 	[Column("user_agent")]
 	[JsonPropertyName("userAgent")]
 	public string? UserAgent { get; set; }
+
+	/// <summary>
+	/// The headers to attach to any image request
+	/// </summary>
+	[Column("headers"), InnerValid]
+	[JsonPropertyName("headers")]
+	public MbHeader[] Headers { get; set; } = [];
 }

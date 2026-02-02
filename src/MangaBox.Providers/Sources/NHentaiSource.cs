@@ -15,6 +15,12 @@ public class NhentaiSource : INhentaiSource
 
 	public string Provider => "nhentai";
 
+	public string? Referer => HomeUrl;
+
+	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+
+	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+
 	private readonly FlareSolverInstance _api;
 
 	public NhentaiSource(IFlareSolverService _flare)
@@ -38,7 +44,7 @@ public class NhentaiSource : INhentaiSource
 	public async Task<MangaChapterPage[]> ChapterPages(string id, string _)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
@@ -51,14 +57,13 @@ public class NhentaiSource : INhentaiSource
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return null;
 
 		var manga = new Manga
 		{
 			Title = doc.InnerText("//div[@id='info']/h1")?.Trim() ?? "",
 			Id = id,
-			Referer = HomeUrl,
 			Provider = Provider,
 			HomePage = url,
 			Cover = doc.Attribute("//div[@id='cover']/a/img", "src") ?? "",

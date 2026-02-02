@@ -21,6 +21,9 @@ public class MangaDexSource : IMangaDexSource
 	private const string DEFAULT_LANG = "en";
 	public string HomeUrl => "https://mangadex.org";
 	public string Provider => "mangadex";
+	public string? Referer => null;
+	public Dictionary<string, string>? Headers => null;
+	public string? UserAgent => "manga-box";
 
 	private readonly IMangaDexService _mangadex;
 

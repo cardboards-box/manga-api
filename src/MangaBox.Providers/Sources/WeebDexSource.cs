@@ -1,12 +1,11 @@
 ﻿using WeebDexSharp;
 using WeebDexSharp.Models;
-using WeebDexSharp.Models.Types;
 
 namespace MangaBox.Providers.Sources;
 
 using static Services.MangaSource;
 
-using Rating = MangaBox.Models.Types.ContentRating;
+using Rating = Models.Types.ContentRating;
 
 public interface IWeebDexSource : IMangaSource
 {
@@ -20,6 +19,12 @@ internal class WeebDexSource(
 	private const string DEFAULT_LANG = "en";
 	public string HomeUrl => "https://weebdex.org";
 	public string Provider => "weebdex";
+
+	public string? Referer => null;
+
+	public string? UserAgent => "mangabox";
+
+	public Dictionary<string, string>? Headers => null;
 
 	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
 	{

@@ -15,7 +15,7 @@ WITH manga_to_update AS (
         MIN(c.ordinal) as first_chapter_ordinal,
         MAX(c.created_at) as last_chapter_created,
         MIN(c.created_at) as first_chapter_created,
-        COUNT(DISTINCT c.volume) as volume_count
+        COUNT(DISTINCT COALESCE(c.volume, 0)) as volume_count
     FROM mb_chapters c
     JOIN manga_to_update m ON m.id = c.manga_id
     WHERE c.deleted_at IS NULL

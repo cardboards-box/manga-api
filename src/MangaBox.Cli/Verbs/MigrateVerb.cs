@@ -11,6 +11,7 @@ internal class MigrateVerb(
 {
 	public override async Task<bool> Execute(MigrateOptions options, CancellationToken token)
 	{
+		
 		return true;
 	}
 }

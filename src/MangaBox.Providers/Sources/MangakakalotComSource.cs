@@ -13,6 +13,12 @@ public abstract class MangakakalotComBase(
 
 	public abstract string Provider { get; }
 
+	public string? Referer => HomeUrl;
+
+	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+
+	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
@@ -22,7 +28,7 @@ public abstract class MangakakalotComBase(
 
 	public async Task<MangaChapterPage[]> ChapterPages(string url)
 	{
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return [];
 
 		return doc
@@ -37,7 +43,7 @@ public abstract class MangakakalotComBase(
 		try
 		{
 			var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-			var doc = await _api.Get(url);
+			var doc = await _api.GetHtml(url);
 			if (doc == null) return null;
 
 			var title = doc.DocumentNode.SelectSingleNode("//ul[@class=\"manga-info-text\"]/li/h1").InnerText;
@@ -50,7 +56,6 @@ public abstract class MangakakalotComBase(
 				Provider = Provider,
 				HomePage = url,
 				Cover = cover,
-				Referer = HomeUrl
 			};
 
 			var desc = doc.DocumentNode.SelectSingleNode("//div[@id='noidungm']");

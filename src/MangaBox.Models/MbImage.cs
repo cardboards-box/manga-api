@@ -39,25 +39,39 @@ public class MbImage : MbDbObject
 	public int Ordinal { get; set; }
 
 	/// <summary>
+	/// The file name of the image
+	/// </summary>
+	[Column("file_name")]
+	[JsonPropertyName("fileName")]
+	public string? FileName { get; set; }
+
+	/// <summary>
+	/// A hash of the URL
+	/// </summary>
+	[Column("url_hash")]
+	[JsonPropertyName("urlHash")]
+	public string? UrlHash { get; set; }
+
+	/// <summary>
 	/// The width of the image in pixels
 	/// </summary>
-	[Column("width")]
-	[JsonPropertyName("width")]
-	public int? Width { get; set; }
+	[Column("image_width")]
+	[JsonPropertyName("imageWidth")]
+	public int? ImageWidth { get; set; }
 
 	/// <summary>
 	/// The height of the image in pixels
 	/// </summary>
-	[Column("height")]
-	[JsonPropertyName("height")]
-	public int? Height { get; set; }
+	[Column("image_height")]
+	[JsonPropertyName("imageHeight")]
+	public int? ImageHeight { get; set; }
 
 	/// <summary>
 	/// The size of the image in bytes
 	/// </summary>
-	[Column("size")]
-	[JsonPropertyName("size")]
-	public long? Size { get; set; }
+	[Column("image_size")]
+	[JsonPropertyName("imageSize")]
+	public long? ImageSize { get; set; }
 
 	/// <summary>
 	/// The mime-type of the image

@@ -5,21 +5,37 @@ using static Services.MangaSource;
 
 public interface IChapmanganatoSource : IMangaUrlSource { }
 
-public class ChapmanganatoSource(IFlareSolverService _flare) : IChapmanganatoSource
+public class ChapmanganatoSource(
+	IFlareSolverService _flare,
+	ILogger<ChapmanganatoSource> _logger) : IChapmanganatoSource
 {
 	public string HomeUrl => "https://www.natomanga.com";
 
 	public string ChapterBaseUri => $"{HomeUrl}";
 
-	public string MangaBaseUri => $"{HomeUrl}";
+	public string MangaBaseUri => $"{HomeUrl}/manga";
 
 	public string Provider => "chapmanganato";
+
+	public string? Referer => HomeUrl + "/";
+
+	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+
+	public Dictionary<string, string>? Headers => new()
+	{
+		{"Sec-Fetch-Dest", "image"},
+		{"Sec-Fetch-Mode", "no-cors"},
+		{"Sec-Fetch-Site", "cross-site"},
+		{"Sec-Ch-Ua-Platform", "\"Windows\""},
+		{"Sec-Ch-Ua-Mobile", "?0"},
+		{"Sec-Ch-Ua", "\"Not A(Brand\";v=\"99\", \"Opera GX\";v=\"107\", \"Chromium\";v=\"121\""},
+	};
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string url)
 	{
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return [];
 
 		return doc
@@ -62,7 +78,7 @@ public class ChapmanganatoSource(IFlareSolverService _flare) : IChapmanganatoSou
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}/{id}";
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return null;
 
 		var manga = new Manga
@@ -72,7 +88,6 @@ public class ChapmanganatoSource(IFlareSolverService _flare) : IChapmanganatoSou
 			Provider = Provider,
 			HomePage = url,
 			Cover = doc.DocumentNode.SelectSingleNode("//div[@class=\"manga-info-pic\"]/img")?.GetAttributeValue("src", "") ?? "",
-			Referer = MangaBaseUri + "/",
 		};
 
 		FillDetails(manga, doc);
@@ -100,6 +115,11 @@ public class ChapmanganatoSource(IFlareSolverService _flare) : IChapmanganatoSou
 		//}
 
 		var chapterEntries = doc.DocumentNode.SelectNodes("//div[@class='chapter-list']/div[@class='row']/span/a");
+		if (chapterEntries is null)
+		{
+			_logger.LogWarning("No chapters found for manga {MangaId} at {Url}", id, url);
+			return null;
+		}
 
 		int num = chapterEntries.Count;
 		foreach (var chapter in chapterEntries)
@@ -124,14 +144,13 @@ public class ChapmanganatoSource(IFlareSolverService _flare) : IChapmanganatoSou
 
 	public (bool matches, string? part) MatchesProvider(string url)
 	{
-		var matches = url.ToLower().StartsWith(HomeUrl.ToLower());
+		var matches = url.ToLower().StartsWith(MangaBaseUri, StringComparison.InvariantCultureIgnoreCase);
 		if (!matches) return (false, null);
 
-		var parts = url.Remove(0, HomeUrl.Length).Split('/', StringSplitOptions.RemoveEmptyEntries);
+		var parts = url[MangaBaseUri.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
 		if (parts.Length == 0) return (false, null);
 
-		var domain = parts.First();
-		if (domain.StartsWith("manga")) return (true, parts.First());
+		if (parts.Length == 1) return (true, parts.First());
 
 		return (false, null);
 	}

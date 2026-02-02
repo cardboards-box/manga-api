@@ -30,7 +30,6 @@ public static class DiExtensions
 			.AddSources()
 			.AddFlareSolver();
 
-		await services.AddServices(config, c => c
-			.AddDatabase());
+		await services.AddServices(config, c => c.AddDatabase());
 	}
 }

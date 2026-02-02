@@ -25,10 +25,10 @@ manga_in AS (
         NULLIF(j->>'cover','') AS cover_url,
         j->'attributes' AS attributes_json,
         j->'chapters'   AS chapters_json,
-
         COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'authors')), '{}'::text[])   AS author_names,
         COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'artists')), '{}'::text[])   AS artist_names,
-        COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'uploaders')), '{}'::text[]) AS uploader_names
+        COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'uploaders')), '{}'::text[]) AS uploader_names,
+        COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'tags')), '{}'::text[]) AS tag_names
     FROM input
 ),
 
@@ -164,7 +164,21 @@ chapters_upsert AS (
         (xmax = 0) AS is_new
 ),
 
-cover_upsert AS (
+cover_existing AS (
+    SELECT
+        img.id,
+        img.ordinal
+    FROM mb_images img
+    JOIN upsert_manga um ON um.id = img.manga_id
+    JOIN manga_in mi ON TRUE
+    WHERE img.chapter_id IS NULL
+      AND img.manga_id = um.id
+      AND img.url = mi.cover_url
+      AND img.deleted_at IS NULL
+    LIMIT 1
+),
+
+cover_insert AS (
     INSERT INTO mb_images (
         url,
         chapter_id,
@@ -176,16 +190,24 @@ cover_upsert AS (
         mi.cover_url,
         NULL::uuid,
         um.id,
-        1,
+        COALESCE(
+            (
+                SELECT MAX(i2.ordinal) + 1
+                FROM mb_images i2
+                WHERE i2.manga_id = um.id
+                  AND i2.chapter_id IS NULL
+                  AND i2.deleted_at IS NULL
+            ),
+            1
+        ) AS next_ordinal,
         CURRENT_TIMESTAMP
     FROM manga_in mi
     JOIN upsert_manga um ON TRUE
     WHERE mi.cover_url IS NOT NULL
-    ON CONFLICT (chapter_id, manga_id, ordinal)
-    DO UPDATE SET
-        url        = EXCLUDED.url,
-        updated_at = CURRENT_TIMESTAMP
-    RETURNING id
+      AND NOT EXISTS (SELECT 1 FROM cover_existing)
+    ON CONFLICT ON CONSTRAINT mb_images_unique
+    DO NOTHING
+    RETURNING id, ordinal
 ),
 
 people_in AS (
@@ -265,6 +287,55 @@ relationships_upsert AS (
         CURRENT_TIMESTAMP
     FROM relationships_in ri
     ON CONFLICT (manga_id, person_id, type)
+    DO UPDATE SET
+        updated_at = CURRENT_TIMESTAMP
+    RETURNING id
+),
+
+
+tags_in AS (
+    SELECT DISTINCT
+        NULLIF(btrim(t.name), '') AS name
+    FROM manga_in mi
+    CROSS JOIN LATERAL (
+        SELECT unnest(mi.tag_names) AS name
+    ) t
+    WHERE NULLIF(btrim(t.name), '') IS NOT NULL
+),
+
+tags_upsert AS (
+    INSERT INTO mb_tags (
+        name,
+        description,
+        source_id,
+        updated_at
+    )
+    SELECT
+        ti.name,
+        NULL,
+        i.source_id,
+        CURRENT_TIMESTAMP
+    FROM tags_in ti
+    CROSS JOIN input i
+    ON CONFLICT (name)
+    DO UPDATE SET
+        updated_at = CURRENT_TIMESTAMP
+    RETURNING id, name
+),
+
+manga_tags_upsert AS (
+    INSERT INTO mb_manga_tags (
+        manga_id,
+        tag_id,
+        updated_at
+    )
+    SELECT DISTINCT
+        um.id,
+        tu.id,
+        CURRENT_TIMESTAMP
+    FROM upsert_manga um
+    JOIN tags_upsert tu ON TRUE
+    ON CONFLICT ON CONSTRAINT mb_manga_tags_unique
     DO UPDATE SET
         updated_at = CURRENT_TIMESTAMP
     RETURNING id

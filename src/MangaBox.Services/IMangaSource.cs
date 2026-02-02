@@ -19,6 +19,21 @@ public interface IMangaSource
 	string Provider { get; }
 
 	/// <summary>
+	/// The referer to add as a header when making image requests
+	/// </summary>
+	string? Referer { get; }
+
+	/// <summary>
+	/// The user-agent to add when making image requests
+	/// </summary>
+	string? UserAgent { get; }
+
+	/// <summary>
+	/// The headers to add when making image requests
+	/// </summary>
+	public Dictionary<string, string>? Headers { get; }
+
+	/// <summary>
 	/// Whether or not the URL matches the provider
 	/// </summary>
 	/// <param name="url">The URL of the manga</param>

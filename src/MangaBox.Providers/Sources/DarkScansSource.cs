@@ -13,12 +13,18 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 
 	public string Provider => "dark-scans";
 
+	public string? Referer => HomeUrl;
+
+	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+
+	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}/?style=list";
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
@@ -30,7 +36,7 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return null;
 
 		var manga = new Manga
@@ -74,7 +80,7 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 	{
 		//https://dark-scan.com/manga/yuusha-party-o-oida-sareta-kiyou-binbou/ajax/chapters/
 		url += "/ajax/chapters";
-		var doc = await _api.Post(url);
+		var doc = await _api.PostHtml(url);
 		if (doc == null) return new();
 
 		var output = new List<MangaChapter>();

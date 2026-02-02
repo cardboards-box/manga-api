@@ -72,6 +72,16 @@ WHERE
     c.id = :id AND
     c.deleted_at IS NULL AND
     p.deleted_at IS NULL;
+
+SELECT s.*
+FROM mb_sources s
+JOIN mb_manga p ON s.id = p.source_id
+JOIN mb_images c ON p.id = c.manga_id
+WHERE 
+    c.id = :id AND
+    c.deleted_at IS NULL AND
+    p.deleted_at IS NULL AND
+    s.deleted_at IS NULL
 ";
         using var con = await _sql.CreateConnection();
         using var rdr = await con.QueryMultipleAsync(QUERY, new { id });
@@ -82,6 +92,7 @@ WHERE
         var related = new List<MangaBoxRelationship>();
         MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbChapter>());
 		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbManga>());
+        MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbSource>());
 
         return new MangaBoxType<MbImage>(item, [..related]);
     }

@@ -4,6 +4,7 @@ using Database;
 using Models;
 using Models.Composites;
 using Models.Types;
+using System.Web;
 
 /// <summary>
 /// A service for loading manga from various sources
@@ -106,8 +107,8 @@ internal class MangaLoaderService(
 				MangaId = manga.Id,
 				ChapterId = chapter.Id,
 				Ordinal = i + 1,
-				Width = page.Width,
-				Height = page.Height,
+				ImageWidth = page.Width,
+				ImageHeight = page.Height,
 			});
 		}
 
@@ -132,22 +133,52 @@ internal class MangaLoaderService(
 
 	public static void Clean(MangaSource.Manga manga)
 	{
-		manga.Title = manga.Title.Trim();
-		manga.Description = manga.Description?.Trim().ForceNull();
+		static string? Decode(string? text)
+		{
+			if (string.IsNullOrEmpty(text)) return text;
+			return HttpUtility.HtmlDecode(text).Trim('\n');
+		}
+
+		manga.Title = Decode(manga.Title.Trim())!;
+		manga.Description = Decode(manga.Description?.Trim().ForceNull());
 		manga.AltDescriptions = manga.AltDescriptions
-			.Select(d => d.Trim())
+			.Select(d => Decode(d.Trim()))
 			.Where(d => !string.IsNullOrEmpty(d))
 			.Distinct()
-			.ToArray();
+			.ToArray()!;
 		manga.AltTitles = manga.AltTitles
-			.Select(t => t.Trim())
+			.Select(t => Decode(t.Trim()))
 			.Where(t => !string.IsNullOrEmpty(t))
 			.Distinct()
-			.ToArray();
+			.ToArray()!;
+		manga.Artists = manga.Artists
+			.Select(d => Decode(d.Trim()))
+			.Where(d => !string.IsNullOrEmpty(d))
+			.Distinct()
+			.ToArray()!;
+		manga.Authors = manga.Authors
+			.Select(d => Decode(d.Trim()))
+			.Where(d => !string.IsNullOrEmpty(d))
+			.Distinct()
+			.ToArray()!;
+		manga.Tags = manga.Tags
+			.Select(d => Decode(d.Trim()))
+			.Where(d => !string.IsNullOrEmpty(d))
+			.Distinct()
+			.ToArray()!;
+		manga.Uploaders = manga.Uploaders
+			.Select(d => Decode(d.Trim()))
+			.Where(d => !string.IsNullOrEmpty(d))
+			.Distinct()
+			.ToArray()!;
+		manga.Chapters = manga.Chapters
+			.GroupBy(c => c.Id)
+			.Select(g => g.First())
+			.ToList();
 
 		foreach (var chapter in manga.Chapters)
 		{
-			chapter.Title = chapter.Title?.Trim().ForceNull();
+			chapter.Title = Decode(chapter.Title?.Trim().ForceNull());
 			chapter.Langauge = chapter.Langauge?.Trim().ForceNull() ?? "en";
 		}
 	}
@@ -190,8 +221,15 @@ internal class MangaLoaderService(
 					BaseUrl = source.HomeUrl,
 					Enabled = true,
 					IsHidden = false,
+					Referer = source.Referer,
+					UserAgent = source.UserAgent,
+					Headers = source.Headers?.Select(h => new MbHeader
+					{
+						Key = h.Key,
+						Value = h.Value,
+					}).ToArray() ?? [],
 				};
-				match.Id = await _db.Source.Insert(match);
+				match.Id = await _db.Source.Upsert(match);
 			}
 
 			yield return new Source(match, source);

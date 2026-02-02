@@ -10,6 +10,14 @@ public static class PolyfillExtensions
 
 	public const string USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36";
 
+	public static readonly Dictionary<string, string> HEADERS_FOR_REFERS = new()
+	{
+		{"Sec-Fetch-Dest", "document"},
+		{"Sec-Fetch-Mode", "navigate"},
+		{"Sec-Fetch-Site", "cross-site"},
+		{"Sec-Fetch-User", "?1"}
+	};
+
 	public static string Join(this IEnumerable<HtmlNode> nodes, bool checkWs = false)
 	{
 		try

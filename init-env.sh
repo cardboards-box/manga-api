@@ -8,6 +8,7 @@ create_dirs() {
   mkdir -p "./$root_dir/setup"
   mkdir -p "./$root_dir/redis"
   mkdir -p "./$root_dir/postgres"
+  mkdir -p "./$root_dir/file-cache"
 }
 
 create_env() {
@@ -92,9 +93,12 @@ services:
     restart: always
     ports:
       - ${PORT_API}:8080
+    volumes:
+      - ./file-cache:/app/file-cache
     environment:
       - Database:ConnectionString=User ID=${POSTGRES_USERNAME};Password=${POSTGRES_PASSWORD};Host=app-db;Database=${POSTGRES_SCHEMA};
       - Redis:Connection=app-redis,password=${REDIS_PASSWORD}
+      - CacheDirectory=/app/file-cache
     networks:
       - app-network
     depends_on:
@@ -113,7 +117,7 @@ chmod 777 -R "./$root_dir"
 
 cd "./$root_dir"
 
-#docker pull ghcr.io/cardboards-box/manga-api/api:latest
-#docker compose up -d
+docker pull ghcr.io/cardboards-box/manga-api/api:latest
+docker compose up -d
 
 cd ..

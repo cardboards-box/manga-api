@@ -14,6 +14,12 @@ public class BattwoSource : IBattwoSource
 
 	public string Provider => "battwo";
 
+	public string? Referer => HomeUrl;
+
+	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+
+	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+
 	private readonly IApiService _api;
 
 	public BattwoSource(IApiService api)
@@ -49,7 +55,6 @@ public class BattwoSource : IBattwoSource
 			Provider = Provider,
 			HomePage = url,
 			Cover = doc.Attribute("//div[@class='row detail-set']/div[@class='col-24 col-sm-8 col-md-6 attr-cover']/img", "src") ?? "",
-			Referer = HomeUrl,
 			Description = doc.InnerHtml("//div[@id='limit-height-body-summary']/div[@class='limit-html']") ?? "",
 			AltTitles = (doc.InnerText("//div[@class='pb-2 alias-set line-b-f']") ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToArray(),
 		};

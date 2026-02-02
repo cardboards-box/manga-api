@@ -10,5 +10,7 @@ DROP TABLE IF EXISTS mb_manga;
 DROP TABLE IF EXISTS mb_tags;
 DROP TABLE IF EXISTS mb_profiles;
 DROP TABLE IF EXISTS mb_sources;
+DROP FUNCTION IF EXISTS headers_array_join;
+DROP TYPE IF EXISTS mb_headers;
 DROP FUNCTION IF EXISTS attributes_array_join;
 DROP TYPE IF EXISTS mb_attribute;

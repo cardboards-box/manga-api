@@ -2,13 +2,17 @@ using MangaBox.All;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 builder.Configuration.AddUserSecrets<Program>();
 
-builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddControllers()
+	.AddJsonOptions(opts =>
+	{
+		opts.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+		opts.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+	});
 builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 builder.Services
 	.AddAuthMiddleware()
 	.AddTelemetry();
@@ -23,6 +27,11 @@ if (app.Environment.IsDevelopment() ||
 	builder.Configuration[Constants.APPLICATION_NAME + ":EnableSwagger"]?.ToLower() == "true")
 {
 	app.MapOpenApi();
+	app.UseSwagger();
+	app.UseSwaggerUI(c =>
+	{
+		c.SwaggerEndpoint("/swagger/v1/swagger.json", "MangaBox V1");
+	});
 }
 
 app.UseCors(c => c
@@ -38,5 +47,7 @@ app.UseAuthorization();
 
 app.MapPrometheusScrapingEndpoint();
 app.MapControllers();
+
+app.UseResponseCaching();
 
 app.Run();

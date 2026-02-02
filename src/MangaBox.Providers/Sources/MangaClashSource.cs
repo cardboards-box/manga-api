@@ -14,18 +14,24 @@ public class MangaClashSource(
 
 	public string Provider => "mangaclash";
 
+	public string? Referer => null;
+
+	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+
+	public Dictionary<string, string>? Headers => null;
+
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}/";
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
-				.SelectNodes("//div[@class='page-break no-gaps']/img")
+				.SelectNodes("//div[@class='page-break no-gaps']/img")?
 				.Select(t => new MangaChapterPage(t.GetAttributeValue("data-src", "").Trim('\n', '\t', '\r')))
-				.ToArray();
+				.ToArray() ?? [];
 	}
 
 	public static string CleanTitle(string title)
@@ -39,7 +45,7 @@ public class MangaClashSource(
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.Get(url);
+		var doc = await _api.GetHtml(url);
 		if (doc == null) return null;
 
 		var manga = new Manga
@@ -87,7 +93,7 @@ public class MangaClashSource(
 			{
 				Title = name.Trim(),
 				Url = href.Trim(),
-				Id = href.Trim('/').Split('/').Last(),
+				Id = href.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries).Last(),
 				Number = i
 			});
 		}

@@ -14,4 +14,5 @@ return await services
 	.Cli(args, c => c
 		.Add<TestVerb>()
 		.Add<MigrateVerb>()
+		.Add<SetupDbVerb>()
 		.AddDatabaseGeneration());
