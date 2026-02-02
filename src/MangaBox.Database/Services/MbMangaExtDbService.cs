@@ -17,27 +17,6 @@ public interface IMbMangaExtDbService
     Task<MbMangaExt?> Fetch(Guid id);
 
     /// <summary>
-    /// Inserts a record into the mb_manga_ext table
-    /// </summary>
-    /// <param name="item">The item to insert</param>
-    /// <returns>The ID of the inserted record</returns>
-    Task<Guid> Insert(MbMangaExt item);
-
-    /// <summary>
-    /// Updates a record in the mb_manga_ext table
-    /// </summary>
-    /// <param name="item">The record to update</param>
-    /// <returns>The number of records updated</returns>
-    Task<int> Update(MbMangaExt item);
-
-    /// <summary>
-    /// Inserts a record in the mb_manga_ext table if it doesn't exist, otherwise updates it
-    /// </summary>
-    /// <param name="item">The item to update or insert</param>
-    /// <returns>The ID of the inserted/updated record</returns>
-    Task<Guid> Upsert(MbMangaExt item);
-
-    /// <summary>
     /// Gets all of the records from the mb_manga_ext table
     /// </summary>
     /// <returns>All of the records</returns>
@@ -49,11 +28,25 @@ public interface IMbMangaExtDbService
     /// <param name="id">The ID of the record to fetch</param>
     /// <returns>The record and all related records</returns>
     Task<MangaBoxType<MbMangaExt>?> FetchWithRelationships(Guid id);
+
+	/// <summary>
+	/// Update the records for the given IDs
+	/// </summary>
+	/// <param name="ids">The IDs of the manga to update</param>
+	/// <returns>The updated records</returns>
+	Task<MbMangaExt[]> Update(params Guid[] ids);
 }
 
 internal class MbMangaExtDbService(
-    IOrmService orm) : Orm<MbMangaExt>(orm), IMbMangaExtDbService
+    IOrmService orm,
+    IQueryCacheService _cache) : Orm<MbMangaExt>(orm), IMbMangaExtDbService
 {
+
+    public async Task<MbMangaExt[]> Update(params Guid[] ids)
+    {
+        var query = await _cache.Required("update_manga_ext");
+        return await Get(query, new { ids });
+    }
 
     public async Task<MangaBoxType<MbMangaExt>?> FetchWithRelationships(Guid id)
     {

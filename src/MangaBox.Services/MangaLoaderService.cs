@@ -130,7 +130,7 @@ internal class MangaLoaderService(
 		return null;
 	}
 
-	public void Clean(MangaSource.Manga manga)
+	public static void Clean(MangaSource.Manga manga)
 	{
 		manga.Title = manga.Title.Trim();
 		manga.Description = manga.Description?.Trim().ForceNull();
@@ -163,6 +163,8 @@ internal class MangaLoaderService(
 		var result = await _db.Manga.UpsertJson(found.Info.Id, json);
 		if (result is null)
 			return Boxed.Exception("An unknown error occurred while upserting the manga.");
+
+		await _db.MangaExt.Update(result.Manga.Id);
 
 		var manga = await _db.Manga.FetchWithRelationships(result.Manga.Id);
 		if (manga is null)
