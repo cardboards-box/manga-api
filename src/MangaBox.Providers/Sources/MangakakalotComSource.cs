@@ -1,8 +1,11 @@
 ﻿namespace MangaBox.Providers.Sources;
 
+using MangaBox.Utilities.Flare;
 using static Services.MangaSource;
 
-public abstract class MangakakalotComBase : IMangaUrlSource
+public abstract class MangakakalotComBase(
+	IFlareSolverService _flare, 
+	ILogger<MangakakalotComBase> _logger) : IMangaUrlSource
 {
 	public virtual string HomeUrl => "https://mangakakalot.com/";
 
@@ -10,14 +13,7 @@ public abstract class MangakakalotComBase : IMangaUrlSource
 
 	public abstract string Provider { get; }
 
-	private readonly IApiService _api;
-	private readonly ILogger _logger;
-
-	public MangakakalotComBase(IApiService api, ILogger<MangakakalotComBase> logger)
-	{
-		_api = api;
-		_logger = logger;
-	}
+	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
 	{
@@ -26,7 +22,7 @@ public abstract class MangakakalotComBase : IMangaUrlSource
 
 	public async Task<MangaChapterPage[]> ChapterPages(string url)
 	{
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return [];
 
 		return doc
@@ -41,7 +37,7 @@ public abstract class MangakakalotComBase : IMangaUrlSource
 		try
 		{
 			var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-			var doc = await _api.GetHtml(url);
+			var doc = await _api.Get(url);
 			if (doc == null) return null;
 
 			var title = doc.DocumentNode.SelectSingleNode("//ul[@class=\"manga-info-text\"]/li/h1").InnerText;
@@ -119,22 +115,24 @@ public abstract class MangakakalotComBase : IMangaUrlSource
 
 public interface IMangakakalotComSource : IMangaUrlSource { }
 
-public class MangakakalotComSource : MangakakalotComBase, IMangakakalotComSource
+public class MangakakalotComSource(
+	IFlareSolverService api, 
+	ILogger<MangakakalotComSource> logger) 
+	: MangakakalotComBase(api, logger), IMangakakalotComSource
 {
 	public override string MangaBaseUri => $"{HomeUrl}read-";
 
 	public override string Provider => "mangakakalot-com";
-
-	public MangakakalotComSource(IApiService api, ILogger<MangakakalotComSource> logger) : base(api, logger) { }
 }
 
 public interface IMangakakalotComAltSource : IMangaUrlSource { }
 
-public class MangakakalotComAltSource : MangakakalotComBase, IMangakakalotComAltSource
+public class MangakakalotComAltSource(
+	IFlareSolverService api, 
+	ILogger<MangakakalotComSource> logger) 
+	: MangakakalotComBase(api, logger), IMangakakalotComAltSource
 {
 	public override string Provider => "mangakakalot-com-alt";
 
 	public override string MangaBaseUri => $"{HomeUrl}manga/";
-
-	public MangakakalotComAltSource(IApiService api, ILogger<MangakakalotComSource> logger) : base(api, logger) { }
 }

@@ -1,5 +1,7 @@
 ﻿namespace MangaBox.Providers.Sources;
 
+using Utilities.Flare;
+
 using static Services.MangaSource;
 
 public interface INhentaiSource : IMangaSource { }
@@ -13,11 +15,11 @@ public class NhentaiSource : INhentaiSource
 
 	public string Provider => "nhentai";
 
-	private readonly IApiService _api;
+	private readonly FlareSolverInstance _api;
 
-	public NhentaiSource(IApiService api)
+	public NhentaiSource(IFlareSolverService _flare)
 	{
-		_api = api;
+		_api = _flare.Limiter();
 	}
 
 	public string FixPreview(string url)
@@ -36,7 +38,7 @@ public class NhentaiSource : INhentaiSource
 	public async Task<MangaChapterPage[]> ChapterPages(string id, string _)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
@@ -49,7 +51,7 @@ public class NhentaiSource : INhentaiSource
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return null;
 
 		var manga = new Manga

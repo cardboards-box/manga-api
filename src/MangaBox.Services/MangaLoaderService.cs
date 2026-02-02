@@ -26,6 +26,14 @@ public interface IMangaLoaderService
 	/// <param name="mangaId">The ID of the manga to refresh</param>
 	/// <returns>A boxed result of <see cref="MangaBoxType{MbManga}"/></returns>
 	Task<Boxed> Refresh(Guid? profileId, Guid mangaId);
+
+	/// <summary>
+	/// Gets the pages for the given chapter ID
+	/// </summary>
+	/// <param name="chapterId">The ID of the chapter to get pages for</param>
+	/// <param name="force">Whether or not to force the refresh to happen</param>
+	/// <returns>A boxed result of <see cref="MangaBoxType{MbChapter}"/></returns>
+	Task<Boxed> Pages(Guid chapterId, bool force);
 }
 
 internal class MangaLoaderService(
@@ -50,139 +58,120 @@ internal class MangaLoaderService(
 
 		if (!force)
 		{
-			var existing = await _db.Manga.FetchWithRelationships(source.Value.id, source.Value.src.Info.Id);
+			var existing = await _db.Manga.FetchWithRelationships(source.Id, source.Info.Id);
 			if (existing is not null) return Boxed.Ok(existing);
 		}
 
-		return await Load(source.Value.src, source.Value.id, profileId);
+		return await Load(source, profileId);
 	}
 
-	public async Task<(string id, Source src)?> FindSource(string url)
+	public async Task<Boxed> Pages(Guid chapterId, bool force)
+	{
+		var result = await _db.Chapter.FetchWithRelationships(chapterId);
+		var chapter = result?.Entity;
+		if (result is null || chapter is null)
+			return Boxed.NotFound(nameof(MbChapter), "Chapter was not found.");
+
+		if (!force && result.Any<MbImage>())
+			return Boxed.Ok(result);
+
+		var manga = result.GetItem<MbManga>();
+		if (manga is null)
+			return Boxed.NotFound(nameof(MbManga), "Manga was not found for chapter.");
+
+		var source = await FindSource(manga.Url);
+		if (source is null)	
+			return Boxed.NotFound(nameof(MbSource), "Manga source was not found.");
+
+		MangaSource.MangaChapterPage[] pages;
+		if (source.Service is IMangaUrlSource url)
+		{
+			if (string.IsNullOrEmpty(chapter.Url))
+				return Boxed.NotFound(nameof(MbChapter), "Chapter URL is empty.");
+
+			pages = await url.ChapterPages(chapter.Url);
+		}
+		else
+			pages = await source.Service.ChapterPages(manga.OriginalSourceId, chapter.SourceId);
+
+		if (pages.Length == 0)
+			return Boxed.NotFound(nameof(MbChapter), "No pages were found for chapter.");
+
+		for(var i = 0; i < pages.Length; i++)
+		{
+			var page = pages[i];
+			await _db.Image.Upsert(new()
+			{
+				Url = page.Page,
+				MangaId = manga.Id,
+				ChapterId = chapter.Id,
+				Ordinal = i + 1,
+				Width = page.Width,
+				Height = page.Height,
+			});
+		}
+
+		result = await _db.Chapter.FetchWithRelationships(chapterId);
+		if (result is null)
+			return Boxed.NotFound(nameof(MbChapter), "Chapter was not found after updating pages.");
+		return Boxed.Ok(result);
+	}
+
+	public async Task<IdSource?> FindSource(string url)
 	{
 		await foreach(var source in Sources())
 		{
 			var (matches, part) = source.Service.MatchesProvider(url);
 			if (!matches || string.IsNullOrEmpty(part)) continue;
 
-			return (part, source);
+			return new(part, source);
 		}
 
 		return null;
 	}
 
-	public async Task<Boxed> Load(Source src, string id, Guid? profileId)
+	public void Clean(MangaSource.Manga manga)
 	{
-		var before = await src.Service.Manga(id);
-		if (before is null)
-			return Boxed.NotFound(nameof(MbManga), "Could not load manga from source");
+		manga.Title = manga.Title.Trim();
+		manga.Description = manga.Description?.Trim().ForceNull();
+		manga.AltDescriptions = manga.AltDescriptions
+			.Select(d => d.Trim())
+			.Where(d => !string.IsNullOrEmpty(d))
+			.Distinct()
+			.ToArray();
+		manga.AltTitles = manga.AltTitles
+			.Select(t => t.Trim())
+			.Where(t => !string.IsNullOrEmpty(t))
+			.Distinct()
+			.ToArray();
 
-		var now = DateTime.UtcNow.AddMinutes(-1);
-
-		var after = await Convert(before, src.Info, profileId);
-		await LoadChapters(before, after);
-		var manga = await _db.Manga.FetchWithRelationships(after);
-		if (manga is null)
-			return Boxed.Exception("An unknown error occurred while fetching the manga after conversion.");
-
-		if (manga.Entity.CreatedAt > now)
-			await _publish.MangaNew(manga);
-		else
-			await _publish.MangaUpdate(manga);
-
-		var newChapters = await _db.Chapter.Get(manga.Entity.Id, now);
-		foreach(var chapter in newChapters)
-			await _publish.ChapterNew(chapter);
-
-		return Boxed.Ok(manga);
-	}
-
-	public async Task LoadChapters(MangaSource.Manga manga, Guid mangaId, string lang = "en")
-	{
-		foreach(var chapter in manga.Chapters)
+		foreach (var chapter in manga.Chapters)
 		{
-			var chap = new MbChapter
-			{
-				MangaId = mangaId,
-				Title = chapter.Title,
-				Url = chapter.Url,
-				SourceId = chapter.Id,
-				Ordinal = chapter.Number,
-				Volume = chapter.Volume,
-				Language = lang,
-				ExternalUrl = chapter.ExternalUrl,
-				Attributes = [..chapter.Attributes.Select(a => new MbAttribute()
-				{
-					Name = a.Name,
-					Value = a.Value,
-				})],
-			};
-			await _db.Chapter.Upsert(chap);
+			chapter.Title = chapter.Title?.Trim().ForceNull();
+			chapter.Langauge = chapter.Langauge?.Trim().ForceNull() ?? "en";
 		}
 	}
 
-	public async Task<Guid> Convert(MangaSource.Manga manga, MbSource source, Guid? profileId)
+	public async Task<Boxed> Load(IdSource found, Guid? profileId)
 	{
-		var mid = await _db.Manga.Upsert(new()
-		{
-			Title = manga.Title,
-			AltTitles = manga.AltTitles,
-			Description = manga.Description,
-			AltDescriptions = manga.AltDescriptions,
-			Url = manga.HomePage,
-			Attributes = [..manga.Attributes.Select(a => new MbAttribute()
-			{
-				Name = a.Name,
-				Value = a.Value,
-			})],
-			ContentRating = manga.Rating,
-			Nsfw = manga.Nsfw,
-			SourceId = source.Id,
-			OriginalSourceId = manga.Id,
-			IsHidden = false,
-			Referer = manga.Referer,
-			SourceCreated = manga.SourceCreated,
-			OrdinalVolumeReset = manga.OrdinalVolumeReset,
-		});
+		var before = await found.Service.Manga(found.Id);
+		if (before is null)
+			return Boxed.NotFound(nameof(MbManga), "Could not load manga from source");
+		
+		Clean(before);
+		var json = JsonSerializer.Serialize(before);
+		var result = await _db.Manga.UpsertJson(found.Info.Id, json);
+		if (result is null)
+			return Boxed.Exception("An unknown error occurred while upserting the manga.");
 
-		await _db.Image.Upsert(new()
-		{
-			Url = manga.Cover,
-			MangaId = mid,
-			Ordinal = 1
-		});
+		var manga = await _db.Manga.FetchWithRelationships(result.Manga.Id);
+		if (manga is null)
+			return Boxed.Exception("An unknown error occurred while fetching the manga after upsert.");
 
-		await AddRelationship(mid, manga.Authors, null, RelationshipType.Author);
-		await AddRelationship(mid, manga.Artists, null, RelationshipType.Artist);
-		await AddRelationship(mid, manga.Uploaders, null, RelationshipType.Uploader);
-
-		if (!profileId.HasValue) return mid;
-
-		var profile = await _db.Profile.Fetch(profileId.Value);
-		if (profile is  null) return mid;
-
-		await AddRelationship(mid, [profile.Username], profile.Id, RelationshipType.Uploader);
-		return mid;
-	}
-
-	public Task AddRelationship(Guid mangaId, string[] names, Guid? pid, RelationshipType type)
-	{
-		return names.Select(async t =>
-		{
-			var id = await _db.Person.Upsert(new()
-			{
-				Name = t,
-				Artist = type == RelationshipType.Artist,
-				Author = type == RelationshipType.Author,
-				ProfileId = pid,
-				User = pid.HasValue
-			});
-			await _db.MangaRelationship.Upsert(new()
-			{
-				MangaId = mangaId,
-				PersonId = id,
-				Type = type,
-			});
-		}).WhenAll();
+		await (result.MangaIsNew ? _publish.MangaNew(manga) : _publish.MangaUpdate(manga));
+		foreach(var chapter in result.ChaptersNew)
+			await _publish.ChapterNew(chapter);
+		return Boxed.Ok(manga);
 	}
 
 	public async IAsyncEnumerable<Source> Sources()
@@ -208,4 +197,10 @@ internal class MangaLoaderService(
 	}
 
 	internal record class Source(MbSource Info, IMangaSource Service);
+
+	internal record class IdSource(string Id, Source Source)
+	{
+		public MbSource Info => Source.Info;
+		public IMangaSource Service => Source.Service;
+	}
 }

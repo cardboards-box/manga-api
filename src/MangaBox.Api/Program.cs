@@ -1,5 +1,4 @@
-using MangaBox.Database;
-using MangaBox.Jwt;
+using MangaBox.All;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,11 +11,9 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services
 	.AddAuthMiddleware()
-	.AddTelemetry()
-	.AddJwt()
-	.AddCoreServices();
+	.AddTelemetry();
 
-await builder.Services.AddServices(builder.Configuration, c => c.AddDatabase());
+await builder.Services.AddMangaBox(builder.Configuration);
 
 var app = builder.Build();
 

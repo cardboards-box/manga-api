@@ -51,6 +51,13 @@ public interface IMbChapterDbService
 	Task<MbChapter[]> Get(Guid mangaId, DateTime after);
 
     /// <summary>
+    /// Gets all of the chapters for the given manga
+    /// </summary>
+    /// <param name="mangaId">The ID of the manga</param>
+    /// <returns>The chapters</returns>
+    Task<MbChapter[]> ByManga(Guid mangaId);
+
+    /// <summary>
     /// Fetches the record and all related records
     /// </summary>
     /// <param name="id">The ID of the record to fetch</param>
@@ -61,7 +68,15 @@ public interface IMbChapterDbService
 internal class MbChapterDbService(
     IOrmService orm) : Orm<MbChapter>(orm), IMbChapterDbService
 {
-    public async Task<MangaBoxType<MbChapter>?> FetchWithRelationships(Guid id)
+    private string? _byManga;
+
+	public Task<MbChapter[]> ByManga(Guid mangaId)
+	{
+        _byManga ??= Map.Select(t => t.With(a => a.MangaId));
+        return Get(_byManga, new { MangaId = mangaId });
+	}
+
+	public async Task<MangaBoxType<MbChapter>?> FetchWithRelationships(Guid id)
     {
         const string QUERY = @"SELECT * FROM mb_chapters WHERE id = :id AND deleted_at IS NULL;
 SELECT p.* 
@@ -75,8 +90,7 @@ WHERE
 SELECT DISTINCT *
 FROM mb_images 
 WHERE 
-    chapter_id = :id AND 
-    manga_id IS NULL AND
+    chapter_id = :id AND
     deleted_at IS NULL;";
         using var con = await _sql.CreateConnection();
         using var rdr = await con.QueryMultipleAsync(QUERY, new { id });

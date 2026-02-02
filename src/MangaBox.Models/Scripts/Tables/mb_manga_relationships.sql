@@ -6,5 +6,5 @@ CREATE TABLE IF NOT EXISTS mb_manga_relationships (
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	deleted_at TIMESTAMP NULL,
-	CONSTRAINT mb_manga_relationships_unique UNIQUE (manga_id, person_id)
+	CONSTRAINT mb_manga_relationships_unique UNIQUE (manga_id, person_id, type)
 );

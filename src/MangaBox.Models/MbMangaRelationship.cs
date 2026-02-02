@@ -29,7 +29,7 @@ public class MbMangaRelationship : MbDbObject
 	/// <summary>
 	/// The type of relationship between the manga and the person
 	/// </summary>
-	[Column("type")]
+	[Column("type", Unique = true)]
 	[JsonPropertyName("type")]
 	[Required]
 	public RelationshipType Type { get; set; }

@@ -54,7 +54,6 @@ public interface IMbImageDbService
 internal class MbImageDbService(
     IOrmService orm) : Orm<MbImage>(orm), IMbImageDbService
 {
-
     public async Task<MangaBoxType<MbImage>?> FetchWithRelationships(Guid id)
     {
         const string QUERY = @"SELECT * FROM mb_images WHERE id = :id AND deleted_at IS NULL;

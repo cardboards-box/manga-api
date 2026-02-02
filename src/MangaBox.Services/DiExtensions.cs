@@ -6,7 +6,7 @@
 public static class DiExtensions
 {
 	/// <summary>
-	/// Adds the general theuth services
+	/// Adds the general services
 	/// </summary>
 	/// <param name="services">The service collection to add to</param>
 	/// <returns>The service collection for fluent method chaining</returns>

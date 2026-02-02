@@ -65,53 +65,74 @@ public class MangaSource
 	{
 		private bool? _nsfw = null;
 
+		[JsonPropertyName("title")]
 		public string Title { get; set; } = string.Empty;
 
+		[JsonPropertyName("id")]
 		public string Id { get; set; } = string.Empty;
 
+		[JsonPropertyName("provider")]
 		public string Provider { get; set; } = string.Empty;
 
+		[JsonPropertyName("homePage")]
 		public string HomePage { get; set; } = string.Empty;
 
+		[JsonPropertyName("cover")]
 		public string Cover { get; set; } = string.Empty;
 
-		public string Description { get; set; } = string.Empty;
+		[JsonPropertyName("description")]
+		public string? Description { get; set; } = string.Empty;
 
+		[JsonPropertyName("altDescriptions")]
 		public string[] AltDescriptions { get; set; } = [];
 
+		[JsonPropertyName("altTitles")]
 		public string[] AltTitles { get; set; } = [];
 
+		[JsonPropertyName("tags")]
 		public string[] Tags { get; set; } = [];
 
+		[JsonPropertyName("authors")]
 		public string[] Authors { get; set; } = [];
 
+		[JsonPropertyName("artists")]
 		public string[] Artists { get; set; } = [];
 
+		[JsonPropertyName("uploaders")]
 		public string[] Uploaders { get; set; } = [];
 
+		[JsonPropertyName("rating")]
 		public ContentRating Rating { get; set; } = ContentRating.Safe;
 
+		[JsonPropertyName("chapters")]
 		public List<MangaChapter> Chapters { get; set; } = [];
 
+		[JsonPropertyName("nsfw")]
 		public bool Nsfw
 		{
 			get => _nsfw ?? (Rating != ContentRating.Safe);
 			set => _nsfw = value;
 		}
-
+		
+		[JsonPropertyName("attributes")]
 		public List<MangaAttribute> Attributes { get; set; } = [];
-
+		
+		[JsonPropertyName("referer")]
 		public string? Referer { get; set; }
 
+		[JsonPropertyName("sourceCreated")]
 		public DateTime? SourceCreated { get; set; }
 
+		[JsonPropertyName("ordinalVolumeReset")]
 		public bool OrdinalVolumeReset { get; set; } = false;
 	}
 
 	public class MangaAttribute
 	{
+		[JsonPropertyName("name")]
 		public string Name { get; set; } = string.Empty;
 
+		[JsonPropertyName("value")]
 		public string Value { get; set; } = string.Empty;
 
 		public MangaAttribute() { }
@@ -125,18 +146,28 @@ public class MangaSource
 
 	public class MangaChapter
 	{
-		public string Title { get; set; } = string.Empty;
+		[JsonPropertyName("title")]
+		public string? Title { get; set; }
 
+		[JsonPropertyName("url")]
 		public string Url { get; set; } = string.Empty;
 
+		[JsonPropertyName("id")]
 		public string Id { get; set; } = string.Empty;
 
+		[JsonPropertyName("number")]
 		public double Number { get; set; }
 
+		[JsonPropertyName("volume")]
 		public double? Volume { get; set; }
 
+		[JsonPropertyName("externalUrl")]
 		public string? ExternalUrl { get; set; }
 
+		[JsonPropertyName("language")]
+		public string? Langauge { get; set; }
+
+		[JsonPropertyName("attributes")]
 		public List<MangaAttribute> Attributes { get; set; } = [];
 	}
 

@@ -29,7 +29,7 @@ public class MbImage : MbDbObject
 	/// <remarks>If the image is a cover, this will be filled in.</remarks>
 	[Column("manga_id", Unique = true), Fk<MbManga>]
 	[JsonPropertyName("mangaId")]
-	public Guid? MangaId { get; set; }
+	public Guid MangaId { get; set; }
 
 	/// <summary>
 	/// The ordinal position of the image within its chapter or manga

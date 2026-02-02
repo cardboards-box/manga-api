@@ -1,21 +1,14 @@
-﻿using MangaBox.Cli.Verbs;
-using MangaBox.Database;
+﻿using MangaBox.All;
+using MangaBox.Cli.Verbs;
 using MangaBox.Database.Generation;
-using MangaBox.Jwt;
-using MangaBox.Services;
-using MangaBox.Providers;
 
 var services = new ServiceCollection()
 	.AddConfig(c => c
 		.AddFile("appsettings.json")
 		.AddUserSecrets<Program>(), out var config)
-	.AddDatabaseGeneration()
-	.AddJwt()
-	.AddCoreServices()
-	.AddGeneralServices()
-	.AddSources();
+	.AddDatabaseGeneration();
 
-await services.AddServices(config, c => c.AddDatabase());
+await services.AddMangaBox(config);
 
 return await services
 	.Cli(args, c => c

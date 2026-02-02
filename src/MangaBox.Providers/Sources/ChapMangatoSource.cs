@@ -1,10 +1,11 @@
 ﻿namespace MangaBox.Providers.Sources;
 
+using Utilities.Flare;
 using static Services.MangaSource;
 
 public interface IChapmanganatoSource : IMangaUrlSource { }
 
-public class ChapmanganatoSource : IChapmanganatoSource
+public class ChapmanganatoSource(IFlareSolverService _flare) : IChapmanganatoSource
 {
 	public string HomeUrl => "https://www.natomanga.com";
 
@@ -14,16 +15,11 @@ public class ChapmanganatoSource : IChapmanganatoSource
 
 	public string Provider => "chapmanganato";
 
-	private readonly IApiService _api;
-
-	public ChapmanganatoSource(IApiService api)
-	{
-		_api = api;
-	}
+	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string url)
 	{
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return [];
 
 		return doc
@@ -43,7 +39,7 @@ public class ChapmanganatoSource : IChapmanganatoSource
 	{
 		var nodes = doc.DocumentNode
 			.SelectNodes("//ul[@class='manga-info-text']/li")?
-			.ToArray() ?? Array.Empty<HtmlNode>();
+			.ToArray() ?? [];
 		foreach (var node in nodes)
 		{
 			var text = node.InnerText.HTMLDecode().Trim();
@@ -66,7 +62,7 @@ public class ChapmanganatoSource : IChapmanganatoSource
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}/{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return null;
 
 		var manga = new Manga

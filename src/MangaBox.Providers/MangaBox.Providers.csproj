@@ -41,6 +41,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\MangaBox.Services\MangaBox.Services.csproj" />
+	  <ProjectReference Include="..\MangaBox.Utilities.Flare\MangaBox.Utilities.Flare.csproj" />
 	</ItemGroup>
 
 </Project>

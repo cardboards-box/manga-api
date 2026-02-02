@@ -1,10 +1,11 @@
 ﻿namespace MangaBox.Providers.Sources;
 
+using Utilities.Flare;
 using static Services.MangaSource;
 
 public interface IMangaKatanaSource : IMangaSource { }
 
-public class MangaKatanaSource : IMangaKatanaSource
+public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 {
 	public string HomeUrl => "https://mangakatana.com/";
 
@@ -12,17 +13,12 @@ public class MangaKatanaSource : IMangaKatanaSource
 
 	public string Provider => "mangakatana";
 
-	private readonly IApiService _api;
-
-	public MangaKatanaSource(IApiService api)
-	{
-		_api = api;
-	}
+	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
@@ -49,7 +45,7 @@ public class MangaKatanaSource : IMangaKatanaSource
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return null;
 
 		var manga = new Manga

@@ -1,10 +1,12 @@
 ﻿namespace MangaBox.Providers.Sources;
 
+using Utilities.Flare;
 using static Services.MangaSource;
 
 public interface IMangaClashSource : IMangaSource { }
 
-public class MangaClashSource : IMangaClashSource
+public class MangaClashSource(
+	IFlareSolverService _flare) : IMangaClashSource
 {
 	public string HomeUrl => "https://mangaclash.com/";
 
@@ -12,17 +14,12 @@ public class MangaClashSource : IMangaClashSource
 
 	public string Provider => "mangaclash";
 
-	private readonly IApiService _api;
-
-	public MangaClashSource(IApiService api)
-	{
-		_api = api;
-	}
+	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}/";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
@@ -31,15 +28,23 @@ public class MangaClashSource : IMangaClashSource
 				.ToArray();
 	}
 
+	public static string CleanTitle(string title)
+	{
+		return title
+			.Replace("Read", "", StringComparison.InvariantCultureIgnoreCase)
+			.Replace("Manga English [New Chapters] Online Free - ToonClash", "", StringComparison.InvariantCultureIgnoreCase)
+			.Trim();
+	}
+
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return null;
 
 		var manga = new Manga
 		{
-			Title = doc.Attribute("//meta[@property='og:title']", "content") ?? "",
+			Title = CleanTitle(doc.Attribute("//meta[@property='og:title']", "content") ?? ""),
 			Id = id,
 			Provider = Provider,
 			HomePage = url,

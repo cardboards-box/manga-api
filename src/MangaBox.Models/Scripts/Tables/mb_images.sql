@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS mb_images (
 	id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
 	url TEXT NULL,
 	chapter_id UUID NULL REFERENCES mb_chapters(id),
-	manga_id UUID NULL REFERENCES mb_manga(id),
+	manga_id UUID NOT NULL REFERENCES mb_manga(id),
 	ordinal INTEGER NOT NULL,
 	width INTEGER NULL,
 	height INTEGER NULL,

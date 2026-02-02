@@ -1,10 +1,11 @@
 ﻿namespace MangaBox.Providers.Sources;
 
+using MangaBox.Utilities.Flare;
 using static Services.MangaSource;
 
 public interface IDarkScansSource : IMangaSource { }
 
-public class DarkScansSource : IDarkScansSource
+public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 {
 	public string HomeUrl => "https://dark-scan.com/";
 
@@ -12,17 +13,12 @@ public class DarkScansSource : IDarkScansSource
 
 	public string Provider => "dark-scans";
 
-	private readonly IApiService _api;
-
-	public DarkScansSource(IApiService api)
-	{
-		_api = api;
-	}
+	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}/?style=list";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
@@ -34,7 +30,7 @@ public class DarkScansSource : IDarkScansSource
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return null;
 
 		var manga = new Manga
@@ -78,10 +74,7 @@ public class DarkScansSource : IDarkScansSource
 	{
 		//https://dark-scan.com/manga/yuusha-party-o-oida-sareta-kiyou-binbou/ajax/chapters/
 		url += "/ajax/chapters";
-		var doc = await _api.GetHtml(url, c =>
-		{
-			c.Method = HttpMethod.Post;
-		});
+		var doc = await _api.Post(url);
 		if (doc == null) return new();
 
 		var output = new List<MangaChapter>();

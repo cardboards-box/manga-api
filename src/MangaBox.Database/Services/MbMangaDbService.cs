@@ -56,10 +56,19 @@ public interface IMbMangaDbService
     /// <param name="id">The ID of the record to fetch</param>
     /// <returns>The record and all related records</returns>
     Task<MangaBoxType<MbManga>?> FetchWithRelationships(Guid id);
+
+	/// <summary>
+	/// Upserts the import manga JSON data
+	/// </summary>
+	/// <param name="sourceId">The source the manga was loaded from</param>
+	/// <param name="json">The JSON data of the manga to upsert</param>
+	/// <returns>The result of the upsert operation</returns>
+	Task<UpsertResult?> UpsertJson(Guid sourceId, string json);
 }
 
 internal class MbMangaDbService(
-    IOrmService orm) : Orm<MbManga>(orm), IMbMangaDbService
+    IOrmService orm,
+    IQueryCacheService _cache) : Orm<MbManga>(orm), IMbMangaDbService
 {
 	public async Task<MangaBoxType<MbManga>?> FetchWithRelationships(string id, Guid source)
 	{
@@ -195,4 +204,20 @@ WHERE
 
 		return new MangaBoxType<MbManga>(item, [..related]);
     }
+
+    public async Task<UpsertResult?> UpsertJson(Guid sourceId, string json)
+    {
+        var query = await _cache.Required("upsert_manga");
+        using var con = await _sql.CreateConnection();
+        var result = await con.ExecuteScalarAsync<string>(query, new
+        {
+            source_id = sourceId,
+            user_agent = (string?)null,
+            manga_json = json
+        });
+        if (string.IsNullOrEmpty(result))
+            return null;
+
+        return JsonSerializer.Deserialize<UpsertResult>(result);
+	}
 }

@@ -1,10 +1,11 @@
 ﻿namespace MangaBox.Providers.Sources;
 
+using MangaBox.Utilities.Flare;
 using static Services.MangaSource;
 
 public interface IMangakakalotTvSource : IMangaUrlSource { }
 
-public class MangakakalotTvSource : IMangakakalotTvSource
+public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvSource
 {
 	public string HomeUrl => "https://ww4.mangakakalot.tv/";
 
@@ -14,16 +15,11 @@ public class MangakakalotTvSource : IMangakakalotTvSource
 
 	public string Provider => "mangakakalot";
 
-	private readonly IApiService _api;
-
-	public MangakakalotTvSource(IApiService api)
-	{
-		_api = api;
-	}
+	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string url)
 	{
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return [];
 
 		return doc
@@ -42,7 +38,7 @@ public class MangakakalotTvSource : IMangakakalotTvSource
 	public async Task<Manga?> Manga(string id)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.Get(url);
 		if (doc == null) return null;
 
 		var manga = new Manga

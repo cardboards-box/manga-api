@@ -20,7 +20,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\MangaBox.Services\MangaBox.Services.csproj" />
+      <ProjectReference Include="..\MangaBox.All\MangaBox.All.csproj" />
     </ItemGroup>
 
 </Project>

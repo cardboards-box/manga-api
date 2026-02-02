@@ -41,9 +41,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\MangaBox.All\MangaBox.All.csproj" />
 		<ProjectReference Include="..\MangaBox.Database.Generation\MangaBox.Database.Generation.csproj" />
-		<ProjectReference Include="..\MangaBox.Providers\MangaBox.Providers.csproj" />
-		<ProjectReference Include="..\MangaBox.Services\MangaBox.Services.csproj" />
 	</ItemGroup>
 
 </Project>

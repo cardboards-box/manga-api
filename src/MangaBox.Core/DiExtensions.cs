@@ -14,6 +14,8 @@ public static class DiExtensions
 	/// <returns>The service collection for fluent method chaining</returns>
 	public static IServiceCollection AddCoreServices(this IServiceCollection services)
 	{
-		return services.AddRedis();
+		return services
+			.AddRedis()
+			.AddSingleton<IQueryCacheService, QueryCacheService>();
 	}
 }

@@ -83,9 +83,40 @@ internal class TestVerb(
 
 	public async Task LoadManga()
 	{
+		const bool FORCE = true;
 		const string URL = "https://mangadex.org/title/fc0a7b86-992e-4126-b30f-ca04811979bf/the-unrivaled-mememori-kun";
-		var result = await _loader.Load(null, URL, false);
-		_logger.LogInformation("Result: {Result}", Serialize((Boxed<MangaBoxType<MbManga>>) result));
+		var result = await _loader.Load(null, URL, FORCE);
+		if (result is not Boxed<MangaBoxType<MbManga>> manga)
+		{
+			_logger.LogWarning("Failed to load manga for {URL}: {Result}", URL, Serialize(result));
+			return;
+		}
+
+		_logger.LogInformation("Result: {Result}", Serialize(manga));
+
+		var mid = manga.Data?.Entity.Id;
+		if (!mid.HasValue)
+		{
+			_logger.LogWarning("Manga ID is null for {URL}: {Result}", URL, Serialize(result));
+			return;
+		}
+
+		var chapters = await _db.Chapter.ByManga(mid.Value);
+		if (chapters.Length == 0)
+		{
+			_logger.LogWarning("No chapters found for manga ID {MangaId}", mid.Value);
+			return;
+		}
+
+		_logger.LogInformation("Chapters: {Chapters}", Serialize(chapters));
+		var pages = await _loader.Pages(chapters.First().Id, FORCE);
+		if (pages is not Boxed<MangaBoxType<MbChapter>> fullChapter)
+		{
+			_logger.LogWarning("Failed to load chapter pages for {ChapterId}: {Result}", chapters.First().Id, Serialize(pages));
+			return;
+		}
+
+		_logger.LogInformation("Pages: {Pages}", Serialize(fullChapter));
 	}
 
 	public override async Task<bool> Execute(TestOption options, CancellationToken token)

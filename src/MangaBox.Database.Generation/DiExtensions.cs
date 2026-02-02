@@ -20,8 +20,7 @@ public static class DiExtensions
         return services
             .AddSingleton<ICommentsService, CommentsService>()
             .AddTransient<IFileGenerationService, FileGenerationService>()
-            .AddTransient<IDatabaseMetadataService, DatabaseMetadataService>()
-            .AddSingleton<IQueryCacheService, QueryCacheService>();
+            .AddTransient<IDatabaseMetadataService, DatabaseMetadataService>();
     }
 
     /// <summary>
