@@ -91,7 +91,8 @@ SELECT DISTINCT *
 FROM mb_images 
 WHERE 
     chapter_id = :id AND
-    deleted_at IS NULL;";
+    deleted_at IS NULL
+ORDER BY ordinal ASC;";
         using var con = await _sql.CreateConnection();
         using var rdr = await con.QueryMultipleAsync(QUERY, new { id });
 

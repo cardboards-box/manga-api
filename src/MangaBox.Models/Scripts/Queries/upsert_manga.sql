@@ -1,12 +1,9 @@
-WITH
-input AS (
+WITH input AS (
     SELECT
         @source_id::uuid   AS source_id,
         @user_agent::text  AS user_agent,
         @manga_json::jsonb AS j
-),
-
-manga_in AS (
+), manga_in AS (
     SELECT
         NULLIF(j->>'title','') AS title,
         COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'altTitles')), '{}'::text[]) AS alt_titles,
@@ -27,24 +24,16 @@ manga_in AS (
         j->'chapters'   AS chapters_json,
         COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'authors')), '{}'::text[])   AS author_names,
         COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'artists')), '{}'::text[])   AS artist_names,
-        COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'uploaders')), '{}'::text[]) AS uploader_names,
-        COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'tags')), '{}'::text[]) AS tag_names
+        COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'uploaders')), '{}'::text[]) AS uploader_names
     FROM input
-),
-
-manga_attrs AS (
+), manga_attrs AS (
     SELECT
-        COALESCE(
-            ARRAY(
-                SELECT (a.name, a.value)::mb_attribute
-                FROM jsonb_to_recordset(COALESCE((SELECT attributes_json FROM manga_in), '[]'::jsonb))
-                     AS a(name text, value text)
-            ),
-            '{}'::mb_attribute[]
-        ) AS attrs
-),
-
-upsert_manga AS (
+        COALESCE(ARRAY(
+            SELECT (a.name, a.value)::mb_attribute
+            FROM jsonb_to_recordset(COALESCE((SELECT attributes_json FROM manga_in), '[]'::jsonb)) 
+                AS a(name text, value text)
+        ), '{}'::mb_attribute[]) AS attrs
+), upsert_manga AS (
     INSERT INTO mb_manga (
         title,
         alt_titles,
@@ -85,21 +74,17 @@ upsert_manga AS (
     CROSS JOIN input i
     ON CONFLICT (source_id, original_source_id)
     DO UPDATE SET
-        title                = EXCLUDED.title,
-        alt_titles           = EXCLUDED.alt_titles,
-        description          = EXCLUDED.description,
-        alt_descriptions     = EXCLUDED.alt_descriptions,
-        url                  = EXCLUDED.url,
-        attributes           = EXCLUDED.attributes,
-        content_rating       = EXCLUDED.content_rating,
-        nsfw                 = EXCLUDED.nsfw,
-        updated_at           = CURRENT_TIMESTAMP
-    RETURNING
-        mb_manga.*,
-        (xmax = 0) AS is_new
-),
-
-chapters_in AS (
+        title = EXCLUDED.title,
+        alt_titles = EXCLUDED.alt_titles,
+        description = EXCLUDED.description,
+        alt_descriptions = EXCLUDED.alt_descriptions,
+        url = EXCLUDED.url,
+        attributes = EXCLUDED.attributes,
+        content_rating = EXCLUDED.content_rating,
+        nsfw = EXCLUDED.nsfw,
+        updated_at = CURRENT_TIMESTAMP
+    RETURNING mb_manga.*, (xmax = 0) AS is_new
+), chapters_in AS (
     SELECT
         um.id AS manga_id,
         c.*
@@ -115,9 +100,7 @@ chapters_in AS (
         external_url text,
         attributes jsonb
     )
-),
-
-chapters_upsert AS (
+), chapters_upsert AS (
     INSERT INTO mb_chapters (
         manga_id,
         title,
@@ -133,52 +116,44 @@ chapters_upsert AS (
     SELECT
         ci.manga_id,
         NULLIF(ci.title,'') AS title,
-        NULLIF(ci.url,'')   AS url,
-        ci.id               AS source_id,
-        ci.number           AS ordinal,
-        ci.volume           AS volume,
+        NULLIF(ci.url,'') AS url,
+        ci.id AS source_id,
+        ci.number AS ordinal,
+        ci.volume AS volume,
         COALESCE(NULLIF(ci.language,''), 'en') AS language,
         NULLIF(ci.external_url,'') AS external_url,
-        COALESCE(
-            ARRAY(
-                SELECT (a.name, a.value)::mb_attribute
-                FROM jsonb_to_recordset(COALESCE(ci.attributes, '[]'::jsonb))
-                     AS a(name text, value text)
-            ),
-            '{}'::mb_attribute[]
-        ) AS attributes,
+        COALESCE(ARRAY(
+            SELECT (a.name, a.value)::mb_attribute
+            FROM jsonb_to_recordset(COALESCE(ci.attributes, '[]'::jsonb))
+                    AS a(name text, value text)
+        ),'{}'::mb_attribute[]) AS attributes,
         CURRENT_TIMESTAMP
     FROM chapters_in ci
     ON CONFLICT (manga_id, source_id)
     DO UPDATE SET
-        title        = EXCLUDED.title,
-        url          = EXCLUDED.url,
-        ordinal      = EXCLUDED.ordinal,
-        volume       = EXCLUDED.volume,
-        language     = EXCLUDED.language,
+        title = EXCLUDED.title,
+        url = EXCLUDED.url,
+        ordinal = EXCLUDED.ordinal,
+        volume = EXCLUDED.volume,
+        language = EXCLUDED.language,
         external_url = EXCLUDED.external_url,
-        attributes   = EXCLUDED.attributes,
-        updated_at   = CURRENT_TIMESTAMP
-    RETURNING
-        mb_chapters.*,
-        (xmax = 0) AS is_new
-),
-
-cover_existing AS (
+        attributes = EXCLUDED.attributes,
+        updated_at = CURRENT_TIMESTAMP
+    RETURNING mb_chapters.*, (xmax = 0) AS is_new
+), cover_existing AS (
     SELECT
         img.id,
         img.ordinal
     FROM mb_images img
     JOIN upsert_manga um ON um.id = img.manga_id
     JOIN manga_in mi ON TRUE
-    WHERE img.chapter_id IS NULL
-      AND img.manga_id = um.id
-      AND img.url = mi.cover_url
-      AND img.deleted_at IS NULL
+    WHERE 
+        img.chapter_id IS NULL AND 
+        img.manga_id = um.id AND 
+        img.url = mi.cover_url AND 
+        img.deleted_at IS NULL
     LIMIT 1
-),
-
-cover_insert AS (
+), cover_insert AS (
     INSERT INTO mb_images (
         url,
         chapter_id,
@@ -190,42 +165,36 @@ cover_insert AS (
         mi.cover_url,
         NULL::uuid,
         um.id,
-        COALESCE(
-            (
-                SELECT MAX(i2.ordinal) + 1
-                FROM mb_images i2
-                WHERE i2.manga_id = um.id
-                  AND i2.chapter_id IS NULL
-                  AND i2.deleted_at IS NULL
-            ),
-            1
-        ) AS next_ordinal,
+        COALESCE((
+            SELECT MAX(i2.ordinal) + 1
+            FROM mb_images i2
+            WHERE i2.manga_id = um.id
+                AND i2.chapter_id IS NULL
+                AND i2.deleted_at IS NULL
+        ), 1) AS next_ordinal,
         CURRENT_TIMESTAMP
     FROM manga_in mi
     JOIN upsert_manga um ON TRUE
-    WHERE mi.cover_url IS NOT NULL
-      AND NOT EXISTS (SELECT 1 FROM cover_existing)
+    WHERE 
+        mi.cover_url IS NOT NULL AND 
+        NOT EXISTS (SELECT 1 FROM cover_existing)
     ON CONFLICT ON CONSTRAINT mb_images_unique
     DO NOTHING
     RETURNING id, ordinal
-),
-
-people_in AS (
+), people_in AS (
     SELECT DISTINCT
         NULLIF(btrim(p.name), '') AS name,
-        p.rel_type::int           AS rel_type
+        p.rel_type::int AS rel_type
     FROM manga_in mi
     CROSS JOIN LATERAL (
-        SELECT unnest(mi.author_names)   AS name, 0 AS rel_type
+        SELECT unnest(mi.author_names) AS name, 0 AS rel_type
         UNION ALL
-        SELECT unnest(mi.artist_names)   AS name, 1 AS rel_type
+        SELECT unnest(mi.artist_names) AS name, 1 AS rel_type
         UNION ALL
         SELECT unnest(mi.uploader_names) AS name, 2 AS rel_type
     ) p
     WHERE NULLIF(btrim(p.name), '') IS NOT NULL
-),
-
-people_rollup AS (
+), people_rollup AS (
     SELECT
         name,
         bool_or(rel_type = 0) AS is_author,
@@ -233,9 +202,7 @@ people_rollup AS (
         bool_or(rel_type = 2) AS is_user
     FROM people_in
     GROUP BY name
-),
-
-people_upsert AS (
+), people_upsert AS (
     INSERT INTO mb_people (
         name,
         avatar,
@@ -256,24 +223,20 @@ people_upsert AS (
     FROM people_rollup pr
     ON CONFLICT (name)
     DO UPDATE SET
-        artist   = mb_people.artist OR EXCLUDED.artist,
-        author   = mb_people.author OR EXCLUDED.author,
-        is_user  = mb_people.is_user OR EXCLUDED.is_user,
+        artist = mb_people.artist OR EXCLUDED.artist,
+        author = mb_people.author OR EXCLUDED.author,
+        is_user = mb_people.is_user OR EXCLUDED.is_user,
         updated_at = CURRENT_TIMESTAMP
     RETURNING id, name
-),
-
-relationships_in AS (
+), relationships_in AS (
     SELECT
-        um.id        AS manga_id,
-        pu.id        AS person_id,
-        pi.rel_type  AS type
+        um.id AS manga_id,
+        pu.id AS person_id,
+        pi.rel_type AS type
     FROM upsert_manga um
     JOIN people_in pi ON TRUE
     JOIN people_upsert pu ON pu.name = pi.name
-),
-
-relationships_upsert AS (
+), relationships_upsert AS (
     INSERT INTO mb_manga_relationships (
         manga_id,
         person_id,
@@ -290,39 +253,37 @@ relationships_upsert AS (
     DO UPDATE SET
         updated_at = CURRENT_TIMESTAMP
     RETURNING id
-),
-
-
-tags_in AS (
+), tags_in AS (
     SELECT DISTINCT
-        NULLIF(btrim(t.name), '') AS name
-    FROM manga_in mi
-    CROSS JOIN LATERAL (
-        SELECT unnest(mi.tag_names) AS name
-    ) t
-    WHERE NULLIF(btrim(t.name), '') IS NOT NULL
+        NULLIF(t.name, '') AS name,
+        NULLIF(t.slug, '') AS slug
+    FROM input i
+    CROSS JOIN LATERAL jsonb_to_recordset(COALESCE(i.j->'tags', '[]'::jsonb))
+        AS t(name text, slug text)
+    WHERE NULLIF(t.slug, '') IS NOT NULL
 ),
-
 tags_upsert AS (
     INSERT INTO mb_tags (
         name,
+        slug,
         description,
         source_id,
         updated_at
     )
     SELECT
         ti.name,
+        ti.slug,
         NULL,
         i.source_id,
         CURRENT_TIMESTAMP
     FROM tags_in ti
     CROSS JOIN input i
-    ON CONFLICT (name)
+    ON CONFLICT (slug)
     DO UPDATE SET
+        name = COALESCE(EXCLUDED.name, mb_tags.name),
         updated_at = CURRENT_TIMESTAMP
-    RETURNING id, name
+    RETURNING id, slug
 ),
-
 manga_tags_upsert AS (
     INSERT INTO mb_manga_tags (
         manga_id,
@@ -339,9 +300,7 @@ manga_tags_upsert AS (
     DO UPDATE SET
         updated_at = CURRENT_TIMESTAMP
     RETURNING id
-),
-
-manga_json AS (
+), manga_json AS (
     SELECT jsonb_build_object(
         'legacyId', um.legacy_id,
         'id', um.id,
@@ -372,9 +331,7 @@ manga_json AS (
     ) AS j,
     um.is_new AS is_new
     FROM upsert_manga um
-),
-
-chapters_json AS (
+), chapters_json AS (
     SELECT
         cu.is_new,
         jsonb_build_object(
@@ -400,9 +357,7 @@ chapters_json AS (
             )
         ) AS j
     FROM chapters_upsert cu
-)
-
-SELECT jsonb_build_object(
+) SELECT jsonb_build_object(
     'manga', (SELECT j FROM manga_json),
     'chaptersUpdated', COALESCE(
         (SELECT jsonb_agg(j ORDER BY (j->>'sourceId'))

@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.OpenApi;
 using OpenTelemetry.Metrics;
-using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using static System.Net.Mime.MediaTypeNames;
 
 namespace MangaBox.Api.Middleware;
@@ -31,6 +32,38 @@ internal static class Extensions
 						]
 					});
 			});
+
+		return services;
+	}
+
+	/// <summary>
+	/// Adds the swagger services to the application
+	/// </summary>
+	/// <param name="services">The service collection</param>
+	/// <returns>The service collection for fluent method chaining</returns>
+	public static IServiceCollection AddCustomSwaggerGen(this IServiceCollection services)
+	{
+		services.AddSwaggerGen(c =>
+		{
+			const string SCHEMA = "bearer";
+			c.AddSecurityDefinition(SCHEMA, new OpenApiSecurityScheme()
+			{
+				Name = "Authorization",
+				Type = SecuritySchemeType.Http,
+				Scheme = SCHEMA,
+				BearerFormat = "JWT",
+				In = ParameterLocation.Header,
+				Description = "JWT Authorization header using the Bearer scheme."
+			});
+			c.AddSecurityRequirement(c => new()
+			{
+				[new OpenApiSecuritySchemeReference(SCHEMA, c)] = []
+			});
+
+			var commentFiles = Directory.GetFiles(AppContext.BaseDirectory, "*.xml", SearchOption.TopDirectoryOnly);
+			foreach (var file in commentFiles)
+				c.IncludeXmlComments(file, file.Contains(".Api"));
+		});
 
 		return services;
 	}
@@ -103,7 +136,7 @@ internal static class Extensions
 	/// <returns>The ID of the user (or null if it's invalid or doesn't exist)</returns>
 	public static Guid? GetProfileId(this BaseController controller)
 	{
-		var id = controller.User?.FindFirst(JwtRegisteredClaimNames.NameId)?.Value;
+		var id = controller.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 		return !string.IsNullOrEmpty(id) && Guid.TryParse(id, out var iid) ? iid : null;
 	}
 }

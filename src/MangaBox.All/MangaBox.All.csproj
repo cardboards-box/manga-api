@@ -7,8 +7,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\MangaBox.Jwt\MangaBox.Jwt.csproj" />
         <ProjectReference Include="..\MangaBox.Providers\MangaBox.Providers.csproj" />
+        <ProjectReference Include="..\MangaBox.Utilities.Auth\MangaBox.Utilities.Auth.csproj" />
         <ProjectReference Include="..\MangaBox.Utilities.Flare\MangaBox.Utilities.Flare.csproj" />
     </ItemGroup>
 

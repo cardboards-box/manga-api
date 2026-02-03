@@ -11,7 +11,7 @@ public class MetaDataController(
 	/// Gets the metadata for the <see cref="ContentRating"/> enum
 	/// </summary>
 	/// <returns>All of the enum descriptions</returns>
-	[HttpGet, Route("metadata/content-ratings")]
+	[HttpGet, Route("metadata/content-rating")]
 	[ProducesArray<EnumDescription>]
 	public Task<IActionResult> GetContentRatings() => Box(() =>
 	{
@@ -23,7 +23,7 @@ public class MetaDataController(
 	/// Gets the metadata for the <see cref="RelationshipType"/> enum
 	/// </summary>
 	/// <returns>All of the enum descriptions</returns>
-	[HttpGet, Route("metadata/relationship-types")]
+	[HttpGet, Route("metadata/relationship-type")]
 	[ProducesArray<EnumDescription>]
 	public Task<IActionResult> GetRelationshipTypes() => Box(() =>
 	{
@@ -32,14 +32,50 @@ public class MetaDataController(
 	});
 
 	/// <summary>
+	/// Gets the metadata for the <see cref="MangaOrderBy"/> enum
+	/// </summary>
+	/// <returns>All of the enum descriptions</returns>
+	[HttpGet, Route("metadata/manga-order-by")]
+	[ProducesArray<EnumDescription>]
+	public Task<IActionResult> GetMangaOrders() => Box(() =>
+	{
+		var values = MangaOrderBy.MangaCreatedAt.Describe(false, false);
+		return Boxed.Ok(values);
+	});
+
+	/// <summary>
+	/// Gets the metadata for the <see cref="MangaState"/> enum
+	/// </summary>
+	/// <returns>All of the enum descriptions</returns>
+	[HttpGet, Route("metadata/manga-state")]
+	[ProducesArray<EnumDescription>]
+	public Task<IActionResult> GetMangaStates() => Box(() =>
+	{
+		var values = MangaState.Favorited.Describe(false, false);
+		return Boxed.Ok(values);
+	});
+
+	/// <summary>
 	/// Gets the manga tags
 	/// </summary>
 	/// <returns>The manga tags</returns>
-	[HttpGet, Route("metadata/manga-tags")]
+	[HttpGet, Route("metadata/manga-tag")]
 	[ProducesArray<MbTag>]
 	public Task<IActionResult> GetTags() => Box(async () =>
 	{
 		var tags = await _db.Tag.Get();
 		return Boxed.Ok(tags);
+	});
+
+	/// <summary>
+	/// Gets the manga sources
+	/// </summary>
+	/// <returns>The manga sources</returns>
+	[HttpGet, Route("metadata/sources")]
+	[ProducesArray<MbSource>]
+	public Task<IActionResult> GetSources() => Box(async () =>
+	{
+		var sources = await _db.Source.Get();
+		return Boxed.Ok(sources);
 	});
 }

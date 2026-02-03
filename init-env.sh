@@ -9,6 +9,7 @@ create_dirs() {
   mkdir -p "./$root_dir/redis"
   mkdir -p "./$root_dir/postgres"
   mkdir -p "./$root_dir/file-cache"
+  mkdir -p "./$root_dir/jwt-key"
 }
 
 create_env() {
@@ -39,6 +40,9 @@ REDIS_PASSWORD=$redis_password
 PORT_API=$api_port
 PORT_DB=$db_port
 PORT_REDIS=$redis_port
+
+OAUTH_APPID=
+OAUTH_SECRET=
 EOF
   echo "$filename created"
 }
@@ -95,10 +99,14 @@ services:
       - ${PORT_API}:8080
     volumes:
       - ./file-cache:/app/file-cache
+      - ./jwt-key:/app/jwt-key
     environment:
       - Database:ConnectionString=User ID=${POSTGRES_USERNAME};Password=${POSTGRES_PASSWORD};Host=app-db;Database=${POSTGRES_SCHEMA};
       - Redis:Connection=app-redis,password=${REDIS_PASSWORD}
-      - CacheDirectory=/app/file-cache
+      - CacheDirectory=./file-cache
+      - OAuth:Jwt:KeyPath=./jwt-key/key.pem
+      - OAuth:AppId=${OAUTH_APPID}
+      - OAuth:Secret=${OAUTH_SECRET}
     networks:
       - app-network
     depends_on:

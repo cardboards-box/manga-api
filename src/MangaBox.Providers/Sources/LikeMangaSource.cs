@@ -8,6 +8,7 @@ public interface ILikeMangaSource : IMangaUrlSource { }
 //Not gonna lie, like 90% of this is chatGPT because
 //I got lazy and wanted to see how well it would do.
 internal class LikeMangaSource(
+	IApiService _api,
 	IFlareSolverService _flare,
 	ILogger<LikeMangaSource> _logger) : ILikeMangaSource
 {
@@ -23,11 +24,11 @@ internal class LikeMangaSource(
 
 	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
 
-	private readonly FlareSolverInstance _api = _flare.Limiter();
+	private readonly FlareSolverInstance _flareInstance = _flare.Limiter();
 
 	public async Task<MangaChapterPage[]> ChapterPages(string url)
 	{
-		var doc = await _api.GetHtml(url);
+		var doc = await _flareInstance.GetHtml(url);
 		if (doc is null) return [];
 
 		return Parse(doc, url);
@@ -47,7 +48,7 @@ internal class LikeMangaSource(
 		const string CoverImgXPath = "//div[contains(@class,'summary_image')]//img";
 
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _flareInstance.GetHtml(url);
 		if (doc == null) return null;
 
 		var title = SelectText(doc, TitleXPath);

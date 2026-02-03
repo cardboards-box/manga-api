@@ -37,6 +37,13 @@ public class MbMangaProgress : MbDbObject
 	public Guid? LastReadChapterId { get; set; }
 
 	/// <summary>
+	/// The date/time the manga was last read
+	/// </summary>
+	[Column("last_read_at")]
+	[JsonPropertyName("lastReadAt")]
+	public DateTime? LastReadAt { get; set; }
+
+	/// <summary>
 	/// Whether the manga is marked as completed
 	/// </summary>
 	[Column("is_completed")]
@@ -49,4 +56,28 @@ public class MbMangaProgress : MbDbObject
 	[Column("favorited")]
 	[JsonPropertyName("favorited")]
 	public bool Favorited { get; set; }
+
+	/// <summary>
+	/// The request to update a favourite manga
+	/// </summary>
+	public class UpdateFavourite
+	{
+		/// <summary>
+		/// The ID of the profile making the request
+		/// </summary>
+		[JsonIgnore]
+		public Guid ProfileId { get; set; }
+
+		/// <summary>
+		/// The ID of the manga to update
+		/// </summary>
+		[JsonPropertyName("mangaId")]
+		public Guid MangaId { get; set; }
+
+		/// <summary>
+		/// Whether or not the user is favoriting the manga
+		/// </summary>
+		[JsonPropertyName("favorited")]
+		public bool Favorited { get; set; }
+	}
 }

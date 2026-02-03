@@ -9,10 +9,12 @@ builder.Services.AddControllers()
 	{
 		opts.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 		opts.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+		opts.JsonSerializerOptions.AllowTrailingCommas = true;
+		opts.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString;
 	});
 builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddCustomSwaggerGen();
 builder.Services
 	.AddAuthMiddleware()
 	.AddTelemetry();

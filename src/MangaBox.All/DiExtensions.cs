@@ -5,10 +5,11 @@ using Microsoft.Extensions.DependencyInjection;
 namespace MangaBox.All;
 
 using Core;
-using Jwt;
-using MangaBox.Database;
+using Database;
 using Providers;
+using Jwt;
 using Services;
+using Utilities.Auth;
 using Utilities.Flare;
 
 /// <summary>
@@ -28,7 +29,8 @@ public static class DiExtensions
 			.AddCoreServices()
 			.AddGeneralServices()
 			.AddSources()
-			.AddFlareSolver();
+			.AddFlareSolver()
+			.AddOAuthServices();
 
 		await services.AddServices(config, c => c.AddDatabase());
 	}

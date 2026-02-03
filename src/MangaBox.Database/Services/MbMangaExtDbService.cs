@@ -2,7 +2,6 @@ namespace MangaBox.Database.Services;
 
 using Models;
 using Models.Composites;
-using Models.Types;
 
 /// <summary>
 /// The service for interacting with the mb_manga_ext table
@@ -36,19 +35,25 @@ public interface IMbMangaExtDbService
 	/// <returns>The updated records</returns>
 	Task<MbMangaExt[]> Update(params Guid[] ids);
 
-    /// <summary>
-    /// Mass updates all extension records
-    /// </summary>
-    /// <returns>The updated records</returns>
-    /// <remarks>USE SPARINGLY</remarks>
-    Task<MbMangaExt[]> MassUpdate();
+	/// <summary>
+	/// Update the records that haven't been touched for so many days
+	/// </summary>
+	/// <param name="days">The number of days to wait before updating the manga</param>
+	/// <returns>The updated records</returns>
+	Task<MbMangaExt[]> Update(double days = 3);
+
+	/// <summary>
+	/// Mass updates all extension records
+	/// </summary>
+	/// <returns>The updated records</returns>
+	/// <remarks>USE SPARINGLY</remarks>
+	Task<MbMangaExt[]> MassUpdate();
 }
 
 internal class MbMangaExtDbService(
     IOrmService orm,
     IQueryCacheService _cache) : Orm<MbMangaExt>(orm), IMbMangaExtDbService
 {
-
     public async Task<MbMangaExt[]> Update(params Guid[] ids)
     {
         var query = await _cache.Required("update_manga_ext");
@@ -60,6 +65,16 @@ internal class MbMangaExtDbService(
 		var query = await _cache.Required("update_manga_ext");
         query = query.Replace("m.id = ANY( :ids ) AND", "");
 		return await Get(query);
+	}
+
+    public async Task<MbMangaExt[]> Update(double days = 3)
+    {
+        var since = DateTime.UtcNow.AddDays(-Math.Abs(days));
+		var query = await _cache.Required("update_manga_ext");
+		query = query
+            .Replace("FROM mb_manga m", "FROM mb_manga m\n\t\tJOIN mb_manga_ext e ON e.manga_id = m.id")
+            .Replace("m.id = ANY( :ids ) AND", "e.updated_at < :since AND");
+		return await Get(query, new { since });
 	}
 
     public async Task<MangaBoxType<MbMangaExt>?> FetchWithRelationships(Guid id)

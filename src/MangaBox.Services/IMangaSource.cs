@@ -104,7 +104,7 @@ public class MangaSource
 		[JsonPropertyName("altTitles")]
 		public string[] AltTitles { get; set; } = [];
 
-		[JsonPropertyName("tags")]
+		[JsonIgnore]
 		public string[] Tags { get; set; } = [];
 
 		[JsonPropertyName("authors")]
@@ -131,6 +131,13 @@ public class MangaSource
 		
 		[JsonPropertyName("attributes")]
 		public List<MangaAttribute> Attributes { get; set; } = [];
+
+		[JsonPropertyName("tags")]
+		public MangaTag[] MangaTags
+		{
+			get => [..Tags.Select(t => new MangaTag { Name = t }).DistinctBy(t => t.Slug)];
+			set => Tags = [..value.Select(t => t.Name).Distinct()];
+		}
 		
 		[JsonPropertyName("referer")]
 		public string? Referer { get; set; }
@@ -140,6 +147,19 @@ public class MangaSource
 
 		[JsonPropertyName("ordinalVolumeReset")]
 		public bool OrdinalVolumeReset { get; set; } = false;
+	}
+
+	public class MangaTag
+	{
+		[JsonPropertyName("name")]
+		public string Name { get; set; } = string.Empty;
+
+		[JsonPropertyName("slug")]
+		public string Slug
+		{
+			get => field ??= MbTag.GenerateSlug(Name);
+			set => field = MbTag.GenerateSlug(value);
+		}
 	}
 
 	public class MangaAttribute

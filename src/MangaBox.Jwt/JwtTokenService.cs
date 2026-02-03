@@ -34,25 +34,28 @@ internal class JwtTokenService(
 	IConfiguration _config,
 	IJwtKeyService _keys) : IJwtTokenService
 {
+	private double? _expiryMinutes;
+	private TimeSpan? _expiry;
+
 	/// <summary>
 	/// The issuer of the token
 	/// </summary>
-	public string Issuer => _config["OAuth:Issuer"]?.ForceNull() ?? Constants.APPLICATION_URL;
+	public string Issuer => field ??= _config["OAuth:Jwt:Issuer"]?.ForceNull() ?? Constants.APPLICATION_URL;
 
 	/// <summary>
 	/// The audiences of the token
 	/// </summary>
-	public string Audience => _config["OAuth:Audience"]?.ForceNull() ?? Issuer;
+	public string Audience => field ??= _config["OAuth:Jwt:Audience"]?.ForceNull() ?? Issuer;
 
 	/// <summary>
 	/// How long the token should be valid for, in minutes
 	/// </summary>
-	public double ExpireMinutes => double.TryParse(_config["OAuth:JwtExpiry"], out var value) ? value : 7 * 24 * 60;
+	public double ExpireMinutes => _expiryMinutes ??= double.TryParse(_config["OAuth:Jwt:Expiry"], out var value) ? value : 7 * 24 * 60;
 
 	/// <summary>
 	/// How long the token should be valid for
 	/// </summary>
-	public TimeSpan Expires => TimeSpan.FromMinutes(ExpireMinutes);
+	public TimeSpan Expires => _expiry ??= TimeSpan.FromMinutes(ExpireMinutes);
 
 	/// <summary>
 	/// Reads all of the claims from the given token string

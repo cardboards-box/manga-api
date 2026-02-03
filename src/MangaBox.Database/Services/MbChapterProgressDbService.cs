@@ -43,38 +43,63 @@ public interface IMbChapterProgressDbService
     /// <returns>All of the records</returns>
     Task<MbChapterProgress[]> Get();
 
-    /// <summary>
-    /// Fetches the record and all related records
-    /// </summary>
-    /// <param name="id">The ID of the record to fetch</param>
-    /// <returns>The record and all related records</returns>
-    Task<MangaBoxType<MbChapterProgress>?> FetchWithRelationships(Guid id);
+	/// <summary>
+	/// Updates the bookmarks for the given profile and chapter
+	/// </summary>
+	/// <param name="profileId">The ID of the profile</param>
+	/// <param name="chapterId">The ID of the chapter</param>
+	/// <param name="bookmarks">The bookmarks to update</param>
+	/// <returns>The updated chapter progress</returns>
+	Task<MangaBoxType<MbMangaProgress>?> UpdateBookmarks(Guid profileId, Guid chapterId, int[] bookmarks);
+
+	/// <summary>
+	/// Updates the page ordinal for the given profile and chapter
+	/// </summary>
+	/// <param name="profileId">The ID of the profile</param>
+	/// <param name="chapterId">The ID of the chapter</param>
+	/// <param name="pageOrdinal">The page ordinal to use</param>
+	/// <returns>The updated chapter progress</returns>
+	Task<MangaBoxType<MbMangaProgress>?> UpdateOrdinal(Guid profileId, Guid chapterId, int? pageOrdinal);
 }
 
 internal class MbChapterProgressDbService(
-    IOrmService orm) : Orm<MbChapterProgress>(orm), IMbChapterProgressDbService
+    IOrmService orm,
+    IQueryCacheService _cache) : Orm<MbChapterProgress>(orm), IMbChapterProgressDbService
 {
-
-    public async Task<MangaBoxType<MbChapterProgress>?> FetchWithRelationships(Guid id)
+    public async Task<MangaBoxType<MbMangaProgress>?> GetProgress(string query, object? parameters = null)
     {
-        const string QUERY = @"SELECT * FROM mb_chapter_progress WHERE id = :id AND deleted_at IS NULL;
-SELECT p.* 
-FROM mb_manga_progress p
-JOIN mb_chapter_progress c ON p.id = c.progress_id
-WHERE 
-    c.id = :id AND
-    c.deleted_at IS NULL AND
-    p.deleted_at IS NULL;
-";
         using var con = await _sql.CreateConnection();
-        using var rdr = await con.QueryMultipleAsync(QUERY, new { id });
+        using var rdr = await con.QueryMultipleAsync(query, parameters);
 
-        var item = await rdr.ReadSingleOrDefaultAsync<MbChapterProgress>();
-        if (item is null) return null;
+        var progress = await rdr.ReadFirstOrDefaultAsync<MbMangaProgress>();
+        if (progress is null) return null;
 
         var related = new List<MangaBoxRelationship>();
-        MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbMangaProgress>());
+        var chapters = await rdr.ReadAsync<MbChapterProgress>();
+        MangaBoxRelationship.Apply(related, chapters);
 
-        return new MangaBoxType<MbChapterProgress>(item, [..related]);
-    }
+        return new(progress, [.. related]);
+	}
+
+	public async Task<MangaBoxType<MbMangaProgress>?> UpdateBookmarks(Guid profileId, Guid chapterId, int[] bookmarks)
+	{
+        var query = await _cache.Required("upsert_bookmarks");
+        return await GetProgress(query, new
+        {
+            profileId,
+            chapterId,
+            bookmarks
+        });
+	}
+
+    public async Task<MangaBoxType<MbMangaProgress>?> UpdateOrdinal(Guid profileId, Guid chapterId, int? pageOrdinal)
+    {
+        var query = await _cache.Required("upsert_chapter_progress");
+        return await GetProgress(query, new
+        {
+            profileId,
+            chapterId,
+            pageOrdinal
+        });
+	}
 }

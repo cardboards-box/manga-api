@@ -2,6 +2,7 @@ namespace MangaBox.Database.Services;
 
 using Models;
 using Models.Composites;
+using Models.Composites.Filters;
 
 /// <summary>
 /// The service for interacting with the mb_manga table
@@ -64,6 +65,13 @@ public interface IMbMangaDbService
 	/// <param name="json">The JSON data of the manga to upsert</param>
 	/// <returns>The result of the upsert operation</returns>
 	Task<UpsertResult?> UpsertJson(Guid sourceId, string json);
+
+    /// <summary>
+    /// Searches for a manga by the given filter
+    /// </summary>
+    /// <param name="filter">The manga filter</param>
+    /// <returns>The searched manga</returns>
+    Task<PaginatedResult<MangaBoxType<MbManga>>> Search(MangaSearchFilter filter);
 }
 
 internal class MbMangaDbService(
@@ -219,5 +227,50 @@ WHERE
             return null;
 
         return JsonSerializer.Deserialize<UpsertResult>(result);
+	}
+
+    public async Task<PaginatedResult<MangaBoxType<MbManga>>> Search(MangaSearchFilter filter)
+    {
+        var query = filter.Build(out var parameters);
+
+        using var con = await _sql.CreateConnection();
+        using var rdr = await con.QueryMultipleAsync(query, parameters);
+
+        var total = await rdr.ReadSingleAsync<int>();
+        if (total == 0) return new();
+		var pages = (int)Math.Ceiling((double)total / filter.Size);
+
+        var images = (await rdr.ReadAsync<MbImage>()).ToGDictionary(t => t.MangaId);
+        var extensions = (await rdr.ReadAsync<MbMangaExt>()).ToGDictionary(t => t.MangaId);
+        var sources = (await rdr.ReadAsync<MbSource>()).ToDictionary(t => t.Id);
+        var tags = (await rdr.ReadAsync<MbTag>()).ToDictionary(t => t.Id);
+        var tagMap = (await rdr.ReadAsync<TagMap>()).ToGDictionary(t => t.MangaId);
+
+		var results = new List<MangaBoxType<MbManga>>();
+
+        foreach(var manga in await rdr.ReadAsync<MbManga>())
+		{
+			var related = new List<MangaBoxRelationship>();
+            if (images.TryGetValue(manga.Id, out var imgs))
+                MangaBoxRelationship.Apply(related, imgs);
+            if (extensions.TryGetValue(manga.Id, out var exts))
+                MangaBoxRelationship.Apply(related, exts);
+            if (sources.TryGetValue(manga.SourceId, out var src))
+                MangaBoxRelationship.Apply(related, src);
+            if (tagMap.TryGetValue(manga.Id, out var tmap))
+                MangaBoxRelationship.Apply(related, tmap
+					.Select(t => tags.TryGetValue(t.TagId, out var tag) ? tag : null)
+					.Where(t => t is not null));
+
+            results.Add(new(manga, [.. related]));
+		}
+
+        return new(pages, total, [.. results]);
+	}
+
+    public class TagMap
+    {
+        public Guid MangaId { get; set; }
+        public Guid TagId { get; set; }
 	}
 }

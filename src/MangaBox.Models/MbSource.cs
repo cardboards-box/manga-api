@@ -46,20 +46,20 @@ public class MbSource : MbDbObject, IDbCacheTable
 	/// </summary>
 	[Column("referer")]
 	[MaxLength(MAX_URL_LENGTH), Url]
-	[JsonPropertyName("referer")]
+	[JsonIgnore]
 	public string? Referer { get; set; }
 
 	/// <summary>
 	/// The optional user-agent to use when making requests
 	/// </summary>
 	[Column("user_agent")]
-	[JsonPropertyName("userAgent")]
+	[JsonIgnore]
 	public string? UserAgent { get; set; }
 
 	/// <summary>
 	/// The headers to attach to any image request
 	/// </summary>
 	[Column("headers"), InnerValid]
-	[JsonPropertyName("headers")]
+	[JsonIgnore]
 	public MbHeader[] Headers { get; set; } = [];
 }

@@ -9,6 +9,34 @@ public class MangaController(
 	ILogger<MangaController> logger) : BaseController(logger)
 {
 	/// <summary>
+	/// Searches for manga based on the given filter
+	/// </summary>
+	/// <param name="filter">The filter to search for</param>
+	/// <returns>The paginated search results</returns>
+	[HttpPost, Route("manga")]
+	[ProducesPaged<MangaBoxType<MbManga>>, ProducesError(400)]
+	public Task<IActionResult> Search([FromBody] MangaSearchFilter filter) => Box(async () =>
+	{
+		filter.ProfileId = this.GetProfileId();
+		if (!filter.ProfileId.HasValue && 
+			(filter.States.Length != 0 ||
+			filter.Order.ContainsKey(MangaOrderBy.LastRead)))
+			return Boxed.Unauthorized("You need to be logged in to use states or last read ordering.");
+
+		var results = await _db.Manga.Search(filter);
+		return Boxed.Ok(results.Pages, results.Count, results.Results);
+	});
+
+	/// <summary>
+	/// Searches for manga based on the given filter
+	/// </summary>
+	/// <param name="filter">The filter to search for</param>
+	/// <returns>The paginated search results</returns>
+	[HttpGet, Route("manga")]
+	[ProducesPaged<MangaBoxType<MbManga>>, ProducesError(400)]
+	public Task<IActionResult> SearchQuery([FromQuery] MangaSearchFilter filter) => Search(filter);
+
+	/// <summary>
 	/// Fetches a manga by it's ID
 	/// </summary>
 	/// <param name="id">The ID of the manga</param>
@@ -68,6 +96,46 @@ public class MangaController(
 	public Task<IActionResult> Load([FromBody] LoadRequest request) => Box(async () =>
 	{
 		return await _loader.Load(this.GetProfileId(), request.Url, request.Force);
+	});
+
+	/// <summary>
+	/// Favourites the given manga
+	/// </summary>
+	/// <param name="id">The ID of the manga to favorite</param>
+	/// <returns>The manga progress</returns>
+	[HttpGet, Route("manga/{id}/favorite")]
+	[ProducesBox<MbMangaProgress>, ProducesError(400), ProducesError(401)]
+	public Task<IActionResult> Favorite([FromRoute] string id) => Box(async () =>
+	{
+		if (!Guid.TryParse(id, out var mid))
+			return Boxed.Bad("Manga ID is not a valid GUID.");
+
+		var profileId = this.GetProfileId();
+		if (!profileId.HasValue)
+			return Boxed.Unauthorized("You need to be logged in to favorite manga.");
+
+		var progress = await _db.MangaProgress.Favourite(profileId.Value, mid, true);
+		return Boxed.Ok(progress);
+	});
+
+	/// <summary>
+	/// Unfavourites the given manga
+	/// </summary>
+	/// <param name="id">The ID of the manga to unfavorite</param>
+	/// <returns>The manga progress</returns>
+	[HttpDelete, Route("manga/{id}/favorite")]
+	[ProducesBox<MbMangaProgress>, ProducesError(400), ProducesError(401)]
+	public Task<IActionResult> Unfavorite([FromRoute] string id) => Box(async () =>
+	{
+		if (!Guid.TryParse(id, out var mid))
+			return Boxed.Bad("Manga ID is not a valid GUID.");
+
+		var profileId = this.GetProfileId();
+		if (!profileId.HasValue)
+			return Boxed.Unauthorized("You need to be logged in to favorite manga.");
+
+		var progress = await _db.MangaProgress.Favourite(profileId.Value, mid, false);
+		return Boxed.Ok(progress);
 	});
 
 	/// <summary>

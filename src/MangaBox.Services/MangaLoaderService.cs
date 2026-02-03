@@ -1,10 +1,11 @@
-﻿namespace MangaBox.Services;
+﻿using System.Web;
+
+namespace MangaBox.Services;
 
 using Database;
 using Models;
 using Models.Composites;
 using Models.Types;
-using System.Web;
 
 /// <summary>
 /// A service for loading manga from various sources

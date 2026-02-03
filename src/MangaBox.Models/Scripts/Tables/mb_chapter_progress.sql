@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS mb_chapter_progress (
 	id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
 	progress_id UUID NOT NULL REFERENCES mb_manga_progress(id),
 	chapter_id UUID NOT NULL REFERENCES mb_chapters(id),
-	is_read BOOLEAN NOT NULL,
+	page_ordinal INTEGER NULL,
 	bookmarks INTEGER[] DEFAULT '{}',
 	last_read TIMESTAMP NULL,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -22,11 +22,11 @@ public class MbChapterProgress : MbDbObject
 	public Guid ChapterId { get; set; }
 
 	/// <summary>
-	/// Whether the chapter has been read
+	/// The ordinal of the page the user is currently on
 	/// </summary>
-	[Column("is_read")]
-	[JsonPropertyName("isRead")]
-	public bool IsRead { get; set; }
+	[Column("page_ordinal")]
+	[JsonPropertyName("pageOrdinal")]
+	public int? PageOrdinal { get; set; }
 
 	/// <summary>
 	/// The page indexes that have been bookmarked in this chapter

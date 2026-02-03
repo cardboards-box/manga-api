@@ -81,19 +81,25 @@ internal class TestVerb(
 		_logger.LogInformation("Output:\r\n{Output}", string.Join(",\r\n", output));
 	}
 
+	public async Task UpdateSince()
+	{
+		var updated = await _db.MangaExt.Update(-0.001);
+		_logger.LogInformation("Updated manga extensions: {Updated}", Serialize(updated));
+	}
+
 	public async Task LoadManga()
 	{
 		const bool FORCE = false;
 		string[] urls = 
 		[
-			//"https://mangadex.org/title/129c90ca-b997-4789-a748-e8765bc67a65/ichinichi-goto-ni-tsun-ga-hetteku-tsuntsuntsuntsuntsuntsuntsuntsuntsuntsuntsundere-joshi",
-			//"https://mangadex.org/title/fc0a7b86-992e-4126-b30f-ca04811979bf/the-unrivaled-mememori-kun",
-			//"https://weebdex.org/title/b1e1fv77hs",
-			//"https://comix.to/title/772k0-tensei-shitara-ponkotsu-maid-to-yobarete-imashita-zense-no-arekore-wo-mochikomi-wo-yashiki-kaikaku-shimasu",
-			//"https://mangaclash.com/manga/last-boss-yametemita-shujinkou-ni-taosareta-furi-shite-jiyuu-ni-ikitemita",
-			//"https://mangakatana.com/manga/the-great-saints-carefree-journey-to-another-world.27345",
+			"https://mangadex.org/title/129c90ca-b997-4789-a748-e8765bc67a65/ichinichi-goto-ni-tsun-ga-hetteku-tsuntsuntsuntsuntsuntsuntsuntsuntsuntsuntsundere-joshi",
+			"https://mangadex.org/title/fc0a7b86-992e-4126-b30f-ca04811979bf/the-unrivaled-mememori-kun",
+			"https://weebdex.org/title/b1e1fv77hs",
+			"https://comix.to/title/772k0-tensei-shitara-ponkotsu-maid-to-yobarete-imashita-zense-no-arekore-wo-mochikomi-wo-yashiki-kaikaku-shimasu",
+			"https://mangaclash.com/manga/last-boss-yametemita-shujinkou-ni-taosareta-furi-shite-jiyuu-ni-ikitemita",
+			"https://mangakatana.com/manga/the-great-saints-carefree-journey-to-another-world.27345",
 			"https://www.natomanga.com/manga/the-great-saint-s-carefree-journey-to-another-world",
-			//"https://likemanga.in/manga/i-got-my-wish-and-reincarnated-as-the-villainess-last-boss",
+			"https://likemanga.in/manga/i-got-my-wish-and-reincarnated-as-the-villainess-last-boss",
 		];
 
 		await Parallel.ForEachAsync(urls, async (url, token) =>
