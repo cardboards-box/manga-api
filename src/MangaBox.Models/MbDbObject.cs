@@ -17,7 +17,7 @@ public abstract class MbDbObjectLegacy : MbDbObject
 	/// <summary>
 	/// The legacy ID of the entity
 	/// </summary>
-	[Column("legacy_id")]
+	[Column("legacy_id", ExcludeUpdates = true)]
 	[JsonPropertyName("legacyId")]
 	public int? LegacyId { get; set; }
 }

@@ -19,38 +19,37 @@ internal class WeebDexSource(
 	private const string DEFAULT_LANG = "en";
 	public string HomeUrl => "https://weebdex.org";
 	public string Provider => "weebdex";
-
+	public string Name => "WeebDex";
 	public string? Referer => null;
 
 	public string? UserAgent => "mangabox";
 
 	public Dictionary<string, string>? Headers => null;
 
-	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
+	public async Task<MangaChapterPage[]> ChapterPages(string _, string chapterId, CancellationToken token)
 	{
-		var result = await _api.Chapters.Get(chapterId);
+		var result = await _api.Chapters.Get(chapterId, token);
 		if (!result.Succeeded || result.Data is null)
 		{
 			_logger.LogWarning("Failed to get chapter {ChapterId}: {Error}", chapterId, result.MetaData.Response.ReasonPhrase);
 			return [];
 		}
 
-		return result.Data.ImageUrls
-			.Select(t => new MangaChapterPage(t.Name, t.Width, t.Height))
-			.ToArray();
+		return [..result.Data.ImageUrls
+			.Select(t => new MangaChapterPage(t.Name, t.Width, t.Height))];
 	}
 
-	public async Task<Manga?> Manga(string id)
+	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
-		var manga = await _api.Manga.Get(id);
+		var manga = await _api.Manga.Get(id, token);
 		if (manga.Succeeded)
-			return await Convert(manga.Data);
+			return await Convert(manga.Data, token);
 
 		_logger.LogWarning("Failed to get manga {MangaId}: {Error}", id, manga.MetaData.Response.ReasonPhrase);
 		return null;
 	}
 
-	public async Task<Manga> Convert(WdManga manga, bool getChaps = true)
+	public async Task<Manga> Convert(WdManga manga, CancellationToken token, bool getChaps = true)
 	{
 		IEnumerable<MangaAttribute> Attributes()
 		{
@@ -75,7 +74,7 @@ internal class WeebDexSource(
 
 		var title = DetermineTitle(manga);
 		var chapters = getChaps
-			? await GetChapters(id, DEFAULT_LANG).OrderBy(t => t.Number).ToListAsync()
+			? await GetChapters(id, token, DEFAULT_LANG).OrderBy(t => t.Number).ToListAsync()
 			: [];
 
 		var artists = manga.Relationships.Artists.Select(a => a.Name).ToArray();
@@ -138,7 +137,8 @@ internal class WeebDexSource(
 		return manga.Title;
 	}
 
-	public async IAsyncEnumerable<MangaChapter> GetChapters(string id, params string[] languages)
+	public async IAsyncEnumerable<MangaChapter> GetChapters(string id, 
+		[EnumeratorCancellation] CancellationToken token, params string[] languages)
 	{
 		var filter = new WdMangaChapterFilter
 		{
@@ -148,7 +148,7 @@ internal class WeebDexSource(
 		};
 		while (true)
 		{
-			var chapters = await _api.Manga.Chapters(id, filter);
+			var chapters = await _api.Manga.Chapters(id, filter, token);
 			if (!chapters.Succeeded)
 			{
 				_logger.LogWarning("Failed to get chapters for manga {MangaId}: {Error}", id, chapters.MetaData.Response.ReasonPhrase);

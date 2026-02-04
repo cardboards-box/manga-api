@@ -20,7 +20,7 @@ public class MangaController(
 		filter.ProfileId = this.GetProfileId();
 		if (!filter.ProfileId.HasValue && 
 			(filter.States.Length != 0 ||
-			filter.Order.ContainsKey(MangaOrderBy.LastRead)))
+			filter.Order == MangaOrderBy.LastRead))
 			return Boxed.Unauthorized("You need to be logged in to use states or last read ordering.");
 
 		var results = await _db.Manga.Search(filter);
@@ -75,27 +75,35 @@ public class MangaController(
 	/// Refreshes a manga by it's ID from it's source
 	/// </summary>
 	/// <param name="id">The ID of the manga</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The manga or the error</returns>
 	[HttpGet, Route("manga/{id}/refresh")]
-	[ProducesBox<MangaBoxType<MbManga>>, ProducesError(400), ProducesError(404)]
-	public Task<IActionResult> Refresh([FromRoute] string id) => Box(async () =>
+	[ProducesBox<MangaBoxType<MbManga>>, ProducesError(400), ProducesError(404), ProducesError(401)]
+	public Task<IActionResult> Refresh([FromRoute] string id, CancellationToken token) => Box(async () =>
 	{
+		var pid = this.GetProfileId();
+		if (!pid.HasValue) return Boxed.Unauthorized("User is not authenticated.");
+
 		if (!Guid.TryParse(id, out var mid))
 			return Boxed.Bad("Manga ID is not a valid GUID.");
 
-		return await _loader.Refresh(this.GetProfileId(), mid);
+		return await _loader.Refresh(this.GetProfileId(), mid, token);
 	});
 
 	/// <summary>
 	/// Loads a manga from it's source
 	/// </summary>
 	/// <param name="request">The request to load a manga</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The manga or the error</returns>
 	[HttpPost, Route("manga/load")]
-	[ProducesBox<MangaBoxType<MbManga>>, ProducesError(400), ProducesError(404)]
-	public Task<IActionResult> Load([FromBody] LoadRequest request) => Box(async () =>
+	[ProducesBox<MangaBoxType<MbManga>>, ProducesError(400), ProducesError(404), ProducesError(401)]
+	public Task<IActionResult> Load([FromBody] LoadRequest request, CancellationToken token) => Box(async () =>
 	{
-		return await _loader.Load(this.GetProfileId(), request.Url, request.Force);
+		var pid = this.GetProfileId();
+		if (!pid.HasValue) return Boxed.Unauthorized("User is not authenticated.");
+
+		return await _loader.Load(this.GetProfileId(), request.Url, request.Force, token);
 	});
 
 	/// <summary>

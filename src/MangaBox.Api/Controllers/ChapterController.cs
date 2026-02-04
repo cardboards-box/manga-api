@@ -6,6 +6,7 @@
 public class ChapterController(
 	IDbService _db,
 	IMangaLoaderService _loader,
+	IImageService _images,
 	ILogger<ChapterController> logger) : BaseController(logger)
 {
 	/// <summary>
@@ -13,16 +14,47 @@ public class ChapterController(
 	/// </summary>
 	/// <param name="id">The ID of the chapter</param>
 	/// <param name="refetch">Whether or not to force refresh the page links</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The chapter data</returns>
 	[HttpGet, Route("chapter/{id}")]
 	[ProducesBox<MangaBoxType<MbChapter>>, ProducesError(400), ProducesError(404)]
-	public Task<IActionResult> Fetch([FromRoute] string id, [FromQuery] bool refetch = false) => Box(async () =>
+	public Task<IActionResult> Fetch([FromRoute] string id, CancellationToken token, [FromQuery] bool refetch = false) => Box(async () =>
 	{
+		if (!this.GetProfileId().HasValue)
+			return Boxed.NotFound(nameof(MbChapter), "Chapter was not found");
+
 		if (!Guid.TryParse(id, out var cid))
 			return Boxed.Bad("Chapter ID is not a valid GUID.");
 
-		return await _loader.Pages(cid, refetch);
+		return await _loader.Pages(cid, refetch, token);
 	});
+
+
+	/// <summary>
+	/// Downloads a zip of the chapter images
+	/// </summary>
+	/// <param name="id">The ID of the chapter</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The image data or the error</returns>
+	[HttpGet, Route("chapter/{id}/download")]
+	[ProducesError(500), ProducesError(404), ProducesError(400)]
+	[ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+	[ResponseCache(Duration = 31536000, Location = ResponseCacheLocation.Any)]
+	public async Task<IActionResult> Download([FromRoute] string id, CancellationToken token)
+	{
+		if (!this.GetProfileId().HasValue)
+			return await Box(() => Boxed.NotFound("Chapter was not found"));
+
+		if (!Guid.TryParse(id, out var guid))
+			return await Box(() => Boxed.Bad($"Invalid image ID: {id}"));
+
+		var result = await _images.Download(guid, token);
+		if (!string.IsNullOrEmpty(result.Error) ||
+			result.Stream is null)
+			return await Box(() => Boxed.Exception(result.Error ?? "Zip stream is missing"));
+
+		return File(result.Stream, result.MimeType ?? "application/zip", result.FileName);
+	}
 
 	/// <summary>
 	/// Book marks the given pages in the chapter

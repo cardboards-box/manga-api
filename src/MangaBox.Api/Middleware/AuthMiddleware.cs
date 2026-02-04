@@ -41,14 +41,16 @@ internal class AuthMiddleware(
 	{
 		try
 		{
+			var token = Context.RequestAborted;
+
 			var (key, client) = GetKey();
 			if (string.IsNullOrEmpty(key))
 				return AuthenticateResult.NoResult();
 
 			if (client)
-				return await HandleClient(key);
+				return await HandleClient(key, token);
 
-			return await HandleApi(key);
+			return await HandleApi(key, token);
 		}
 		catch (Exception ex)
 		{
@@ -61,10 +63,11 @@ internal class AuthMiddleware(
 	/// Handle client requests
 	/// </summary>
 	/// <param name="key">The client authentication token</param>
+	/// <param name="cancel">The cancellation token for the request</param>
 	/// <returns>The result of the authentication request</returns>
-	public async Task<AuthenticateResult> HandleClient(string key)
+	public async Task<AuthenticateResult> HandleClient(string key, CancellationToken cancel)
 	{
-		var token = await _jwt.ParseToken(key);
+		var token = await _jwt.ParseToken(key, cancel);
 		if (token is null)
 			return AuthenticateResult.Fail("Invalid JWT token");
 
@@ -78,9 +81,12 @@ internal class AuthMiddleware(
 	/// Handle API Key requests
 	/// </summary>
 	/// <param name="key">The API key</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The result of the authentication request</returns>
-	public Task<AuthenticateResult> HandleApi(string key)
+	public Task<AuthenticateResult> HandleApi(string key, CancellationToken token)
 	{
+		token.ThrowIfCancellationRequested();
+		_logger.LogInformation("User attempting to login with un-implemented API key: {Key}", key);
 		return Task.FromResult(
 			AuthenticateResult.Fail(
 				"API key authentication is not implemented yet. Please use JWT tokens instead."));

@@ -103,7 +103,7 @@ services:
     environment:
       - Database:ConnectionString=User ID=${POSTGRES_USERNAME};Password=${POSTGRES_PASSWORD};Host=app-db;Database=${POSTGRES_SCHEMA};
       - Redis:Connection=app-redis,password=${REDIS_PASSWORD}
-      - CacheDirectory=./file-cache
+      - Imaging:CacheDir=./file-cache
       - OAuth:Jwt:KeyPath=./jwt-key/key.pem
       - OAuth:AppId=${OAUTH_APPID}
       - OAuth:Secret=${OAUTH_SECRET}

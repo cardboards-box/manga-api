@@ -17,6 +17,7 @@
     "Tables/mb_manga_progress.sql",
     "Tables/mb_chapter_progress.sql",
     "Tables/mb_manga_relationships.sql",
-    "Tables/mb_images.sql"
+    "Tables/mb_images.sql",
+    "indices.sql"
   ]
 }

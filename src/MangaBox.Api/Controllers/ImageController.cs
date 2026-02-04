@@ -31,17 +31,18 @@ public class ImageController(
 	/// Gets the image data by it's ID
 	/// </summary>
 	/// <param name="id">The ID of the image</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The image data or the error</returns>
 	[HttpGet, Route("image/{id}")]
 	[ProducesError(500), ProducesError(404), ProducesError(400)]
 	[ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
 	[ResponseCache(Duration = 31536000, Location = ResponseCacheLocation.Any)]
-	public async Task<IActionResult> Get([FromRoute] string id)
+	public async Task<IActionResult> Get([FromRoute] string id, CancellationToken token)
 	{
 		if (!Guid.TryParse(id, out var guid))
 			return await Box(() => Boxed.Bad($"Invalid image ID: {id}"));
 
-		var result = await _image.Get(guid);
+		var result = await _image.Get(guid, token);
 		if (!string.IsNullOrEmpty(result.Error) ||
 			result.Stream is null)
 			return await Box(() => Boxed.Exception(result.Error ?? "Image stream is missing"));

@@ -13,7 +13,7 @@ public interface IJwtTokenService
 	/// <param name="token">The token to parse</param>
 	/// <param name="cancel">The cancellation token for the request</param>
 	/// <returns>The JWT token</returns>
-	Task<JwtToken?> ParseToken(string token, CancellationToken cancel = default);
+	Task<JwtToken?> ParseToken(string token, CancellationToken cancel);
 
 	/// <summary>
 	/// Generates a JWT token from the given JwtToken object
@@ -21,7 +21,7 @@ public interface IJwtTokenService
 	/// <param name="token">The token to generate</param>
 	/// <param name="cancel">The cancellation token for the request</param>
 	/// <returns>The JWT token</returns>
-	Task<string> GenerateToken(JwtToken token, CancellationToken cancel = default);
+	Task<string> GenerateToken(JwtToken token, CancellationToken cancel);
 
 	/// <summary>
 	/// Gets an empty JWT token with default values

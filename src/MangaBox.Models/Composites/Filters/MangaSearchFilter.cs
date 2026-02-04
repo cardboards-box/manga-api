@@ -91,28 +91,6 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 	/// <returns>The query</returns>
 	public override string Build(out DynamicParameters parameters)
 	{
-		string GetOrders()
-		{
-			var orderClauses = new List<string>();
-
-			if (Order is { Count: > 0 })
-			{
-				foreach (var kvp in Order)
-				{
-					if (kvp.Key == MangaOrderBy.LastRead && !ProfileId.HasValue)
-						continue;
-
-					var col = OrderColumn(kvp.Key);
-					var dir = !kvp.Value ? "DESC" : "ASC";
-					orderClauses.Add($"{col} {dir} NULLS LAST");
-				}
-			}
-			else
-				orderClauses.Add("ext.last_chapter_created DESC NULLS LAST");
-
-			return "\t\t" + string.Join(", ", orderClauses);
-		}
-
 		void HandleTags(StringBuilder bob, DynamicParameters parameters)
 		{
 			if (Tags is not { Length: > 0 }) return;
@@ -196,8 +174,8 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 
 			if (States.Contains(MangaState.InProgress))
 			{
-				if (StatesInclude) conditions.Add("mp.last_read_chapter_id IS NOT NULL");
-				else conditions.Add("mp.last_read_chapter_id IS NULL");
+				if (StatesInclude) conditions.Add(@"(mp.last_read_chapter_id IS NOT NULL AND mp.is_completed IS NOT NULL AND mp.is_completed = FALSE)");
+				else conditions.Add("(mp.last_read_chapter_id IS NULL OR mp.is_completed IS NULL OR mp.is_completed = FALSE)");
 			}
 
 			if (States.Contains(MangaState.Bookmarked))
@@ -244,11 +222,7 @@ DROP TABLE IF EXISTS tmp_manga_results_{suffix};
 CREATE TEMP TABLE tmp_manga_results_{suffix} ON COMMIT DROP AS
 SELECT
 	m.id,
-	ROW_NUMBER() OVER (ORDER BY
-""");
-		bob.AppendLine(GetOrders());
-		bob.AppendLine($"""
-	) as position
+	{OrderColumn(Order)} as order_column
 FROM mb_manga m
 JOIN mb_manga_ext ext ON ext.manga_id = m.id
 LEFT JOIN mb_chapters last_ch ON last_ch.id = ext.last_chapter_id
@@ -298,25 +272,29 @@ WHERE
 		bob.AppendLine($"""
 ;
 SELECT COUNT(*) FROM tmp_manga_results_{suffix};
-DELETE FROM tmp_manga_results_{suffix} 
-WHERE 
-	position <= :offset OR 
-	position > :limit + :offset;
+
+CREATE TEMP TABLE tmp_manga_results_{suffix}_ordered ON COMMIT DROP AS
+SELECT id, order_column
+FROM tmp_manga_results_{suffix}
+ORDER BY order_column {(Asc ? "ASC" : "DESC")}
+LIMIT :limit OFFSET :offset;
+
+DROP TABLE tmp_manga_results_{suffix};
 
 SELECT i.*
 FROM mb_images i
-JOIN tmp_manga_results_{suffix} p ON p.id = i.manga_id
+JOIN tmp_manga_results_{suffix}_ordered p ON p.id = i.manga_id
 WHERE i.chapter_id IS NULL AND i.deleted_at IS NULL;
 
 SELECT e.*
 FROM mb_manga_ext e
-JOIN tmp_manga_results_{suffix} p ON p.id = e.manga_id
+JOIN tmp_manga_results_{suffix}_ordered p ON p.id = e.manga_id
 WHERE e.deleted_at IS NULL;
 
 SELECT DISTINCT s.*
 FROM mb_sources s
 JOIN mb_manga m ON m.source_id = s.id
-JOIN tmp_manga_results_{suffix} p ON p.id = m.id
+JOIN tmp_manga_results_{suffix}_ordered p ON p.id = m.id
 WHERE 
 	m.deleted_at IS NULL AND
 	s.deleted_at IS NULL;
@@ -324,20 +302,20 @@ WHERE
 SELECT DISTINCT t.*
 FROM mb_tags t 
 JOIN mb_manga_tags mt ON mt.tag_id = t.id
-JOIN tmp_manga_results_{suffix} p ON p.id = mt.manga_id
+JOIN tmp_manga_results_{suffix}_ordered p ON p.id = mt.manga_id
 WHERE t.deleted_at IS NULL AND mt.deleted_at IS NULL;
 
 SELECT DISTINCT mt.manga_id, mt.tag_id
 FROM mb_manga_tags mt
-JOIN tmp_manga_results_{suffix} p ON p.id = mt.manga_id
+JOIN tmp_manga_results_{suffix}_ordered p ON p.id = mt.manga_id
 WHERE mt.deleted_at IS NULL;
 
-SELECT m.*, t.position
+SELECT m.*, t.order_column
 FROM mb_manga m
-JOIN tmp_manga_results_{suffix} t ON m.id = t.id
-ORDER BY t.position;
+JOIN tmp_manga_results_{suffix}_ordered t ON m.id = t.id
+ORDER BY t.order_column {(Asc ? "ASC" : "DESC")};
 
-DROP TABLE tmp_manga_results_{suffix};
+DROP TABLE tmp_manga_results_{suffix}_ordered;
 COMMIT;
 """);
 		return bob.ToString();

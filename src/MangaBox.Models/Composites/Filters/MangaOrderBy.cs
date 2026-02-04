@@ -6,18 +6,6 @@
 public enum MangaOrderBy
 {
 	/// <summary>
-	/// Order by when the manga was created
-	/// </summary>
-	[Display(Name = "Manga Created At")]
-	[Description("Order by when the manga was created")]
-	MangaCreatedAt,
-	/// <summary>
-	/// Order by when the manga was last updated
-	/// </summary>
-	[Display(Name = "Manga Updated At")]
-	[Description("Order by when the manga was last updated")]
-	MangaUpdatedAt,
-	/// <summary>
 	/// When the most recent chapter was created
 	/// </summary>
 	[Display(Name = "Last Chapter Created At")]
@@ -41,6 +29,18 @@ public enum MangaOrderBy
 	[Display(Name = "First Chapter Updated At")]
 	[Description("When the oldest chapter was updated")]
 	FirstChapterUpdatedAt,
+	/// <summary>
+	/// Order by when the manga was created
+	/// </summary>
+	[Display(Name = "Manga Created At")]
+	[Description("Order by when the manga was created")]
+	MangaCreatedAt,
+	/// <summary>
+	/// Order by when the manga was last updated
+	/// </summary>
+	[Display(Name = "Manga Updated At")]
+	[Description("Order by when the manga was last updated")]
+	MangaUpdatedAt,
 	/// <summary>
 	/// The total number of unique chapters in the manga
 	/// </summary>

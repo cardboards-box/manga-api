@@ -15,6 +15,8 @@ public class NhentaiSource : INhentaiSource
 
 	public string Provider => "nhentai";
 
+	public string Name => "NHentai.to";
+
 	public string? Referer => HomeUrl;
 
 	public string? UserAgent => PolyfillExtensions.USER_AGENT;
@@ -41,10 +43,10 @@ public class NhentaiSource : INhentaiSource
 		return string.Join('/', parts.SkipLast().Append($"{fwext}{ext}"));
 	}
 
-	public async Task<MangaChapterPage[]> ChapterPages(string id, string _)
+	public async Task<MangaChapterPage[]> ChapterPages(string id, string _, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
@@ -54,10 +56,10 @@ public class NhentaiSource : INhentaiSource
 				.ToArray();
 	}
 
-	public async Task<Manga?> Manga(string id)
+	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
 		var manga = new Manga

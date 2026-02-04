@@ -87,6 +87,16 @@ WHERE
     c.deleted_at IS NULL AND
     p.deleted_at IS NULL;
 
+SELECT DISTINCT s.*
+FROM mb_sources s 
+JOIN mb_manga m ON m.source_id = s.id
+JOIN mb_chapters c ON c.manga_id = m.id
+WHERE 
+    c.id = :id AND
+    c.deleted_at IS NULL AND
+    m.deleted_at IS NULL AND
+    s.deleted_at IS NULL;
+
 SELECT DISTINCT *
 FROM mb_images 
 WHERE 
@@ -101,9 +111,10 @@ ORDER BY ordinal ASC;";
 
         var related = new List<MangaBoxRelationship>();
         MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbManga>());
-        MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbImage>());
+        MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbSource>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbImage>());
 
-		return new MangaBoxType<MbChapter>(item, [..related]);
+		return new(item, [..related]);
     }
 
 	public Task<MbChapter[]> Get(Guid mangaId, DateTime after)

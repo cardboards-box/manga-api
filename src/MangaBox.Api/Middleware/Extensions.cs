@@ -133,10 +133,39 @@ internal static class Extensions
 	/// Gets the ID of the currently logged in user
 	/// </summary>
 	/// <param name="controller">The controller in question</param>
+	/// <param name="admin">Whether or not the user is an admin</param>
+	/// <returns>The ID of the user (or null if it's invalid or doesn't exist)</returns>
+	public static Guid? GetProfileId(this BaseController controller, out bool admin)
+	{
+		admin = false;
+		if (controller.User is null) return null;
+
+		admin = controller.User.IsInRole(Constants.ROLE_ADMIN);
+		var allowed = admin || controller.User.IsInRole(Constants.ROLE_USER);
+		if (!allowed) return null;
+
+		return GetBaseProfileId(controller);
+	}
+
+	/// <summary>
+	/// Gets the ID of the currently logged in user
+	/// </summary>
+	/// <param name="controller">The controller in question</param>
 	/// <returns>The ID of the user (or null if it's invalid or doesn't exist)</returns>
 	public static Guid? GetProfileId(this BaseController controller)
+	{
+		return GetProfileId(controller, out _);
+	}
+
+	/// <summary>
+	/// Gets the ID of the currently logged in user (without validating roles)
+	/// </summary>
+	/// <param name="controller">The controller in question</param>
+	/// <returns>The ID of the user (or null if it's invalid or doesn't exist)</returns>
+	public static Guid? GetBaseProfileId(this BaseController controller)
 	{
 		var id = controller.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 		return !string.IsNullOrEmpty(id) && Guid.TryParse(id, out var iid) ? iid : null;
 	}
+
 }

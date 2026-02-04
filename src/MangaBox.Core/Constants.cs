@@ -16,6 +16,16 @@ public static class Constants
 	public const string APPLICATION_URL = "mangabox.app";
 
 	/// <summary>
+	/// The role name for administrators
+	/// </summary>
+	public const string ROLE_ADMIN = "Admin";
+
+	/// <summary>
+	/// The role name for people who can read manga
+	/// </summary>
+	public const string ROLE_USER = "User";
+
+	/// <summary>
 	/// The maximum length for relatively short strings
 	/// </summary>
 	/// <remarks>Things like usernames, keys, etc.</remarks>

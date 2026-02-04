@@ -49,11 +49,24 @@ public interface IMbProfileDbService
     /// <param name="id">The ID of the record to fetch</param>
     /// <returns>The record and all related records</returns>
     Task<MangaBoxType<MbProfile>?> FetchWithRelationships(Guid id);
+
+    /// <summary>
+    /// Gets a list of all of the admins
+    /// </summary>
+    /// <returns>The admins</returns>
+    Task<MbProfile[]> Admins();
 }
 
 internal class MbProfileDbService(
     IOrmService orm) : Orm<MbProfile>(orm), IMbProfileDbService
 {
+    private static string? _queryAdmins;
+
+    public Task<MbProfile[]> Admins()
+    {
+        _queryAdmins ??= Map.Select(t => t.With(a => a.Admin));
+        return Get(_queryAdmins, new { Admin = true });
+	}
 
     public async Task<MangaBoxType<MbProfile>?> FetchWithRelationships(Guid id)
     {

@@ -16,8 +16,9 @@ public interface IFlareSolverBase
 	/// <param name="cookies">The cookies for the request</param>
 	/// <param name="proxy">Optional proxy to use for the session</param>
 	/// <param name="timeout">The timeout to use</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The response from flare solver</returns>
-	Task<SolverResponse?> Get(string url, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null);
+	Task<SolverResponse?> Get(string url, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default);
 
 	/// <summary>
 	/// Fetches a URL using FlareSolverr with POST data
@@ -27,8 +28,9 @@ public interface IFlareSolverBase
 	/// <param name="cookies">The cookies for the request</param>
 	/// <param name="proxy">Optional proxy to use for the session</param>
 	/// <param name="timeout">The timeout to use</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The response from flare solver</returns>
-	Task<SolverResponse?> Post(string url, NameValueCollection data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null);
+	Task<SolverResponse?> Post(string url, NameValueCollection data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default);
 
 	/// <summary>
 	/// Fetches a URL using FlareSolverr with POST data
@@ -38,8 +40,9 @@ public interface IFlareSolverBase
 	/// <param name="cookies">The cookies for the request</param>
 	/// <param name="proxy">Optional proxy to use for the session</param>
 	/// <param name="timeout">The timeout to use</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The response from flare solver</returns>
-	Task<SolverResponse?> Post(string url, Dictionary<string, string> data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null);
+	Task<SolverResponse?> Post(string url, Dictionary<string, string> data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default);
 }
 
 /// <summary>
@@ -47,17 +50,18 @@ public interface IFlareSolverBase
 /// </summary>
 public interface IFlareSolverService : IFlareSolverBase
 {
-    /// <summary>
-    /// Create a flare session
-    /// </summary>
-    /// <param name="proxy">Optional proxy to use for the session</param>
-    /// <returns>The session that was created</returns>
-    Task<SolverSession> CreateSession(SolverProxy? proxy = null);
+	/// <summary>
+	/// Create a flare session
+	/// </summary>
+	/// <param name="proxy">Optional proxy to use for the session</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The session that was created</returns>
+	Task<SolverSession> CreateSession(SolverProxy? proxy, CancellationToken token);
 
     /// <summary>
     /// Clears all of the flare sessions
     /// </summary>
-    Task ClearSessions();
+    Task ClearSessions(CancellationToken token);
 
     /// <summary>
     /// Creates and returns a new instance of the FlareSolver.
@@ -70,42 +74,42 @@ internal class FlareSolverService(
     IFlareSolverApiService _api,
     ILogger<FlareSolverService> _logger) : IFlareSolverService
 {
-    public async Task ClearSessions()
+    public async Task ClearSessions(CancellationToken token)
     {
-        var sessions = await _api.SessionList();
+        var sessions = await _api.SessionList(token);
         if (sessions is null || sessions.SessionIds is null || sessions.SessionIds.Length == 0)
             return;
 
         foreach (var sessionId in sessions.SessionIds)
-            await _api.SessionDestroy(sessionId);
+            await _api.SessionDestroy(sessionId, token);
     }
 
-    public async Task<SolverSession> CreateSession(SolverProxy? proxy = null)
+    public async Task<SolverSession> CreateSession(SolverProxy? proxy, CancellationToken token)
     {
-        var session = await _api.SessionCreate(proxy: proxy)
+        var session = await _api.SessionCreate(null, proxy, token)
             ?? throw new Exception("Failed to create session");
 
         return new SolverSession(_api, session.SessionId);
     }
 
-    public Task<SolverResponse?> Get(string url, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null)
+    public Task<SolverResponse?> Get(string url, SolverCookie[]? cookies, SolverProxy? proxy, int? timeout, CancellationToken token)
     {
-        return _api.Get(url, cookies: cookies, proxy: proxy, maxTimeout: timeout);
+        return _api.Get(url, null, cookies, proxy, false, timeout, token);
     }
 
-    public Task<SolverResponse?> Post(string url, NameValueCollection data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null)
+    public Task<SolverResponse?> Post(string url, NameValueCollection data, SolverCookie[]? cookies, SolverProxy? proxy, int? timeout, CancellationToken token)
     {
-        return _api.Post(url, data, cookies: cookies, proxy: proxy, maxTimeout: timeout);
+        return _api.Post(url, data, null, cookies, proxy, false, timeout, token);
     }
 
-    public Task<SolverResponse?> Post(string url, Dictionary<string, string> data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null)
+    public Task<SolverResponse?> Post(string url, Dictionary<string, string> data, SolverCookie[]? cookies, SolverProxy? proxy, int? timeout, CancellationToken token)
     {
         var collection = new NameValueCollection();
         foreach (var (key, value) in data)
         {
             collection.Add(key, value);
         }
-        return Post(url, collection, cookies: cookies, proxy: proxy, timeout: timeout);
+        return Post(url, collection, cookies, proxy, timeout, token);
     }
 
     public FlareSolverInstance Limiter() => new(this, _logger);

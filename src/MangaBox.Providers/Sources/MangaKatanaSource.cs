@@ -13,6 +13,8 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 
 	public string Provider => "mangakatana";
 
+	public string Name => "MangaKatana";
+
 	public string? Referer => HomeUrl;
 
 	public string? UserAgent => PolyfillExtensions.USER_AGENT;
@@ -21,10 +23,10 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
+	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
@@ -33,14 +35,14 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 			.Where(t => t.Contains("thzq=["))
 			.SelectMany(t =>
 			{
-				var sections = t.Split(new[] { "thzq=[" }, StringSplitOptions.RemoveEmptyEntries);
-				if (sections.Length < 2) return Array.Empty<string>();
+				var sections = t.Split(["thzq=["], StringSplitOptions.RemoveEmptyEntries);
+				if (sections.Length < 2) return [];
 
 				return sections
 					.Last()
 					.Split(']')
 					.First()
-					.Split(new[] { ',', '\'', '\"' }, StringSplitOptions.RemoveEmptyEntries)
+					.Split([ ',', '\'', '\"' ], StringSplitOptions.RemoveEmptyEntries)
 					.Select(t => t.Trim())
 					.ToArray();
 			})
@@ -48,10 +50,10 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 			.ToArray();
 	}
 
-	public async Task<Manga?> Manga(string id)
+	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
 		var manga = new Manga

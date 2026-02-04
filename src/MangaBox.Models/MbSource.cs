@@ -20,6 +20,13 @@ public class MbSource : MbDbObject, IDbCacheTable
 	public string Slug { get; set; } = string.Empty;
 
 	/// <summary>
+	/// The name of the source
+	/// </summary>
+	[Column("name")]
+	[JsonPropertyName("name")]
+	public string Name { get; set; } = string.Empty;
+
+	/// <summary>
 	/// The base URL to use for the source
 	/// </summary>
 	[Column("base_url")]

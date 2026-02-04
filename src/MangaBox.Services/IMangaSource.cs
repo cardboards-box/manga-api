@@ -1,6 +1,6 @@
 ﻿namespace MangaBox.Services;
 
-using MangaBox.Models.Types;
+using Models.Types;
 using static MangaSource;
 
 /// <summary>
@@ -17,6 +17,11 @@ public interface IMangaSource
 	/// The provider slug for the source
 	/// </summary>
 	string Provider { get; }
+
+	/// <summary>
+	/// The display name of the manga source
+	/// </summary>
+	string Name { get; }
 
 	/// <summary>
 	/// The referer to add as a header when making image requests
@@ -44,16 +49,18 @@ public interface IMangaSource
 	/// Fetches a manga definition from the given source
 	/// </summary>
 	/// <param name="id">The ID of the manga to fetch</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The manga or null if something went wrong</returns>
-	Task<Manga?> Manga(string id);
+	Task<Manga?> Manga(string id, CancellationToken token);
 
 	/// <summary>
 	/// Fetches the pages for a specific chapter of a manga from the given source
 	/// </summary>
 	/// <param name="mangaId">The ID of the manga</param>
 	/// <param name="chapterId">The ID of the chapter</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The pages of the chapter or null if something went wrong</returns>
-	Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId);
+	Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token);
 }
 
 /// <summary>
@@ -65,8 +72,9 @@ public interface IMangaUrlSource : IMangaSource
 	/// Fetches the page for a specific chapter of a manga from the given source
 	/// </summary>
 	/// <param name="url">The URL of the page the chapters are on</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The pages of the chapter or null if something went wrong</returns>
-	Task<MangaChapterPage[]> ChapterPages(string url);
+	Task<MangaChapterPage[]> ChapterPages(string url, CancellationToken token);
 }
 
 /// <summary>
@@ -147,6 +155,9 @@ public class MangaSource
 
 		[JsonPropertyName("ordinalVolumeReset")]
 		public bool OrdinalVolumeReset { get; set; } = false;
+
+		[JsonPropertyName("legacyId")]
+		public int? LegacyId { get; set; }
 	}
 
 	public class MangaTag
@@ -204,6 +215,9 @@ public class MangaSource
 
 		[JsonPropertyName("attributes")]
 		public List<MangaAttribute> Attributes { get; set; } = [];
+
+		[JsonPropertyName("legacyId")]
+		public int? LegacyId { get; set; }
 	}
 
 	public class MangaChapterPage

@@ -10,62 +10,69 @@ using Models;
 /// <remarks>You probably don't want this class, prefer: <see cref="IFlareSolverService"/></remarks>
 internal interface IFlareSolverApiService
 {
-    /// <summary>
-    /// Fetches data from the flare solver API
-    /// </summary>
-    /// <param name="url">The URL to use</param>
-    /// <param name="sessionId">The session ID to use</param>
-    /// <param name="cookies">The cookies to include</param>
-    /// <param name="proxy">The proxy to use</param>
-    /// <param name="returnOnlyCookies">Whether to return only cookies</param>
-    /// <param name="maxTimeout">The maximum timeout</param>
-    /// <returns>The solver response</returns>
-    Task<SolverResponse?> Get(string url,
-        string? sessionId = null,
-        SolverCookie[]? cookies = null,
-        SolverProxy? proxy = null,
-        bool returnOnlyCookies = false,
-        int? maxTimeout = null);
-
 	/// <summary>
-	/// Fetches data from the flare solver API with a POST
+	/// Fetches data from the flare solver API
 	/// </summary>
 	/// <param name="url">The URL to use</param>
-    /// <param name="parameters">The body parameters</param>
 	/// <param name="sessionId">The session ID to use</param>
 	/// <param name="cookies">The cookies to include</param>
 	/// <param name="proxy">The proxy to use</param>
 	/// <param name="returnOnlyCookies">Whether to return only cookies</param>
 	/// <param name="maxTimeout">The maximum timeout</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The solver response</returns>
+	Task<SolverResponse?> Get(string url,
+        string? sessionId,
+        SolverCookie[]? cookies,
+        SolverProxy? proxy,
+        bool returnOnlyCookies,
+        int? maxTimeout,
+        CancellationToken token);
+
+	/// <summary>
+	/// Fetches data from the flare solver API with a POST
+	/// </summary>
+	/// <param name="url">The URL to use</param>
+	/// <param name="parameters">The body parameters</param>
+	/// <param name="sessionId">The session ID to use</param>
+	/// <param name="cookies">The cookies to include</param>
+	/// <param name="proxy">The proxy to use</param>
+	/// <param name="returnOnlyCookies">Whether to return only cookies</param>
+	/// <param name="maxTimeout">The maximum timeout</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The solver response</returns>
 	Task<SolverResponse?> Post(string url,
         NameValueCollection parameters,
-        string? sessionId = null,
-        SolverCookie[]? cookies = null,
-        SolverProxy? proxy = null,
-        bool returnOnlyCookies = false,
-        int? maxTimeout = null);
+        string? sessionId,
+        SolverCookie[]? cookies,
+        SolverProxy? proxy,
+		bool returnOnlyCookies,
+		int? maxTimeout,
+		CancellationToken token);
 
-    /// <summary>
-    /// Fetches a list of all of the active sessions
-    /// </summary>
-    /// <returns>The list of active sessions</returns>
-    Task<SolverSessionList?> SessionList();
-    
-    /// <summary>
-    /// Creates a new session
-    /// </summary>
-    /// <param name="sessionId">The session ID to use</param>
-    /// <param name="proxy">The proxy to use</param>
-    /// <returns>The created session</returns>
-    Task<SolverSessionCreate?> SessionCreate(string? sessionId = null, SolverProxy? proxy = null);
+	/// <summary>
+	/// Fetches a list of all of the active sessions
+	/// </summary>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The list of active sessions</returns>
+	Task<SolverSessionList?> SessionList(CancellationToken token);
 
-    /// <summary>
-    /// Destroys the given session
-    /// </summary>
-    /// <param name="sessionId">The session ID to use</param>
-    /// <returns>Whether or not the session was destroyed</returns>
-    Task<SolverSessionDestroy?> SessionDestroy(string sessionId);
+	/// <summary>
+	/// Creates a new session
+	/// </summary>
+	/// <param name="sessionId">The session ID to use</param>
+	/// <param name="proxy">The proxy to use</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The created session</returns>
+	Task<SolverSessionCreate?> SessionCreate(string? sessionId, SolverProxy? proxy, CancellationToken token);
+
+	/// <summary>
+	/// Destroys the given session
+	/// </summary>
+	/// <param name="sessionId">The session ID to use</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>Whether or not the session was destroyed</returns>
+	Task<SolverSessionDestroy?> SessionDestroy(string sessionId, CancellationToken token);
 }
 
 internal class FlareSolverApiService(
@@ -83,11 +90,12 @@ internal class FlareSolverApiService(
     public string ServerUrl => _serverUrl ??= $"{SolverUrl?.TrimEnd('/')}/{Version.Trim('/')}";
 
     public Task<SolverResponse?> Get(string url,
-        string? sessionId = null,
-        SolverCookie[]? cookies = null,
-        SolverProxy? proxy = null,
-        bool returnOnlyCookies = false,
-        int? maxTimeout = null)
+        string? sessionId,
+        SolverCookie[]? cookies,
+        SolverProxy? proxy,
+        bool returnOnlyCookies,
+        int? maxTimeout,
+        CancellationToken token)
     {
         var request = new SolverRequest
         {
@@ -99,16 +107,17 @@ internal class FlareSolverApiService(
             MaxTimeout = maxTimeout ?? DEFAULT_TIMEOUT,
             ReturnOnlyCookies = returnOnlyCookies
         };
-        return _api.Post<SolverResponse, SolverRequest>(ServerUrl, request);
+        return _api.Post<SolverResponse, SolverRequest>(ServerUrl, request, token: token);
     }
 
     public Task<SolverResponse?> Post(string url, 
         NameValueCollection parameters, 
-        string? sessionId = null, 
-        SolverCookie[]? cookies = null, 
-        SolverProxy? proxy = null, 
-        bool returnOnlyCookies = false, 
-        int? maxTimeout = null)
+        string? sessionId, 
+        SolverCookie[]? cookies, 
+        SolverProxy? proxy, 
+        bool returnOnlyCookies, 
+        int? maxTimeout,
+        CancellationToken token)
     {
         var request = new SolverRequest
         {
@@ -121,10 +130,10 @@ internal class FlareSolverApiService(
             MaxTimeout = maxTimeout ?? DEFAULT_TIMEOUT,
             ReturnOnlyCookies = returnOnlyCookies
         };
-        return _api.Post<SolverResponse, SolverRequest>(ServerUrl, request);
+        return _api.Post<SolverResponse, SolverRequest>(ServerUrl, request, token: token);
     }
 
-    public Task<SolverSessionCreate?> SessionCreate(string? sessionId = null, SolverProxy? proxy = null)
+    public Task<SolverSessionCreate?> SessionCreate(string? sessionId, SolverProxy? proxy, CancellationToken token)
     {
         var request = new SolverRequest
         {
@@ -132,25 +141,25 @@ internal class FlareSolverApiService(
             SessionId = sessionId,
             Proxy = proxy
         };
-        return _api.Post<SolverSessionCreate, SolverRequest>(ServerUrl, request);
+        return _api.Post<SolverSessionCreate, SolverRequest>(ServerUrl, request, token: token);
     }
 
-    public Task<SolverSessionDestroy?> SessionDestroy(string sessionId)
+    public Task<SolverSessionDestroy?> SessionDestroy(string sessionId, CancellationToken token)
     {
         var request = new SolverRequest
         {
             Command = SolverRequest.CMD_SESSION_DESTROY,
             SessionId = sessionId,
         };
-        return _api.Post<SolverSessionDestroy, SolverRequest>(ServerUrl, request);
+        return _api.Post<SolverSessionDestroy, SolverRequest>(ServerUrl, request, token: token);
     }
 
-    public Task<SolverSessionList?> SessionList()
+    public Task<SolverSessionList?> SessionList(CancellationToken token)
     {
         var request = new SolverRequest
         {
             Command = SolverRequest.CMD_SESSION_LIST
         };
-        return _api.Post<SolverSessionList, SolverRequest>(ServerUrl, request);
+        return _api.Post<SolverSessionList, SolverRequest>(ServerUrl, request, token: token);
     }
 }

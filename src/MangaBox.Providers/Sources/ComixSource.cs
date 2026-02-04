@@ -17,13 +17,15 @@ internal class ComixSource(
 
 	public string? Referer => HomeUrl;
 
+	public string Name => "Comix.to";
+
 	public string? UserAgent => PolyfillExtensions.USER_AGENT;
 
 	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
 
-	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
+	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
-		var chapter = await _api.Chapter(chapterId);
+		var chapter = await _api.Chapter(chapterId, token);
 		if (chapter?.Result?.Images is null)
 		{
 			_logger.LogWarning("Chapter not found: {ChapterId}", chapterId);
@@ -35,11 +37,11 @@ internal class ComixSource(
 			.ToArray();
 	}
 
-	public async Task<Manga?> Manga(string id)
+	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
-		async IAsyncEnumerable<MangaChapter> GetChapters(Comix<Comix.Manga> manga)
+		async IAsyncEnumerable<MangaChapter> GetChapters(Comix<Comix.Manga> manga, [EnumeratorCancellation] CancellationToken token)
 		{
-			await foreach (var chapter in _api.AllChapters(id))
+			await foreach (var chapter in _api.AllChapters(id, token))
 			{
 				yield return new MangaChapter
 				{
@@ -55,7 +57,7 @@ internal class ComixSource(
 		}
 		;
 
-		var manga = await _api.Manga(id);
+		var manga = await _api.Manga(id, token);
 		if (manga is null)
 		{
 			_logger.LogWarning("Manga not found: {MangaId}", id);
@@ -72,7 +74,7 @@ internal class ComixSource(
 			Description = manga.Result.Synopsis,
 			AltTitles = manga.Result.AltTitles,
 			Tags = [],
-			Chapters = await GetChapters(manga).OrderBy(t => t.Number).ToListA(),
+			Chapters = await GetChapters(manga, token).OrderBy(t => t.Number).ToListA(),
 			Nsfw = manga.Result.IsNsfw,
 			Attributes = [],
 			SourceCreated = DateTimeOffset.FromUnixTimeSeconds(manga.Result.CreatedAt).DateTime,
@@ -105,27 +107,28 @@ internal class ComixApiService(IApiService _api)
 		return $"{BASE_URL}/{url.TrimStart('/')}";
 	}
 
-	public Task<Comix<Comix.Manga>?> Manga(string id)
+	public Task<Comix<Comix.Manga>?> Manga(string id, CancellationToken token)
 	{
-		return _api.Get<Comix<Comix.Manga>>(WrapUrl($"manga/{id}"));
+		return _api.Get<Comix<Comix.Manga>>(WrapUrl($"manga/{id}"), token: token);
 	}
 
-	public Task<Comix<Comix.Chapter>?> Chapter(string id)
+	public Task<Comix<Comix.Chapter>?> Chapter(string id, CancellationToken token)
 	{
-		return _api.Get<Comix<Comix.Chapter>>(WrapUrl($"chapters/{id}"));
+		return _api.Get<Comix<Comix.Chapter>>(WrapUrl($"chapters/{id}"), token: token);
 	}
 
-	public Task<Comix<Comix.ChapterList>?> Chapters(string id, int page = 1)
+	public Task<Comix<Comix.ChapterList>?> Chapters(string id, int page, CancellationToken token)
 	{
-		return _api.Get<Comix<Comix.ChapterList>>(WrapUrl($"manga/{id}/chapters?page={page}&limit=100"));
+		return _api.Get<Comix<Comix.ChapterList>>(WrapUrl($"manga/{id}/chapters?page={page}&limit=100"), token: token);
 	}
 
-	public async IAsyncEnumerable<Comix.Chapter> AllChapters(string mangaId)
+	public async IAsyncEnumerable<Comix.Chapter> AllChapters(string mangaId, [EnumeratorCancellation] CancellationToken token)
 	{
 		int page = 1;
 		while (true)
 		{
-			var result = await Chapters(mangaId, page);
+			token.ThrowIfCancellationRequested();
+			var result = await Chapters(mangaId, page, token);
 			if (result == null || result.Result.Items.Length == 0)
 				yield break;
 

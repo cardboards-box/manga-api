@@ -15,6 +15,8 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 
 	public string Provider => "mangakakalot";
 
+	public string Name => "Mangakakalot.tv";
+
 	public string? Referer => null;
 
 	public string? UserAgent => PolyfillExtensions.USER_AGENT;
@@ -23,9 +25,9 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public async Task<MangaChapterPage[]> ChapterPages(string url)
+	public async Task<MangaChapterPage[]> ChapterPages(string url, CancellationToken token)
 	{
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return [];
 
 		return doc
@@ -35,16 +37,16 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 				.ToArray();
 	}
 
-	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
+	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{ChapterBaseUri}{mangaId}/{chapterId}";
-		return ChapterPages(url);
+		return ChapterPages(url, token);
 	}
 
-	public async Task<Manga?> Manga(string id)
+	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
 		var manga = new Manga
@@ -93,23 +95,25 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 			manga.Chapters.Add(c);
 		}
 
-		manga.Chapters = manga.Chapters.OrderBy(t => t.Number).ToList();
+		manga.Chapters = [.. manga.Chapters.OrderBy(t => t.Number)];
 
 		return manga;
 	}
 
 	public (bool matches, string? part) MatchesProvider(string url)
 	{
-		var matches = url.ToLower().StartsWith(HomeUrl.ToLower());
+		var matches = url.StartsWith(HomeUrl, StringComparison.CurrentCultureIgnoreCase);
 		if (!matches) return (false, null);
 
-		var parts = url.Remove(0, HomeUrl.Length).Split('/', StringSplitOptions.RemoveEmptyEntries);
+		var parts = url[HomeUrl.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
 		if (parts.Length == 0) return (false, null);
 
 		var domain = parts.First();
-		if (domain.ToLower() == "manga" && parts.Length == 2) return (true, parts.Last());
+		if (domain.Equals("manga", StringComparison.CurrentCultureIgnoreCase) && parts.Length == 2) 
+			return (true, parts.Last());
 
-		if (domain.ToLower() == "chapter" && parts.Length > 1) return (true, parts.Skip(1).First());
+		if (domain.Equals("chapter", StringComparison.CurrentCultureIgnoreCase) && parts.Length > 1) 
+			return (true, parts.Skip(1).First());
 
 		return (false, null);
 	}

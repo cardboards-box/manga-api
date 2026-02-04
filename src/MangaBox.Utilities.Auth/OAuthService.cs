@@ -15,8 +15,9 @@ public interface IOAuthService
 	/// Resolves the code and returns the auth response
 	/// </summary>
 	/// <param name="code">The OAuth code</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The auth response</returns>
-	Task<Boxed> Resolve(string code);
+	Task<Boxed> Resolve(string code, CancellationToken token);
 
 	/// <summary>
 	/// Gets the authentication URL for the OAuth platform
@@ -29,8 +30,9 @@ public interface IOAuthService
 	/// Gets the JWT token for the given profile
 	/// </summary>
 	/// <param name="profile">The profile to get the token for</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The token and the profile</returns>
-	Task<AuthResponse> GetToken(MbProfile profile);
+	Task<AuthResponse> GetToken(MbProfile profile, CancellationToken token);
 }
 
 internal class OAuthService(
@@ -44,9 +46,9 @@ internal class OAuthService(
 	public string OAuthUrl => field ??= _config["OAuth:Url"]?.ForceNull()?.TrimEnd('/') ?? "https://auth.index-0.com";
 	public string[] ReturnUrls => field ??= _config.GetValue<string[]>("OAuth:ReturnUrls") ?? ["https://localhost:7115/resolve"];
 
-	public async Task<Boxed> Resolve(string code)
+	public async Task<Boxed> Resolve(string code, CancellationToken cancel)
 	{
-		var res = await ResolveCode(code);
+		var res = await ResolveCode(code, cancel);
 		if (res is null || !string.IsNullOrEmpty(res.Error))
 			return Boxed.Unauthorized(res?.Error ?? "Login Failed (1)");
 		if (res.User is null) return Boxed.Unauthorized("Login Failed (2)");
@@ -66,11 +68,11 @@ internal class OAuthService(
 		if (profile is null) 
 			return Boxed.Unauthorized("Login Failed (4)");
 
-		var token = await GetToken(profile);
+		var token = await GetToken(profile, cancel);
 		return Boxed.Ok(token);
 	}
 
-	public async Task<AuthResponse> GetToken(MbProfile profile)
+	public async Task<AuthResponse> GetToken(MbProfile profile, CancellationToken cancel)
 	{
 		var token = _token.Empty()
 			.Add(ClaimTypes.NameIdentifier, profile.Id.ToString())
@@ -81,17 +83,17 @@ internal class OAuthService(
 			.Add(ClaimTypes.PrimarySid, profile.PlatformId)
 			.Add(ClaimTypes.PrimaryGroupSid, profile.ProviderId);
 
-		if (profile.Admin) token.Add(ClaimTypes.Role, "Admin");
-		if (profile.CanRead) token.Add(ClaimTypes.Role, "User");
+		if (profile.Admin) token.Add(ClaimTypes.Role, Constants.ROLE_ADMIN);
+		if (profile.CanRead) token.Add(ClaimTypes.Role, Constants.ROLE_USER);
 
-		var jwt = await _token.GenerateToken(token);
+		var jwt = await _token.GenerateToken(token, cancel);
 		return new(jwt, profile);
 	}
 
-	public Task<TokenResponse?> ResolveCode(string code)
+	public Task<TokenResponse?> ResolveCode(string code, CancellationToken token)
 	{
 		var request = new TokenRequest(code, Secret, AppId);
-		return _api.Post<TokenResponse, TokenRequest>($"{OAuthUrl}/api/data", request);
+		return _api.Post<TokenResponse, TokenRequest>($"{OAuthUrl}/api/data", request, token: token);
 	}
 
 	public string? Url(string? returnUrl)

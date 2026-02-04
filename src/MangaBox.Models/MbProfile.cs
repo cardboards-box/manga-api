@@ -48,13 +48,6 @@ public class MbProfile : MbDbObjectLegacy
 	public string ProviderId { get; set; } = string.Empty;
 
 	/// <summary>
-	/// The optional JSON blob of settings for the user
-	/// </summary>
-	[Column("settings_blob")]
-	[JsonPropertyName("settingsBlob")]
-	public string? SettingsBlob { get; set; }
-
-	/// <summary>
 	/// The user's email
 	/// </summary>
 	[Column("email")]
@@ -63,16 +56,23 @@ public class MbProfile : MbDbObjectLegacy
 	public string Email { get; set; } = string.Empty;
 
 	/// <summary>
+	/// The optional JSON blob of settings for the user
+	/// </summary>
+	[Column("settings_blob", ExcludeUpdates = true)]
+	[JsonPropertyName("settingsBlob")]
+	public string? SettingsBlob { get; set; }
+
+	/// <summary>
 	/// Whether or not the user is an administrator
 	/// </summary>
-	[Column("admin")]
+	[Column("admin", ExcludeUpdates = true)]
 	[JsonPropertyName("admin")]
 	public bool Admin { get; set; } = false;
 
 	/// <summary>
 	/// Whehter or not the user can read manga on the platform
 	/// </summary>
-	[Column("can_read")]
+	[Column("can_read", ExcludeUpdates = true)]
 	[JsonPropertyName("canRead")]
 	public bool CanRead { get; set; } = false;
 }

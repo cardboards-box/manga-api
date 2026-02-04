@@ -9,7 +9,7 @@ using static Constants;
 /// </summary>
 [Table("mb_manga")]
 [InterfaceOption(nameof(MbManga))]
-[Searchable(nameof(Title), nameof(Description))]
+[Searchable(nameof(Title), nameof(Description), nameof(AltTitles))]
 public class MbManga : MbDbObjectLegacy
 {
 	private bool? _nsfw = null;

@@ -16,6 +16,8 @@ internal class LikeMangaSource(
 
 	public string Provider => "like-manga";
 
+	public string Name => "LikeManga (likemanga.in)";
+
 	public string MangaBaseUri => $"{HomeUrl}/manga/";
 
 	public string? Referer => HomeUrl + "/";
@@ -26,21 +28,21 @@ internal class LikeMangaSource(
 
 	private readonly FlareSolverInstance _flareInstance = _flare.Limiter();
 
-	public async Task<MangaChapterPage[]> ChapterPages(string url)
+	public async Task<MangaChapterPage[]> ChapterPages(string url, CancellationToken token)
 	{
-		var doc = await _flareInstance.GetHtml(url);
+		var doc = await _flareInstance.GetHtml(url, token);
 		if (doc is null) return [];
 
 		return Parse(doc, url);
 	}
 
-	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
+	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}";
-		return ChapterPages(url);
+		return ChapterPages(url, token);
 	}
 
-	public async Task<Manga?> Manga(string id)
+	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
 		const string TitleXPath = "//div[contains(@class,'post-title')]/h1";
 		const string GenresXPath = "//div[contains(@class,'post-content_item')][.//h5[normalize-space()='Genre(s)']]//div[contains(@class,'genres-content')]//a";
@@ -48,7 +50,7 @@ internal class LikeMangaSource(
 		const string CoverImgXPath = "//div[contains(@class,'summary_image')]//img";
 
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _flareInstance.GetHtml(url);
+		var doc = await _flareInstance.GetHtml(url, token);
 		if (doc == null) return null;
 
 		var title = SelectText(doc, TitleXPath);
@@ -79,7 +81,7 @@ internal class LikeMangaSource(
 		};
 
 		//https://likemanga.in/manga/i-got-my-wish-and-reincarnated-as-the-villainess-last-boss/ajax/chapters/
-		var chapters = await _api.PostHtml($"{url.TrimEnd('/')}/ajax/chapters/");
+		var chapters = await _api.PostHtml($"{url.TrimEnd('/')}/ajax/chapters/", token: token);
 		if (chapters is null)
 		{
 			_logger.LogWarning("Could not get chapters for manga: {url}", url);

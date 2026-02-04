@@ -6,7 +6,9 @@ var services = new ServiceCollection()
 	.AddConfig(c => c
 		.AddFile("appsettings.json")
 		.AddUserSecrets<Program>(), out var config)
-	.AddDatabaseGeneration();
+	.AddDatabaseGeneration()
+	
+	.AddTransient<LegacyPostgresSqlService>();
 
 await services.AddMangaBox(config);
 

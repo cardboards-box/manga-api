@@ -12,6 +12,19 @@ public class AuthController(
 {
 #if DEBUG
 	private const string? DEFAULT_REDIRECT = "https://localhost:7115/resolve";
+
+	/// <summary>
+	/// Attempts to resolve the code and log the user in
+	/// </summary>
+	/// <param name="code">The OAuth platform code</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The response</returns>
+	[HttpGet, Route("resolve")]
+	[ProducesBox<AuthResponse>, ProducesError(401)]
+	public Task<IActionResult> ResolveTemp([FromQuery] string code, CancellationToken token) => Box(() =>
+	{
+		return _oauth.Resolve(code, token);
+	});
 #else
 	private const string? DEFAULT_REDIRECT = null;
 #endif
@@ -34,27 +47,14 @@ public class AuthController(
 	/// Attempts to resolve the code and log the user in
 	/// </summary>
 	/// <param name="code">The OAuth platform code</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The response</returns>
 	[HttpGet, Route("auth/resolve/{code}")]
 	[ProducesBox<AuthResponse>, ProducesError(401)]
-	public Task<IActionResult> Resolve([FromRoute] string code) => Box(() =>
+	public Task<IActionResult> Resolve([FromRoute] string code, CancellationToken token) => Box(() =>
 	{
-		return _oauth.Resolve(code);
+		return _oauth.Resolve(code, token);
 	});
-
-#if DEBUG
-	/// <summary>
-	/// Attempts to resolve the code and log the user in
-	/// </summary>
-	/// <param name="code">The OAuth platform code</param>
-	/// <returns>The response</returns>
-	[HttpGet, Route("resolve")]
-	[ProducesBox<AuthResponse>, ProducesError(401)]
-	public Task<IActionResult> ResolveTemp([FromQuery] string code) => Box(() =>
-	{
-		return _oauth.Resolve(code);
-	});
-#endif
 
 	/// <summary>
 	/// Fetches the current user's profile
@@ -64,7 +64,7 @@ public class AuthController(
 	[ProducesBox<MbProfile>, ProducesError(401)]
 	public Task<IActionResult> Me() => Box(async () =>
 	{
-		var id = this.GetProfileId();
+		var id = this.GetBaseProfileId();
 		if (!id.HasValue) return Boxed.Unauthorized("Not logged in.");
 
 		var profile = await _db.Profile.Fetch(id.Value);

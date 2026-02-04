@@ -139,14 +139,14 @@ public class FlareSolverInstance(
 		_logger.LogInformation("Resuming after pause. New Limits {limit} - {timeout}ms", limit, timeout);
 	}
 
-	private async Task<HtmlDocument> DoRequest(string url, bool get, NameValueCollection? body = null, int count = 0)
+	private async Task<HtmlDocument> DoRequest(string url, bool get, NameValueCollection? body, CancellationToken token, int count = 0)
 	{
 		try
 		{
 			_logger.LogInformation("Getting data from {url}", url);
 			var data = get 
-				? await _flare.Get(url, _cookies, timeout: 30_000)
-				: await _flare.Post(url, body ?? [], _cookies, timeout: 30_000);
+				? await _flare.Get(url, _cookies, timeout: 30_000, token: token)
+				: await _flare.Post(url, body ?? [], _cookies, timeout: 30_000, token: token);
 			if (data is null || data.Solution is null) throw new Exception("Failed to get data");
 
 			if (data.Solution.Status < 200 || data.Solution.Status >= 300)
@@ -167,9 +167,9 @@ public class FlareSolverInstance(
 			ClearCookies();
 			var delay = Random.Shared.Next(PauseDurationSecondsMin, PauseDurationSecondsMax);
 			_logger.LogError(ex, "Failed to get data for url {count}/{max}, retrying after {delay} seconds: {url}", count, MaxRetries, delay, url);
-			await Task.Delay(delay * 1000);
+			await Task.Delay(delay * 1000, token);
 			_logger.LogInformation("Retrying request");
-			return await DoRequest(url, get, body, count);
+			return await DoRequest(url, get, body, token, count);
 		}
 	}
 
@@ -178,14 +178,15 @@ public class FlareSolverInstance(
 	/// </summary>
 	/// <param name="url">The URL to fetch</param>
 	/// <param name="cache">Whether or not to cache the page</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The HTML document retrieved from the URL</returns>
 	/// <remarks>This does not use <see cref="LimitCheck(CancellationToken)"/></remarks>
-	public virtual async Task<HtmlDocument> GetHtml(string url, bool cache = false)
+	public virtual async Task<HtmlDocument> GetHtml(string url, CancellationToken token, bool cache = false)
 	{
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;
 
-		var page = await DoRequest(url, true, null);
+		var page = await DoRequest(url, true, null, token);
 		if (cache) _pageCache[url] = page;
 		return page;
 	}
@@ -196,14 +197,15 @@ public class FlareSolverInstance(
 	/// <param name="url">The URL to fetch</param>
 	/// <param name="body">The body of the request</param>
 	/// <param name="cache">Whether or not to cache the page</param>
+	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The HTML document retrieved from the URL</returns>
 	/// <remarks>This does not use <see cref="LimitCheck(CancellationToken)"/></remarks>
-	public virtual async Task<HtmlDocument> PostHtml(string url, NameValueCollection? body = null, bool cache = false)
+	public virtual async Task<HtmlDocument> PostHtml(string url, CancellationToken token, NameValueCollection? body = null, bool cache = false)
 	{
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;
 
-		var page = await DoRequest(url, false, body);
+		var page = await DoRequest(url, false, body, token);
 		if (cache) _pageCache[url] = page;
 		return page;
 	}

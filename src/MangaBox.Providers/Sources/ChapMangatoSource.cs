@@ -17,6 +17,8 @@ public class ChapmanganatoSource(
 
 	public string Provider => "chapmanganato";
 
+	public string Name => "NatoManga (Used to be: ChapMangaNato)";
+
 	public string? Referer => HomeUrl + "/";
 
 	public string? UserAgent => PolyfillExtensions.USER_AGENT;
@@ -33,9 +35,9 @@ public class ChapmanganatoSource(
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public async Task<MangaChapterPage[]> ChapterPages(string url)
+	public async Task<MangaChapterPage[]> ChapterPages(string url, CancellationToken token)
 	{
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token: token);
 		if (doc == null) return [];
 
 		return doc
@@ -45,10 +47,10 @@ public class ChapmanganatoSource(
 				.ToArray();
 	}
 
-	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
+	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{ChapterBaseUri}/manga/{mangaId}/{chapterId}";
-		return ChapterPages(url);
+		return ChapterPages(url, token);
 	}
 
 	public void FillDetails(Manga manga, HtmlDocument doc)
@@ -75,10 +77,10 @@ public class ChapmanganatoSource(
 		manga.Description = description?.InnerText.HTMLDecode().Trim() ?? string.Empty;
 	}
 
-	public async Task<Manga?> Manga(string id)
+	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}/{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
 		var manga = new Manga
@@ -91,28 +93,6 @@ public class ChapmanganatoSource(
 		};
 
 		FillDetails(manga, doc);
-
-		//var desc = doc.DocumentNode.SelectSingleNode("//div[@id='panel-story-info-description']");
-		//foreach (var item in desc.ChildNodes.ToArray())
-		//{
-		//    if (item.Name == "h3") item.Remove();
-		//}
-
-		//manga.Description = desc.InnerHtml.Trim().HTMLDecode();
-
-		//var textEntries = doc.DocumentNode.SelectNodes("//div[@class=\"story-info-right\"]/table/tbody/tr");
-
-		//foreach (var tr in textEntries)
-		//{
-		//    var label = tr.SelectSingleNode("./td[@class=\"table-label\"]")?.InnerText?.Trim().ToLower();
-
-		//    if (!(label?.Contains("genres") ?? false)) 
-		//        continue;
-
-		//    var atags = tr.SelectNodes("./td[@class=\"table-value\"]/a").Select(t => t.InnerText).ToArray();
-		//    manga.Tags = atags;
-		//    break;
-		//}
 
 		var chapterEntries = doc.DocumentNode.SelectNodes("//div[@class='chapter-list']/div[@class='row']/span/a");
 		if (chapterEntries is null)

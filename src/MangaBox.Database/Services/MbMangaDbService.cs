@@ -63,8 +63,9 @@ public interface IMbMangaDbService
 	/// </summary>
 	/// <param name="sourceId">The source the manga was loaded from</param>
 	/// <param name="json">The JSON data of the manga to upsert</param>
+    /// <param name="profileId">The ID of the profile who created the JSON</param>
 	/// <returns>The result of the upsert operation</returns>
-	Task<UpsertResult?> UpsertJson(Guid sourceId, string json);
+	Task<UpsertResult?> UpsertJson(Guid sourceId, Guid? profileId, string json);
 
     /// <summary>
     /// Searches for a manga by the given filter
@@ -213,14 +214,14 @@ WHERE
 		return new MangaBoxType<MbManga>(item, [..related]);
     }
 
-    public async Task<UpsertResult?> UpsertJson(Guid sourceId, string json)
+    public async Task<UpsertResult?> UpsertJson(Guid sourceId, Guid? profileId, string json)
     {
         var query = await _cache.Required("upsert_manga");
         using var con = await _sql.CreateConnection();
         var result = await con.ExecuteScalarAsync<string>(query, new
         {
             source_id = sourceId,
-            user_agent = (string?)null,
+            profile_id = profileId,
             manga_json = json
         });
         if (string.IsNullOrEmpty(result))

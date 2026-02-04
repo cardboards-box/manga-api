@@ -1,8 +1,8 @@
 WITH input AS (
     SELECT
-        @source_id::uuid   AS source_id,
-        @user_agent::text  AS user_agent,
-        @manga_json::jsonb AS j
+        @source_id::uuid AS source_id,
+        @manga_json::jsonb AS j,
+        @profile_id::uuid AS profile_id
 ), manga_in AS (
     SELECT
         NULLIF(j->>'title','') AS title,
@@ -24,7 +24,8 @@ WITH input AS (
         j->'chapters'   AS chapters_json,
         COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'authors')), '{}'::text[])   AS author_names,
         COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'artists')), '{}'::text[])   AS artist_names,
-        COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'uploaders')), '{}'::text[]) AS uploader_names
+        COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'uploaders')), '{}'::text[]) AS uploader_names,
+        (j->>'legacyId')::int AS legacy_id
     FROM input
 ), manga_attrs AS (
     SELECT
@@ -50,7 +51,8 @@ WITH input AS (
         user_agent,
         source_created,
         ordinal_volume_reset,
-        updated_at
+        updated_at,
+        legacy_id
     )
     SELECT
         mi.title,
@@ -65,10 +67,11 @@ WITH input AS (
         mi.original_source_id,
         false,
         mi.referer,
-        i.user_agent,
+        null,
         mi.source_created,
         mi.ordinal_volume_reset,
-        CURRENT_TIMESTAMP
+        CURRENT_TIMESTAMP,
+        mi.legacy_id
     FROM manga_in mi
     CROSS JOIN manga_attrs ma
     CROSS JOIN input i
@@ -97,8 +100,9 @@ WITH input AS (
         number numeric,
         volume numeric,
         language text,
-        external_url text,
-        attributes jsonb
+        "externalUrl" text,
+        attributes jsonb,
+        "legacyId" integer
     )
 ), chapters_upsert AS (
     INSERT INTO mb_chapters (
@@ -111,7 +115,8 @@ WITH input AS (
         language,
         external_url,
         attributes,
-        updated_at
+        updated_at,
+        legacy_id
     )
     SELECT
         ci.manga_id,
@@ -121,13 +126,14 @@ WITH input AS (
         ci.number AS ordinal,
         ci.volume AS volume,
         COALESCE(NULLIF(ci.language,''), 'en') AS language,
-        NULLIF(ci.external_url,'') AS external_url,
+        NULLIF(ci."externalUrl",'') AS external_url,
         COALESCE(ARRAY(
             SELECT (a.name, a.value)::mb_attribute
             FROM jsonb_to_recordset(COALESCE(ci.attributes, '[]'::jsonb))
                     AS a(name text, value text)
         ),'{}'::mb_attribute[]) AS attributes,
-        CURRENT_TIMESTAMP
+        CURRENT_TIMESTAMP as updated_at,
+        ci."legacyId" as legacy_id
     FROM chapters_in ci
     ON CONFLICT (manga_id, source_id)
     DO UPDATE SET
@@ -181,10 +187,22 @@ WITH input AS (
     ON CONFLICT ON CONSTRAINT mb_images_unique
     DO NOTHING
     RETURNING id, ordinal
+), profile_person AS (
+    SELECT
+        p.username AS name,
+        p.avatar   AS avatar,
+        p.id       AS profile_id
+    FROM mb_profiles p
+    JOIN input i ON i.profile_id = p.id
+    WHERE 
+        p.deleted_at IS NULL AND 
+        i.profile_id IS NOT NULL
 ), people_in AS (
     SELECT DISTINCT
         NULLIF(btrim(p.name), '') AS name,
-        p.rel_type::int AS rel_type
+        p.rel_type::int AS rel_type,
+        NULL::uuid      AS profile_id,
+        NULL::text      AS avatar
     FROM manga_in mi
     CROSS JOIN LATERAL (
         SELECT unnest(mi.author_names) AS name, 0 AS rel_type
@@ -194,12 +212,25 @@ WITH input AS (
         SELECT unnest(mi.uploader_names) AS name, 2 AS rel_type
     ) p
     WHERE NULLIF(btrim(p.name), '') IS NOT NULL
+
+    UNION ALL
+
+    SELECT
+        NULLIF(btrim(pp.name), '') AS name,
+        2 AS rel_type,
+        pp.profile_id,
+        pp.avatar
+    FROM profile_person pp
+    WHERE NULLIF(btrim(pp.name), '') IS NOT NULL
+
 ), people_rollup AS (
     SELECT
         name,
         bool_or(rel_type = 0) AS is_author,
         bool_or(rel_type = 1) AS is_artist,
-        bool_or(rel_type = 2) AS is_user
+        bool_or(rel_type = 2) AS is_user,
+        (ARRAY_AGG(profile_id) FILTER (WHERE profile_id IS NOT NULL))[1] AS profile_id,
+        (ARRAY_AGG(avatar) FILTER (WHERE avatar IS NOT NULL))[1] AS avatar
     FROM people_in
     GROUP BY name
 ), people_upsert AS (
@@ -214,11 +245,11 @@ WITH input AS (
     )
     SELECT
         pr.name,
-        NULL,
+        pr.avatar,
         pr.is_artist,
         pr.is_author,
         pr.is_user,
-        NULL,
+        pr.profile_id,
         CURRENT_TIMESTAMP
     FROM people_rollup pr
     ON CONFLICT (name)
@@ -226,10 +257,13 @@ WITH input AS (
         artist = mb_people.artist OR EXCLUDED.artist,
         author = mb_people.author OR EXCLUDED.author,
         is_user = mb_people.is_user OR EXCLUDED.is_user,
+        avatar = COALESCE(mb_people.avatar, EXCLUDED.avatar),
+        profile_id = COALESCE(mb_people.profile_id, EXCLUDED.profile_id),
         updated_at = CURRENT_TIMESTAMP
     RETURNING id, name
 ), relationships_in AS (
     SELECT
+        DISTINCT
         um.id AS manga_id,
         pu.id AS person_id,
         pi.rel_type AS type

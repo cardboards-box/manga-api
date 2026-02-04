@@ -110,12 +110,12 @@ public static class PolyfillExtensions
 
 
 	//
-	public static async Task<HtmlDocument?> GetHtml(this IHttpBuilder builder)
+	public static async Task<HtmlDocument?> GetHtml(this IHttpBuilder builder, CancellationToken token = default)
 	{
 		using var resp = await builder.Result();
 		if (resp == null || !resp.IsSuccessStatusCode) return null;
 
-		var data = await resp.Content.ReadAsStringAsync();
+		var data = await resp.Content.ReadAsStringAsync(token);
 		return data.ParseHtml();
 	}
 	//
@@ -190,7 +190,8 @@ public static class PolyfillExtensions
 	}
 
 	//
-	public static async Task<HtmlDocument> GetHtml(this IApiService api, string url, Action<HttpRequestMessage>? config = null)
+	public static async Task<HtmlDocument> GetHtml(this IApiService api, string url, 
+		Action<HttpRequestMessage>? config = null, CancellationToken token = default)
 	{
 		var json = new SystemTextJsonService(new JsonSerializerOptions());
 		var req = await ((IHttpBuilder)api.Create(url, json, "GET")
@@ -199,7 +200,8 @@ public static class PolyfillExtensions
 			{
 				c.Headers.Add("user-agent", USER_AGENT);
 				config?.Invoke(c);
-			})))
+			}))
+			.CancelWith(token))
 			.Result() ?? throw new NullReferenceException($"Request returned null for: {url}");
 
 		if (req.StatusCode == HttpStatusCode.Moved)
@@ -211,18 +213,19 @@ public static class PolyfillExtensions
 				throw new NullReferenceException($"Request returned null for: {url}");
 			}
 
-			return await api.GetHtml(location, config);
+			return await api.GetHtml(location, config, token);
 		}
 		req.EnsureSuccessStatusCode();
 
-		using var io = await req.Content.ReadAsStreamAsync();
+		using var io = await req.Content.ReadAsStreamAsync(token);
 		var doc = new HtmlDocument();
 		doc.Load(io);
 
 		return doc;
 	}
 
-	public static async Task<HtmlDocument> PostHtml(this IApiService api, string url, Action<HttpRequestMessage>? config = null)
+	public static async Task<HtmlDocument> PostHtml(this IApiService api, string url, 
+		Action<HttpRequestMessage>? config = null, CancellationToken token = default)
 	{
 		var req = await ((IHttpBuilder)api.Create(url, _json, "POST")
 			.Accept("*/*")
@@ -230,19 +233,21 @@ public static class PolyfillExtensions
 			{
 				c.Headers.Add("user-agent", USER_AGENT);
 				config?.Invoke(c);
-			})))
+			}))
+			.CancelWith(token))
 			.Result() ?? throw new NullReferenceException($"Request returned null for: {url}");
 
 		req.EnsureSuccessStatusCode();
 
-		using var io = await req.Content.ReadAsStreamAsync();
+		using var io = await req.Content.ReadAsStreamAsync(token);
 		var doc = new HtmlDocument();
 		doc.Load(io);
 
 		return doc;
 	}
 
-	public static async Task<HtmlDocument> PostHtml(this IApiService api, string url, (string, string)[] formData, Action<HttpRequestMessage>? config = null)
+	public static async Task<HtmlDocument> PostHtml(this IApiService api, string url, (string, string)[] formData, 
+		Action<HttpRequestMessage>? config = null, CancellationToken token = default)
 	{
 		var req = await ((IHttpBuilder)api.Create(url, _json, "POST")
 			.Body(formData)
@@ -251,19 +256,21 @@ public static class PolyfillExtensions
 			{
 				c.Headers.Add("user-agent", USER_AGENT);
 				config?.Invoke(c);
-			})))
+			}))
+			.CancelWith(token))
 			.Result() ?? throw new NullReferenceException($"Request returned null for: {url}");
 
 		req.EnsureSuccessStatusCode();
 
-		using var io = await req.Content.ReadAsStreamAsync();
+		using var io = await req.Content.ReadAsStreamAsync(token);
 		var doc = new HtmlDocument();
 		doc.Load(io);
 
 		return doc;
 	}
 	//
-	public static async Task<(Stream data, long length, string filename, string type)> GetData(this IApiService api, string url, Action<HttpRequestMessage>? config = null)
+	public static async Task<(Stream data, long length, string filename, string type)> GetData(this IApiService api, string url, 
+		Action<HttpRequestMessage>? config = null, CancellationToken token = default)
 	{
 		var req = await ((IHttpBuilder)api.Create(url, _json, "GET")
 			.Accept("*/*")
@@ -271,10 +278,9 @@ public static class PolyfillExtensions
 			{
 				c.Headers.Add("user-agent", USER_AGENT);
 				config?.Invoke(c);
-			})))
-			.Result();
-		if (req == null)
-			throw new NullReferenceException($"Request returned null for: {url}");
+			}))
+			.CancelWith(token))
+			.Result() ?? throw new NullReferenceException($"Request returned null for: {url}");
 
 		req.EnsureSuccessStatusCode();
 
@@ -286,6 +292,6 @@ public static class PolyfillExtensions
 		var type = headers?.ContentType?.ToString() ?? "";
 		var length = headers?.ContentLength ?? 0;
 
-		return (await req.Content.ReadAsStreamAsync(), length, path, type);
+		return (await req.Content.ReadAsStreamAsync(token), length, path, type);
 	}
 }

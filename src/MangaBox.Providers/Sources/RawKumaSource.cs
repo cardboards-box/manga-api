@@ -2,11 +2,11 @@
 
 public interface IRawKumaSource
 {
-	IAsyncEnumerable<ChapterDownloadLink> GetDownloadLinks(string url);
+	IAsyncEnumerable<ChapterDownloadLink> GetDownloadLinks(string url, CancellationToken token);
 
-	Task<string?> Download(ChapterDownloadLink link, string output);
+	Task<string?> Download(ChapterDownloadLink link, string output, CancellationToken token);
 
-	Task<string?> DownloadFromPages(ChapterDownloadLink link, string output);
+	Task<string?> DownloadFromPages(ChapterDownloadLink link, string output, CancellationToken token);
 }
 
 internal class RawKumaSource : IRawKumaSource
@@ -22,9 +22,9 @@ internal class RawKumaSource : IRawKumaSource
 		_logger = logger;
 	}
 
-	public async IAsyncEnumerable<ChapterDownloadLink> GetDownloadLinks(string url)
+	public async IAsyncEnumerable<ChapterDownloadLink> GetDownloadLinks(string url, [EnumeratorCancellation] CancellationToken token)
 	{
-		var html = await _api.GetHtml(url);
+		var html = await _api.GetHtml(url, token: token);
 		if (html is null)
 		{
 			_logger.LogError("Failed to get html from {url}", url);
@@ -53,7 +53,7 @@ internal class RawKumaSource : IRawKumaSource
 		}
 	}
 
-	public async Task<string?> Download(ChapterDownloadLink link, string output)
+	public async Task<string?> Download(ChapterDownloadLink link, string output, CancellationToken token)
 	{
 		if (link is null)
 		{
@@ -64,7 +64,7 @@ internal class RawKumaSource : IRawKumaSource
 		if (!Directory.Exists(output)) Directory.CreateDirectory(output);
 
 
-		var (stream, _, file, type) = await _api.GetData(link.Url);
+		var (stream, _, file, type) = await _api.GetData(link.Url, token: token);
 		if (string.IsNullOrEmpty(file))
 		{
 			_logger.LogError("Failed to get file name from {url}", link.Url);
@@ -85,14 +85,14 @@ internal class RawKumaSource : IRawKumaSource
 		}
 
 		using var io = File.Create(path);
-		await stream.CopyToAsync(io);
+		await stream.CopyToAsync(io, token);
 		await stream.DisposeAsync();
-		await io.FlushAsync();
+		await io.FlushAsync(token);
 		_logger.LogInformation("Downloaded {file} from {url} >> {path}", file, link.Url, path);
 		return path;
 	}
 
-	public async Task<string?> DownloadFromPages(ChapterDownloadLink link, string output)
+	public async Task<string?> DownloadFromPages(ChapterDownloadLink link, string output, CancellationToken token)
 	{
 		if (link is null)
 		{
@@ -104,7 +104,7 @@ internal class RawKumaSource : IRawKumaSource
 		var chapterPath = Path.Combine(output, link.Chapter);
 		if (!Directory.Exists(chapterPath)) Directory.CreateDirectory(chapterPath);
 
-		var html = await _api.GetHtml(link.PagesUrl);
+		var html = await _api.GetHtml(link.PagesUrl, token: token);
 		if (html is null)
 		{
 			_logger.LogError("Failed to get html from {url}", link.PagesUrl);
@@ -121,7 +121,7 @@ internal class RawKumaSource : IRawKumaSource
 		var pageUrls = pages.Select(t => t.GetAttributeValue("src", ""));
 		foreach (var page in pageUrls)
 		{
-			var (stream, _, file, type) = await _api.GetData(page);
+			var (stream, _, file, type) = await _api.GetData(page, token: token);
 			if (string.IsNullOrEmpty(file))
 				file = page.Split('/').Last();
 
@@ -130,9 +130,9 @@ internal class RawKumaSource : IRawKumaSource
 
 			var path = Path.Combine(chapterPath, file);
 			using var io = File.Create(path);
-			await stream.CopyToAsync(io);
+			await stream.CopyToAsync(io, token);
 			await stream.DisposeAsync();
-			await io.FlushAsync();
+			await io.FlushAsync(token);
 			_logger.LogInformation("Downloaded {file} from {url} >> {path}", file, page, path);
 		}
 

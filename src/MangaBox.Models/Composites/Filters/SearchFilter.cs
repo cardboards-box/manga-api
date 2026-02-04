@@ -25,7 +25,7 @@ public abstract class SearchFilter<TOrderBy>
 	/// The size of the results
 	/// </summary>
 	[JsonPropertyName("size")]
-	public int Size { get; set; } = 100;
+	public int Size { get; set; } = 20;
 
 	/// <summary>
 	/// The text to search for
@@ -42,8 +42,14 @@ public abstract class SearchFilter<TOrderBy>
 	/// <summary>
 	/// How to order the results
 	/// </summary>
-	[JsonPropertyName("orderBy")]
-	public Dictionary<TOrderBy, bool> Order { get; set; } = [];
+	[JsonPropertyName("order")]
+	public TOrderBy Order { get; set; } = default!;
+
+	/// <summary>
+	/// Ordering direction
+	/// </summary>
+	[JsonPropertyName("asc")]
+	public bool Asc { get; set; } = true;
 
 	/// <summary>
 	/// Gets a random table suffix for temp tables

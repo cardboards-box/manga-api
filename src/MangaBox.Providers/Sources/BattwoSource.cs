@@ -14,6 +14,8 @@ public class BattwoSource : IBattwoSource
 
 	public string Provider => "battwo";
 
+	public string Name => "Battwo";
+
 	public string? Referer => HomeUrl;
 
 	public string? UserAgent => PolyfillExtensions.USER_AGENT;
@@ -27,9 +29,9 @@ public class BattwoSource : IBattwoSource
 		_api = api;
 	}
 
-	public async Task<MangaChapterPage[]> ChapterPages(string url)
+	public async Task<MangaChapterPage[]> ChapterPages(string url, CancellationToken token)
 	{
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token: token);
 		if (doc == null) return [];
 
 		var chapterId = url.Split('/', StringSplitOptions.RemoveEmptyEntries).Last();
@@ -37,15 +39,15 @@ public class BattwoSource : IBattwoSource
 		throw new NotImplementedException();
 	}
 
-	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
+	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
-		return ChapterPages(ChapterUri + chapterId);
+		return ChapterPages(ChapterUri + chapterId, token);
 	}
 
-	public async Task<Manga?> Manga(string id)
+	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token: token);
 		if (doc == null) return null;
 
 		var manga = new Manga

@@ -83,13 +83,13 @@ internal class TestVerb(
 
 	public async Task UpdateSince()
 	{
-		var updated = await _db.MangaExt.Update(-0.001);
+		var updated = await _db.MangaExt.Update(-0);
 		_logger.LogInformation("Updated manga extensions: {Updated}", Serialize(updated));
 	}
 
-	public async Task LoadManga()
+	public async Task LoadManga(CancellationToken token)
 	{
-		const bool FORCE = false;
+		bool force = false, doLogger = false;
 		string[] urls = 
 		[
 			"https://mangadex.org/title/129c90ca-b997-4789-a748-e8765bc67a65/ichinichi-goto-ni-tsun-ga-hetteku-tsuntsuntsuntsuntsuntsuntsuntsuntsuntsuntsundere-joshi",
@@ -100,18 +100,22 @@ internal class TestVerb(
 			"https://mangakatana.com/manga/the-great-saints-carefree-journey-to-another-world.27345",
 			"https://www.natomanga.com/manga/the-great-saint-s-carefree-journey-to-another-world",
 			"https://likemanga.in/manga/i-got-my-wish-and-reincarnated-as-the-villainess-last-boss",
+			"https://mangadex.org/title/b3a9c1f8-93d2-49ba-96e2-84727c1031a6/isekai-ni-otosareta-jouka-wa-kihon"
 		];
 
-		await Parallel.ForEachAsync(urls, async (url, token) =>
+		var profileId = (await _db.Profile.Admins()).FirstOrDefault()?.Id;
+
+		await Parallel.ForEachAsync(urls, token, async (url, token) =>
 		{
-			var result = await _loader.Load(null, url, FORCE);
+			var result = await _loader.Load(profileId, url, force, token);
 			if (result is not Boxed<MangaBoxType<MbManga>> manga)
 			{
 				_logger.LogWarning("Failed to load manga for {URL}: {Result}", url, Serialize(result));
 				return;
 			}
 
-			_logger.LogInformation("Result: {Result}", Serialize(manga));
+			if (doLogger)
+				_logger.LogInformation("Result: {Result}", Serialize(manga));
 
 			var mid = manga.Data?.Entity.Id;
 			if (!mid.HasValue)
@@ -127,15 +131,17 @@ internal class TestVerb(
 				return;
 			}
 
-			_logger.LogInformation("Chapters: {Chapters}", Serialize(chapters));
-			var pages = await _loader.Pages(chapters.First().Id, FORCE);
+			if (doLogger)
+				_logger.LogInformation("Chapters: {Chapters}", Serialize(chapters));
+
+			var pages = await _loader.Pages(chapters.First().Id, force, token);
 			if (pages is not Boxed<MangaBoxType<MbChapter>> fullChapter)
 			{
 				_logger.LogWarning("Failed to load chapter pages for {ChapterId}: {Result}", chapters.First().Id, Serialize(pages));
 				return;
 			}
 
-			_logger.LogInformation("Pages: {Pages}", Serialize(fullChapter));
+			_logger.LogInformation("Pages: {Pages}", fullChapter.Data?.GetItems<MbImage>()?.Count() ?? -1);
 		});
 	}
 

@@ -13,6 +13,8 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 
 	public string Provider => "dark-scans";
 
+	public string Name => "Dark Scans (dark-scans.com)";
+
 	public string? Referer => HomeUrl;
 
 	public string? UserAgent => PolyfillExtensions.USER_AGENT;
@@ -21,10 +23,10 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
+	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}/?style=list";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
@@ -33,10 +35,10 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 			.ToArray();
 	}
 
-	public async Task<Manga?> Manga(string id)
+	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
 		var manga = new Manga
@@ -71,17 +73,17 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 		}
 
 		manga.Description = doc.InnerHtml("//div[@class='summary__content show-more']") ?? "";
-		manga.Chapters = await GetChapters(url);
+		manga.Chapters = await GetChapters(url, token);
 
 		return manga;
 	}
 
-	public async Task<List<MangaChapter>> GetChapters(string url)
+	public async Task<List<MangaChapter>> GetChapters(string url, CancellationToken token)
 	{
 		//https://dark-scan.com/manga/yuusha-party-o-oida-sareta-kiyou-binbou/ajax/chapters/
 		url += "/ajax/chapters";
-		var doc = await _api.PostHtml(url);
-		if (doc == null) return new();
+		var doc = await _api.PostHtml(url, token);
+		if (doc == null) return [];
 
 		var output = new List<MangaChapter>();
 		var chapters = doc.DocumentNode.SelectNodes("//li[contains(@class, 'wp-manga-chapter')]/a");
@@ -100,19 +102,19 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 				Number = i
 			});
 		}
-		return output.OrderBy(t => t.Number).ToList();
+		return [..output.OrderBy(t => t.Number)];
 	}
 
 	public (bool matches, string? part) MatchesProvider(string url)
 	{
-		var matches = url.ToLower().StartsWith(HomeUrl.ToLower());
+		var matches = url.StartsWith(HomeUrl, StringComparison.CurrentCultureIgnoreCase);
 		if (!matches) return (false, null);
 
-		var parts = url.Remove(0, HomeUrl.Length).Split('/', StringSplitOptions.RemoveEmptyEntries);
+		var parts = url[HomeUrl.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
 		if (parts.Length == 0) return (false, null);
 
 		var domain = parts.First();
-		if (domain.ToLower() != "manga") return (false, null);
+		if (!domain.Equals("manga", StringComparison.CurrentCultureIgnoreCase)) return (false, null);
 
 		if (parts.Length >= 2)
 			return (true, parts[1]);

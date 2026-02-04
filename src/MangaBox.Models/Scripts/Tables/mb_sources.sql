@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS mb_sources (
 	id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
 	slug TEXT NOT NULL UNIQUE,
+	name TEXT NULL,
 	base_url TEXT NOT NULL,
 	is_hidden BOOLEAN NOT NULL,
 	enabled BOOLEAN NOT NULL,

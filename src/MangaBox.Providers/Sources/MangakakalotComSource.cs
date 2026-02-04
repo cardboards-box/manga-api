@@ -1,6 +1,6 @@
 ﻿namespace MangaBox.Providers.Sources;
 
-using MangaBox.Utilities.Flare;
+using Utilities.Flare;
 using static Services.MangaSource;
 
 public abstract class MangakakalotComBase(
@@ -13,6 +13,8 @@ public abstract class MangakakalotComBase(
 
 	public abstract string Provider { get; }
 
+	public abstract string Name { get; }
+
 	public string? Referer => HomeUrl;
 
 	public string? UserAgent => PolyfillExtensions.USER_AGENT;
@@ -21,14 +23,14 @@ public abstract class MangakakalotComBase(
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
+	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		throw new NotImplementedException();
 	}
 
-	public async Task<MangaChapterPage[]> ChapterPages(string url)
+	public async Task<MangaChapterPage[]> ChapterPages(string url, CancellationToken token)
 	{
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return [];
 
 		return doc
@@ -38,12 +40,12 @@ public abstract class MangakakalotComBase(
 			.ToArray();
 	}
 
-	public virtual async Task<Manga?> Manga(string id)
+	public virtual async Task<Manga?> Manga(string id, CancellationToken token)
 	{
 		try
 		{
 			var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-			var doc = await _api.GetHtml(url);
+			var doc = await _api.GetHtml(url, token);
 			if (doc == null) return null;
 
 			var title = doc.DocumentNode.SelectSingleNode("//ul[@class=\"manga-info-text\"]/li/h1").InnerText;
@@ -97,7 +99,7 @@ public abstract class MangakakalotComBase(
 				manga.Chapters.Add(c);
 			}
 
-			manga.Chapters = manga.Chapters.OrderBy(t => t.Number).ToList();
+			manga.Chapters = [.. manga.Chapters.OrderBy(t => t.Number)];
 
 			return manga;
 		}
@@ -110,10 +112,10 @@ public abstract class MangakakalotComBase(
 
 	public virtual (bool matches, string? part) MatchesProvider(string url)
 	{
-		url = url.ToLower().Trim();
-		if (!url.StartsWith(MangaBaseUri)) return (false, null);
+		url = url.Trim();
+		if (!url.StartsWith(MangaBaseUri, StringComparison.InvariantCultureIgnoreCase)) return (false, null);
 
-		var domain = url.Remove(0, MangaBaseUri.Length).Trim('/', '.', '-', ' ');
+		var domain = url[MangaBaseUri.Length..].Trim('/', '.', '-', ' ');
 		return (true, domain);
 	}
 }
@@ -128,6 +130,8 @@ public class MangakakalotComSource(
 	public override string MangaBaseUri => $"{HomeUrl}read-";
 
 	public override string Provider => "mangakakalot-com";
+
+	public override string Name => "Mangakakalot (v1)";
 }
 
 public interface IMangakakalotComAltSource : IMangaUrlSource { }
@@ -140,4 +144,6 @@ public class MangakakalotComAltSource(
 	public override string Provider => "mangakakalot-com-alt";
 
 	public override string MangaBaseUri => $"{HomeUrl}manga/";
+
+	public override string Name => "Mangakakalot (v2)";
 }

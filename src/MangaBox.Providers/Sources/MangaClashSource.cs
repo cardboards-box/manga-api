@@ -14,6 +14,8 @@ public class MangaClashSource(
 
 	public string Provider => "mangaclash";
 
+	public string Name => "MangaClash";
+
 	public string? Referer => null;
 
 	public string? UserAgent => PolyfillExtensions.USER_AGENT;
@@ -22,10 +24,10 @@ public class MangaClashSource(
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId)
+	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}/";
-		var doc = await _api.GetHtml(url);
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return [];
 
 		return doc.DocumentNode
@@ -42,10 +44,10 @@ public class MangaClashSource(
 			.Trim();
 	}
 
-	public async Task<Manga?> Manga(string id)
+	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
-		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
-		var doc = await _api.GetHtml(url);
+		var url = id.StartsWith("http", StringComparison.InvariantCultureIgnoreCase) ? id : $"{MangaBaseUri}{id}";
+		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
 		var manga = new Manga
@@ -105,14 +107,14 @@ public class MangaClashSource(
 
 	public (bool matches, string? part) MatchesProvider(string url)
 	{
-		var matches = url.ToLower().StartsWith(HomeUrl.ToLower());
+		var matches = url.StartsWith(HomeUrl, StringComparison.CurrentCultureIgnoreCase);
 		if (!matches) return (false, null);
 
-		var parts = url.Remove(0, HomeUrl.Length).Split('/', StringSplitOptions.RemoveEmptyEntries);
+		var parts = url[HomeUrl.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
 		if (parts.Length == 0) return (false, null);
 
 		var domain = parts.First();
-		if (domain.ToLower() != "manga") return (false, null);
+		if (!domain.Equals("manga", StringComparison.CurrentCultureIgnoreCase)) return (false, null);
 
 		if (parts.Length >= 2)
 			return (true, parts[1]);

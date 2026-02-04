@@ -17,32 +17,32 @@ public class SolverSession : IAsyncDisposable, IFlareSolverBase
     }
 
     /// <inheritdoc />
-	public Task<SolverResponse?> Get(string url, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null)
+	public Task<SolverResponse?> Get(string url, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default)
     {
-        return _api.Get(url, cookies: cookies, proxy: proxy, sessionId: _sessionId, maxTimeout: timeout);
+        return _api.Get(url, _sessionId, cookies, proxy, false, timeout, token);
     }
 
 	/// <inheritdoc />
-	public Task<SolverResponse?> Post(string url, NameValueCollection data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null)
+	public Task<SolverResponse?> Post(string url, NameValueCollection data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default)
     {
-        return _api.Post(url, data, cookies: cookies, proxy: proxy, sessionId: _sessionId, maxTimeout: timeout);
+        return _api.Post(url, data, _sessionId, cookies, proxy, false, timeout, token);
     }
 
 	/// <inheritdoc />
-	public Task<SolverResponse?> Post(string url, Dictionary<string, string> data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null)
+	public Task<SolverResponse?> Post(string url, Dictionary<string, string> data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default)
     {
         var collection = new NameValueCollection();
         foreach (var (key, value) in data)
         {
             collection.Add(key, value);
         }
-        return Post(url, collection, cookies: cookies, proxy: proxy, timeout: timeout);
+        return Post(url, collection, cookies, proxy, timeout, token);
     }
 
 	/// <inheritdoc />
 	public async ValueTask DisposeAsync()
     {
-        await _api.SessionDestroy(_sessionId);
+        await _api.SessionDestroy(_sessionId, CancellationToken.None);
         GC.SuppressFinalize(this);
     }
 }
