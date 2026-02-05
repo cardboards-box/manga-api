@@ -1,4 +1,6 @@
-﻿namespace MangaBox.Providers.Sources;
+﻿using System.Threading.RateLimiting;
+
+namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
 
@@ -104,4 +106,6 @@ public class NhentaiSource : INhentaiSource
 
 		return (false, null);
 	}
+
+	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
 }

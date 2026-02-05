@@ -1,6 +1,8 @@
-﻿namespace MangaBox.Providers.Sources;
+﻿using System.Threading.RateLimiting;
 
-using MangaBox.Utilities.Flare;
+namespace MangaBox.Providers.Sources;
+
+using Utilities.Flare;
 using static Services.MangaSource;
 
 public interface IMangakakalotTvSource : IMangaUrlSource { }
@@ -117,4 +119,6 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 
 		return (false, null);
 	}
+
+	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
 }

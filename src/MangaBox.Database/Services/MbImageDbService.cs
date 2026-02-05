@@ -2,7 +2,6 @@ namespace MangaBox.Database.Services;
 
 using Models;
 using Models.Composites;
-using Models.Types;
 
 /// <summary>
 /// The service for interacting with the mb_images table
@@ -49,6 +48,13 @@ public interface IMbImageDbService
     /// <param name="id">The ID of the record to fetch</param>
     /// <returns>The record and all related records</returns>
     Task<MangaBoxType<MbImage>?> FetchWithRelationships(Guid id);
+
+	/// <summary>
+	/// Fetches a set of images by their IDs
+	/// </summary>
+	/// <param name="ids">The IDs of the images</param>
+	/// <returns>The image set</returns>
+	Task<MangaImageSet> FetchSet(params Guid[] ids);
 }
 
 internal class MbImageDbService(
@@ -96,4 +102,39 @@ WHERE
 
         return new MangaBoxType<MbImage>(item, [..related]);
     }
+
+    public async Task<MangaImageSet> FetchSet(params Guid[] ids)
+    {
+        const string QUERY = @"SELECT DISTINCT * 
+FROM mb_images 
+WHERE 
+    id = ANY( :ids ) AND 
+    deleted_at IS NULL;
+
+SELECT DISTINCT p.* 
+FROM mb_manga p
+JOIN mb_images c ON p.id = c.manga_id
+WHERE 
+    c.id = ANY( :ids ) AND
+    c.deleted_at IS NULL AND
+    p.deleted_at IS NULL;
+
+SELECT DISTINCT s.*
+FROM mb_sources s
+JOIN mb_manga p ON s.id = p.source_id
+JOIN mb_images c ON p.id = c.manga_id
+WHERE 
+    c.id = ANY( :ids ) AND
+    c.deleted_at IS NULL AND
+    p.deleted_at IS NULL AND
+    s.deleted_at IS NULL";
+
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(QUERY, new { ids });
+
+		var images = (await rdr.ReadAsync<MbImage>()).ToArray();
+		var manga = (await rdr.ReadAsync<MbManga>()).ToArray();
+        var sources = (await rdr.ReadAsync<MbSource>()).ToArray();
+        return new(manga, sources, images);
+	}
 }

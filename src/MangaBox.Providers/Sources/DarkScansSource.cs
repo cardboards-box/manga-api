@@ -1,6 +1,8 @@
-﻿namespace MangaBox.Providers.Sources;
+﻿using System.Threading.RateLimiting;
 
-using MangaBox.Utilities.Flare;
+namespace MangaBox.Providers.Sources;
+
+using Utilities.Flare;
 using static Services.MangaSource;
 
 public interface IDarkScansSource : IMangaSource { }
@@ -121,4 +123,6 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 
 		return (false, null);
 	}
+
+	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
 }

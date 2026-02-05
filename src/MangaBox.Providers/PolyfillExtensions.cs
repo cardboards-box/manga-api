@@ -1,5 +1,5 @@
 ﻿using CardboardBox.Json;
-using HtmlAgilityPack;
+using System.Threading.RateLimiting;
 using System.Web;
 
 namespace MangaBox.Providers;
@@ -17,6 +17,16 @@ public static class PolyfillExtensions
 		{"Sec-Fetch-Site", "cross-site"},
 		{"Sec-Fetch-User", "?1"}
 	};
+
+	public static RateLimiter DefaultRateLimiter()  => new TokenBucketRateLimiter(new()
+	{
+		TokenLimit = 25,
+		QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+		QueueLimit = int.MaxValue,
+		ReplenishmentPeriod = TimeSpan.FromSeconds(5),
+		TokensPerPeriod = 25,
+		AutoReplenishment = true
+	});
 
 	public static string Join(this IEnumerable<HtmlNode> nodes, bool checkWs = false)
 	{

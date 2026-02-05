@@ -1,4 +1,6 @@
-﻿namespace MangaBox.Providers.Sources;
+﻿using System.Threading.RateLimiting;
+
+namespace MangaBox.Providers.Sources;
 
 using static Services.MangaSource;
 
@@ -115,4 +117,6 @@ public class BattwoSource : IBattwoSource
 		var id = url.Split('/').Last();
 		return (true, id);
 	}
+
+	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
 }

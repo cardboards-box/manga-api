@@ -1,5 +1,7 @@
 ﻿namespace MangaBox.Api.Controllers;
 
+using Services.CBZModels;
+
 /// <summary>
 /// The controller for chapter endpoints
 /// </summary>
@@ -35,12 +37,17 @@ public class ChapterController(
 	/// </summary>
 	/// <param name="id">The ID of the chapter</param>
 	/// <param name="token">The cancellation token for the request</param>
+	/// <param name="format">The format to download the chapter in</param>
 	/// <returns>The image data or the error</returns>
-	[HttpGet, Route("chapter/{id}/download")]
+	[HttpGet, Route("chapter/{id}/zip")]
 	[ProducesError(500), ProducesError(404), ProducesError(400)]
 	[ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+#if !DEBUG
 	[ResponseCache(Duration = 31536000, Location = ResponseCacheLocation.Any)]
-	public async Task<IActionResult> Download([FromRoute] string id, CancellationToken token)
+#endif
+	public async Task<IActionResult> Download(
+		[FromRoute] string id, CancellationToken token, 
+		[FromQuery] ComicFormat format = ComicFormat.Zip)
 	{
 		if (!this.GetProfileId().HasValue)
 			return await Box(() => Boxed.NotFound("Chapter was not found"));
@@ -48,7 +55,7 @@ public class ChapterController(
 		if (!Guid.TryParse(id, out var guid))
 			return await Box(() => Boxed.Bad($"Invalid image ID: {id}"));
 
-		var result = await _images.Download(guid, token);
+		var result = await _images.Download(guid, format, token);
 		if (!string.IsNullOrEmpty(result.Error) ||
 			result.Stream is null)
 			return await Box(() => Boxed.Exception(result.Error ?? "Zip stream is missing"));

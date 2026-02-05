@@ -55,4 +55,25 @@ public class ImageController(
 
 		return File(result.Stream, result.MimeType ?? "application/octet-stream", result.FileName);
 	}
+
+	/// <summary>
+	/// Generates an image strip for the given IDs
+	/// </summary>
+	/// <param name="ids">The IDs of the images</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The image stream</returns>
+	[HttpGet, Route("image/strip")]
+	[ProducesError(500), ProducesError(404), ProducesError(400)]
+	[ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+	public async Task<IActionResult> Strip([FromQuery] Guid[] ids, CancellationToken token)
+	{
+		var results = await _image.Combine(ids, token);
+		if (results.Stream is null)
+			return await Box(() => Boxed.Exception(results.Error ?? "Image stream is missing"));
+
+		if (!string.IsNullOrEmpty(results.Error))
+			Response.Headers.TryAdd("X-Image-Strip-Error", results.Error);
+
+		return File(results.Stream, results.MimeType ?? "application/octet-stream", results.FileName);
+	}
 }

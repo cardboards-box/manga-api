@@ -1,4 +1,6 @@
-﻿namespace MangaBox.Providers.Sources;
+﻿using System.Threading.RateLimiting;
+
+namespace MangaBox.Providers.Sources;
 
 using static Services.MangaSource;
 
@@ -94,6 +96,8 @@ internal class ComixSource(
 
 		return (true, parts.First());
 	}
+
+	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
 }
 
 internal class ComixApiService(IApiService _api)

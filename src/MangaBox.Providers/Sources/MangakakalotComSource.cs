@@ -1,4 +1,6 @@
-﻿namespace MangaBox.Providers.Sources;
+﻿using System.Threading.RateLimiting;
+
+namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
 using static Services.MangaSource;
@@ -118,6 +120,8 @@ public abstract class MangakakalotComBase(
 		var domain = url[MangaBaseUri.Length..].Trim('/', '.', '-', ' ');
 		return (true, domain);
 	}
+
+	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
 }
 
 public interface IMangakakalotComSource : IMangaUrlSource { }

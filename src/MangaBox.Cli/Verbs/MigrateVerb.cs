@@ -21,11 +21,12 @@ internal class MigrateVerb(
 	ISqlService _sql,
 	LegacyPostgresSqlService _legacy,
 	IMangaLoaderService _loader,
+	ISourceService _sources,
 	ILogger<MigrateVerb> logger) : BooleanVerb<MigrateOptions>(logger)
 {
 	public async Task EnsureSources(CancellationToken token)
 	{
-		await _loader.Sources(token).ToArrayAsync(token);
+		await _sources.All(token).ToArrayAsync(token);
 	}
 
 	public async Task<(IdMap Manga, IdMap Chapters, IdMap Profiles)> GetLegacyMap()
@@ -55,7 +56,7 @@ SELECT id, legacy_id FROM mb_profiles WHERE legacy_id IS NOT NULL AND legacy_id 
 				return;
 			}
 
-			var source = await _loader.FindSource(manga.MangaUrl, token);
+			var source = await _sources.FindByUrl(manga.MangaUrl, token);
 			if (source is null)
 			{
 				_logger.LogWarning("No source found for manga >> {Id} >> {Url}", manga.LegacyId, manga.MangaUrl);

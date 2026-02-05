@@ -62,6 +62,18 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 	public bool StatesAnd { get; set; } = true;
 
 	/// <summary>
+	/// The minimum number of chapters the manga should have
+	/// </summary>
+	[JsonPropertyName("chapMin")]
+	public int? ChapMin { get; set; }
+
+	/// <summary>
+	/// The maximum number of chapters the manga should have
+	/// </summary>
+	[JsonPropertyName("chapMax")]
+	public int? ChapMax { get; set; }
+
+	/// <summary>
 	/// Converts the order by enum to a column name
 	/// </summary>
 	/// <param name="key">The order key</param>
@@ -100,12 +112,12 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 			if (!TagsAnd)
 			{
 				bob.AppendLine("""
-  AND EXISTS (
+	AND EXISTS (
 		SELECT 1
 		FROM mb_manga_tags mt
 		WHERE mt.manga_id = m.id
 		  AND mt.tag_id = ANY( :tags )
-  )
+	)
 """);
 				return;
 			}
@@ -113,13 +125,13 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 			parameters.Add("tagCount", Tags.Length);
 
 			bob.AppendLine("""
-  AND m.id IN (
+	AND m.id IN (
 		SELECT mt.manga_id
 		FROM mb_manga_tags mt
 		WHERE mt.tag_id = ANY( :tags )
 		GROUP BY mt.manga_id
 		HAVING COUNT(DISTINCT mt.tag_id) = :tagCount
-  )
+	)
 """);
 		}
 
@@ -264,6 +276,18 @@ WHERE
 		{
 			parameters.Add("sources", Sources);
 			bob.AppendLine("\tAND m.source_id = ANY( :sources )");
+		}
+
+		if (ChapMin.HasValue)
+		{
+			parameters.Add("chapMin", ChapMin.Value);
+			bob.AppendLine("\tAND ext.unique_chapter_count >= :chapMin");
+		}
+
+		if (ChapMax.HasValue)
+		{
+			parameters.Add("chapMax", ChapMax.Value);
+			bob.AppendLine("\tAND ext.unique_chapter_count <= :chapMax");
 		}
 
 		HandleTags(bob, parameters);

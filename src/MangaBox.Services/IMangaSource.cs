@@ -1,4 +1,6 @@
-﻿namespace MangaBox.Services;
+﻿using System.Threading.RateLimiting;
+
+namespace MangaBox.Services;
 
 using Models.Types;
 using static MangaSource;
@@ -61,6 +63,12 @@ public interface IMangaSource
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The pages of the chapter or null if something went wrong</returns>
 	Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token);
+
+	/// <summary>
+	/// Gets a rate limiter for fetching images from the source
+	/// </summary>
+	/// <returns>The rate limiter to use for fetching images</returns>
+	RateLimiter GetRateLimiter();
 }
 
 /// <summary>

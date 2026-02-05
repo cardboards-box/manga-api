@@ -1,6 +1,8 @@
-﻿namespace MangaBox.Providers.Sources;
+﻿using System.Threading.RateLimiting;
 
-using MangaBox.Utilities.Flare;
+namespace MangaBox.Providers.Sources;
+
+using Utilities.Flare;
 using static Services.MangaSource;
 
 public interface ILikeMangaSource : IMangaUrlSource { }
@@ -250,4 +252,6 @@ internal class LikeMangaSource(
 					System.Globalization.CultureInfo.InvariantCulture, out var d)
 				? d : double.NaN;
 	}
+
+	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
 }

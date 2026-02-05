@@ -49,26 +49,11 @@ public interface IMangaLoaderService
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>A boxed result of <see cref="MangaBoxType{MbChapter}"/></returns>
 	Task<Boxed> Pages(Guid chapterId, bool force, CancellationToken token);
-
-	/// <summary>
-	/// Finds the source to load the given manga URL
-	/// </summary>
-	/// <param name="url">The URL of the manga</param>
-	/// <param name="token">The cancellation token for the request</param>
-	/// <returns>A source with a specific manga's ID</returns>
-	Task<IdedSource?> FindSource(string url, CancellationToken token);
-
-	/// <summary>
-	/// Gets all of the sources for loading manga
-	/// </summary>
-	/// <param name="token">The cancellation token for the request</param>
-	/// <returns>All of the sources</returns>
-	IAsyncEnumerable<LoaderSource> Sources(CancellationToken token);
 }
 
 internal class MangaLoaderService(
 	IDbService _db,
-	IEnumerable<IMangaSource> _sources,
+	ISourceService _sources,
 	IMangaPublishService _publish) : IMangaLoaderService
 {
 	public async Task<Boxed> Refresh(Guid? profileId, Guid mangaId, CancellationToken token)
@@ -82,7 +67,7 @@ internal class MangaLoaderService(
 
 	public async Task<Boxed> Load(Guid? profileId, string url, bool force, CancellationToken token)
 	{
-		var source = await FindSource(url, token);
+		var source = await _sources.FindByUrl(url, token);
 		if (source is null)
 			return Boxed.NotFound(nameof(MbSource), "Manga source was not found.");
 
@@ -109,7 +94,7 @@ internal class MangaLoaderService(
 		if (manga is null)
 			return Boxed.NotFound(nameof(MbManga), "Manga was not found for chapter.");
 
-		var source = await FindSource(manga.Url, token);
+		var source = await _sources.FindByUrl(manga.Url, token);
 		if (source is null)	
 			return Boxed.NotFound(nameof(MbSource), "Manga source was not found.");
 
@@ -152,20 +137,6 @@ internal class MangaLoaderService(
 		if (result is null)
 			return Boxed.NotFound(nameof(MbChapter), "Chapter was not found after updating pages.");
 		return Boxed.Ok(result);
-	}
-
-	public async Task<IdedSource?> FindSource(string url, CancellationToken token)
-	{
-		await foreach(var source in Sources(token))
-		{
-			token.ThrowIfCancellationRequested();
-			var (matches, part) = source.Service.MatchesProvider(url);
-			if (!matches || string.IsNullOrEmpty(part)) continue;
-
-			return new(part, source);
-		}
-
-		return null;
 	}
 
 	public static void Clean(MangaSource.Manga manga, LegacyIds? ids)
@@ -255,60 +226,4 @@ internal class MangaLoaderService(
 		
 		return await Load(before, found.Info.Id, profileId, null);
 	}
-
-	public async IAsyncEnumerable<LoaderSource> Sources([EnumeratorCancellation] CancellationToken token)
-	{
-		var sources = await _db.Source.Get();
-		foreach(var source in _sources)
-		{
-			token.ThrowIfCancellationRequested();
-			var match = sources.FirstOrDefault(s => s.Slug.EqualsIc(source.Provider));
-			if (match is null)
-			{
-				match = new()
-				{
-					Slug = source.Provider,
-					Name = source.Name,
-					BaseUrl = source.HomeUrl,
-					Enabled = true,
-					IsHidden = false,
-					Referer = source.Referer,
-					UserAgent = source.UserAgent,
-					Headers = source.Headers?.Select(h => new MbHeader
-					{
-						Key = h.Key,
-						Value = h.Value,
-					}).ToArray() ?? [],
-				};
-				match.Id = await _db.Source.Upsert(match);
-			}
-
-			yield return new LoaderSource(match, source);
-		}
-	}
-}
-
-/// <summary>
-/// The source and it's service
-/// </summary>
-/// <param name="Info">The source information</param>
-/// <param name="Service">The manga service</param>
-public record class LoaderSource(MbSource Info, IMangaSource Service);
-
-/// <summary>
-/// A source with a specific manga's ID
-/// </summary>
-/// <param name="Id">The Id of the manga</param>
-/// <param name="Source">The source and its service</param>
-public record class IdedSource(string Id, LoaderSource Source)
-{
-	/// <summary>
-	/// The source information
-	/// </summary>
-	public MbSource Info => Source.Info;
-
-	/// <summary>
-	/// The manga service
-	/// </summary>
-	public IMangaSource Service => Source.Service;
 }

@@ -1,4 +1,6 @@
-﻿namespace MangaBox.Providers.Sources;
+﻿using System.Threading.RateLimiting;
+
+namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
 using static Services.MangaSource;
@@ -124,4 +126,6 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 
 		return (false, null);
 	}
+
+	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
 }

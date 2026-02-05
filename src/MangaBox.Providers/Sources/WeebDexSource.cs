@@ -1,4 +1,5 @@
-﻿using WeebDexSharp;
+﻿using System.Threading.RateLimiting;
+using WeebDexSharp;
 using WeebDexSharp.Models;
 
 namespace MangaBox.Providers.Sources;
@@ -177,4 +178,6 @@ internal class WeebDexSource(
 
 		return (true, parts.First());
 	}
+
+	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
 }

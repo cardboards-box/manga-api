@@ -1,5 +1,7 @@
 ﻿namespace MangaBox.Api.Controllers;
 
+using Services.CBZModels;
+
 /// <summary>
 /// The controller for metadata endpoints
 /// </summary>
@@ -76,6 +78,18 @@ public class MetaDataController(
 	public Task<IActionResult> GetMangaStates() => Box(() =>
 	{
 		var values = MangaState.Favorited.Describe(false, false);
+		return Boxed.Ok(values);
+	});
+
+	/// <summary>
+	/// Gets the metadata for the <see cref="ComicFormat"/> enum
+	/// </summary>
+	/// <returns>All of the enum descriptions</returns>
+	[HttpGet, Route("metadata/download-format")]
+	[ProducesArray<EnumDescription>]
+	public Task<IActionResult> GetDownloadFormats() => Box(() =>
+	{
+		var values = ComicFormat.Zip.Describe(false, false);
 		return Boxed.Ok(values);
 	});
 

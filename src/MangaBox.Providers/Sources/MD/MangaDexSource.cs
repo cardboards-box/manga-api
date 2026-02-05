@@ -1,4 +1,6 @@
-﻿namespace MangaBox.Providers.Sources.MD;
+﻿using System.Threading.RateLimiting;
+
+namespace MangaBox.Providers.Sources.MD;
 
 using static Services.MangaSource;
 
@@ -244,4 +246,6 @@ public class MangaDexSource(IMangaDexService _mangadex) : IMangaDexSource
 
 		return (true, parts.First());
 	}
+
+	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
 }
