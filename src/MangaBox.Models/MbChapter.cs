@@ -61,6 +61,13 @@ public class MbChapter : MbDbObjectLegacy
 	public string Language { get; set; } = string.Empty;
 
 	/// <summary>
+	/// The number of pages the chapter has
+	/// </summary>
+	[Column("page_count")]
+	[JsonPropertyName("pageCount")]
+	public int? PageCount { get; set; }
+
+	/// <summary>
 	/// The place where you can read the chapter if MB cannot scrape the pages
 	/// </summary>
 	[Column("external_url")]

@@ -14,6 +14,7 @@ public static class DiExtensions
 	{
 		return services
 			.AddTransient<IMangaLoaderService, MangaLoaderService>()
-			.AddTransient<IImageService, ImageService>();
+			.AddTransient<IImageService, ImageService>()
+			.AddTransient<IVolumeService, VolumeService>();
 	}
 }

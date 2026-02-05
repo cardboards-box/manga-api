@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS mb_chapters (
 	ordinal NUMERIC NOT NULL,
 	volume NUMERIC NULL,
 	language TEXT NULL,
+	page_count INTEGER NULL,
 	external_url TEXT NULL,
 	attributes mb_attribute[] DEFAULT '{}',
 	legacy_id INTEGER NULL,

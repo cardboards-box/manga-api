@@ -1,22 +1,18 @@
-WITH
-tag_src AS (
+WITH tag_src AS (
   SELECT
     m.id AS manga_legacy_id,
     btrim(t) AS tag_name
   FROM manga_cache m
   LEFT JOIN LATERAL unnest(COALESCE(m.tags, '{}'::text[])) AS t ON TRUE
   WHERE m.deleted_at IS NULL
-),
-tags_json AS (
+), tags_json AS (
   SELECT
     manga_legacy_id,
     jsonb_agg(DISTINCT jsonb_build_object('name', tag_name)) AS tags
   FROM tag_src
   WHERE tag_name IS NOT NULL AND tag_name <> ''
   GROUP BY manga_legacy_id
-),
-
-chapters_json AS (
+), chapters_json AS (
   SELECT
     c.manga_id AS manga_legacy_id,
     jsonb_agg(
@@ -27,6 +23,22 @@ chapters_json AS (
         'number', c.ordinal,
         'volume', c.volume,
         'externalUrl', NULLIF(c.external_url, ''),
+        'language', NULLIF(c.language, ''),
+        'pages', COALESCE(
+          (
+            SELECT jsonb_agg(
+                     jsonb_build_object(
+                       'page', p.page_url,
+                       'width', NULL,
+                       'height', NULL
+                     )
+                     ORDER BY p.ord
+                   )
+            FROM unnest(COALESCE(c.pages, '{}'::text[])) WITH ORDINALITY AS p(page_url, ord)
+            WHERE NULLIF(btrim(p.page_url), '') IS NOT NULL
+          ),
+          '[]'::jsonb
+        ),
         'attributes', COALESCE(
           (
             SELECT jsonb_agg(jsonb_build_object('name', a.name, 'value', a.value))
@@ -44,7 +56,6 @@ chapters_json AS (
     AND m.deleted_at IS NULL
   GROUP BY c.manga_id
 )
-
 SELECT
   (m.id * -1)::int AS legacy_id,
   jsonb_build_object(
@@ -56,12 +67,8 @@ SELECT
     'description', NULLIF(m.description, ''),
     'altDescriptions', '[]'::jsonb,
     'altTitles', to_jsonb(COALESCE(m.alt_titles, '{}'::text[])),
-
-    -- not in legacy schema
     'authors', '[]'::jsonb,
     'artists', '[]'::jsonb,
-
-    -- uploader username(s)
     'uploaders',
       CASE
         WHEN m.uploader IS NULL THEN '[]'::jsonb
@@ -75,13 +82,9 @@ SELECT
           '[]'::jsonb
         )
       END,
-
-    -- legacy schema has nsfw but no explicit rating; map nsfw=>Erotica(2) else Safe(0)
     'rating', CASE WHEN m.nsfw THEN 2 ELSE 0 END,
-
     'chapters', COALESCE(cj.chapters, '[]'::jsonb),
     'nsfw', m.nsfw,
-
     'attributes', COALESCE(
       (
         SELECT jsonb_agg(jsonb_build_object('name', a.name, 'value', a.value))
@@ -89,10 +92,7 @@ SELECT
       ),
       '[]'::jsonb
     ),
-
-    -- tags (name only; slug computed in C#)
     'tags', COALESCE(tj.tags, '[]'::jsonb),
-
     'referer', m.referer,
     'sourceCreated', m.source_created,
     'ordinalVolumeReset', m.ordinal_volume_reset,

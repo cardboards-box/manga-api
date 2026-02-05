@@ -48,6 +48,14 @@ public interface IMbMangaExtDbService
 	/// <returns>The updated records</returns>
 	/// <remarks>USE SPARINGLY</remarks>
 	Task<MbMangaExt[]> MassUpdate();
+
+	/// <summary>
+	/// Gets the manga's extended data and all of the chapters
+	/// </summary>
+	/// <param name="mangaId">The ID of the manga</param>
+	/// <param name="profileId">The ID of the profile making the request</param>
+	/// <returns>The extension data and chapters</returns>
+	Task<MangaBoxType<MbMangaExt>?> ByManga(Guid mangaId, Guid? profileId);
 }
 
 internal class MbMangaExtDbService(
@@ -77,7 +85,58 @@ internal class MbMangaExtDbService(
 		return await Get(query, new { since });
 	}
 
-    public async Task<MangaBoxType<MbMangaExt>?> FetchWithRelationships(Guid id)
+	public async Task<MangaBoxType<MbMangaExt>?> ByManga(Guid mangaId, Guid? profileId)
+	{
+		const string QUERY = @"
+SELECT DISTINCT e.*
+FROM mb_manga_ext e    
+WHERE 
+    e.manga_id = :id AND 
+    e.deleted_at IS NULL;
+
+SELECT DISTINCT m.*
+FROM mb_manga m
+WHERE 
+    m.id = :id AND 
+    m.deleted_at IS NULL;
+
+SELECT DISTINCT c.*
+FROM mb_chapters c
+WHERE 
+    c.manga_id = :id AND 
+    c.deleted_at IS NULL;
+
+SELECT DISTINCT p.*
+FROM mb_manga_progress p
+WHERE 
+    p.manga_id = :id AND 
+    p.profile_id = :profileId AND 
+    p.deleted_at IS NULL;
+
+SELECT DISTINCT c.*
+FROM mb_chapter_progress c
+JOIN mb_manga_progress p ON p.id = c.progress_id
+WHERE 
+    p.manga_id = :id AND 
+    p.profile_id = :profileId AND 
+    p.deleted_at IS NULL AND
+    c.deleted_at IS NULL;";
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(QUERY, new { id = mangaId, profileId });
+
+		var item = await rdr.ReadSingleOrDefaultAsync<MbMangaExt>();
+		if (item is null) return null;
+
+		var related = new List<MangaBoxRelationship>();
+        MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbManga>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbChapter>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbMangaProgress>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbChapterProgress>());
+
+		return new(item, [.. related]);
+	}
+
+	public async Task<MangaBoxType<MbMangaExt>?> FetchWithRelationships(Guid id)
     {
         const string QUERY = @"SELECT * FROM mb_manga_ext WHERE id = :id AND deleted_at IS NULL;
 SELECT p.* 

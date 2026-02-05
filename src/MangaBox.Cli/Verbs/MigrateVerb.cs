@@ -23,6 +23,11 @@ internal class MigrateVerb(
 	IMangaLoaderService _loader,
 	ILogger<MigrateVerb> logger) : BooleanVerb<MigrateOptions>(logger)
 {
+	public async Task EnsureSources(CancellationToken token)
+	{
+		await _loader.Sources(token).ToArrayAsync(token);
+	}
+
 	public async Task<(IdMap Manga, IdMap Chapters, IdMap Profiles)> GetLegacyMap()
 	{
 		const string QUERY = @"
@@ -76,6 +81,7 @@ SELECT id, legacy_id FROM mb_profiles WHERE legacy_id IS NOT NULL AND legacy_id 
 
 	public async Task LoadManga(bool cache, CancellationToken token)
 	{
+		await EnsureSources(token);
 		var legacy = await (cache ? _legacy.MangaCache() : _legacy.Manga());
 		_logger.LogInformation("Fetched {Count} legacy manga entries", legacy.Length);
 

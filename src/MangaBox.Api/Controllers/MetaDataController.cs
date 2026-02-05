@@ -32,6 +32,30 @@ public class MetaDataController(
 	});
 
 	/// <summary>
+	/// Gets the metadata for the <see cref="ChapterOrderBy"/> enum
+	/// </summary>
+	/// <returns>All of the enum descriptions</returns>
+	[HttpGet, Route("metadata/chapter-order-by")]
+	[ProducesArray<EnumDescription>]
+	public Task<IActionResult> GetChapterOrderBys() => Box(() =>
+	{
+		var values = ChapterOrderBy.Date.Describe(false, false);
+		return Boxed.Ok(values);
+	});
+
+	/// <summary>
+	/// Gets the metadata for the <see cref="VolumeState"/> enum
+	/// </summary>
+	/// <returns>All of the enum descriptions</returns>
+	[HttpGet, Route("metadata/volume-state")]
+	[ProducesArray<EnumDescription>]
+	public Task<IActionResult> GetVolumeStates() => Box(() =>
+	{
+		var values = VolumeState.Completed.Describe(false, false);
+		return Boxed.Ok(values);
+	});
+
+	/// <summary>
 	/// Gets the metadata for the <see cref="MangaOrderBy"/> enum
 	/// </summary>
 	/// <returns>All of the enum descriptions</returns>

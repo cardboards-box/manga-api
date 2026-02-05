@@ -5,6 +5,7 @@
 /// </summary>
 public class MangaController(
 	IDbService _db,
+	IVolumeService _volume,
 	IMangaLoaderService _loader,
 	ILogger<MangaController> logger) : BaseController(logger)
 {
@@ -59,16 +60,25 @@ public class MangaController(
 	/// Fetches all of the chapters of the given manga
 	/// </summary>
 	/// <param name="id">The ID of the manga</param>
+	/// <param name="order">The order to sort the chapters by</param>
+	/// <param name="asc">Whether to sort in ascending order</param>
 	/// <returns>The chapters or the error</returns>
 	[HttpGet, Route("manga/{id}/chapters")]
-	[ProducesBox<MbChapter[]>, ProducesError(400)]
-	public Task<IActionResult> Chapters([FromRoute] string id) => Box(async () =>
+	[ProducesBox<MangaVolumes>, ProducesError(400)]
+	public Task<IActionResult> Chapters(
+		[FromRoute] string id,
+		[FromQuery] ChapterOrderBy order = ChapterOrderBy.Ordinal,
+		[FromQuery] bool asc = true) => Box(async () =>
 	{
 		if (!Guid.TryParse(id, out var mid))
 			return Boxed.Bad("Manga ID is not a valid GUID.");
 
-		var chapters = await _db.Chapter.ByManga(mid);
-		return Boxed.Ok(chapters);
+		return await _volume.Get(new()
+		{
+			MangaId = mid,
+			Order = order,
+			Asc = asc,
+		}, this.GetProfileId());
 	});
 
 	/// <summary>

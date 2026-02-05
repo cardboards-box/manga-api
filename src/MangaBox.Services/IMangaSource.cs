@@ -218,14 +218,23 @@ public class MangaSource
 
 		[JsonPropertyName("legacyId")]
 		public int? LegacyId { get; set; }
+
+		/// <summary>
+		/// The optional pages for the chapter
+		/// </summary>
+		[JsonPropertyName("pages")]
+		public List<MangaChapterPage> Pages { get; set; } = [];
 	}
 
 	public class MangaChapterPage
 	{
+		[JsonPropertyName("page")]
 		public string Page { get; set; } = string.Empty;
 
+		[JsonPropertyName("width")]
 		public int? Width { get; set; }
 
+		[JsonPropertyName("height")]
 		public int? Height { get; set; }
 
 		public MangaChapterPage() { }

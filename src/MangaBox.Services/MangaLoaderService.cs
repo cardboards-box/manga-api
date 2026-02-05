@@ -57,6 +57,13 @@ public interface IMangaLoaderService
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>A source with a specific manga's ID</returns>
 	Task<IdedSource?> FindSource(string url, CancellationToken token);
+
+	/// <summary>
+	/// Gets all of the sources for loading manga
+	/// </summary>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>All of the sources</returns>
+	IAsyncEnumerable<LoaderSource> Sources(CancellationToken token);
 }
 
 internal class MangaLoaderService(
@@ -133,6 +140,12 @@ internal class MangaLoaderService(
 				ImageWidth = page.Width,
 				ImageHeight = page.Height,
 			});
+		}
+
+		if (chapter.PageCount != pages.Length)
+		{
+			chapter.PageCount = pages.Length;
+			await _db.Chapter.Update(chapter);
 		}
 
 		result = await _db.Chapter.FetchWithRelationships(chapterId);
