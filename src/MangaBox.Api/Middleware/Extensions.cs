@@ -168,4 +168,13 @@ internal static class Extensions
 		return !string.IsNullOrEmpty(id) && Guid.TryParse(id, out var iid) ? iid : null;
 	}
 
+	/// <summary>
+	/// Whether or not the user is an administrator
+	/// </summary>
+	/// <param name="controller">The controller in question</param>
+	/// <returns>Whether or not the user is an admin</returns>
+	public static bool IsAdmin(this BaseController controller)
+	{
+		return controller.User?.IsInRole(Constants.ROLE_ADMIN) ?? false;
+	}
 }

@@ -37,10 +37,17 @@ public interface IMbChapterDbService
     Task<Guid> Upsert(MbChapter item);
 
     /// <summary>
-    /// Gets all of the records from the mb_chapters table
+    /// Deletes a chapter by it's ID (and all of it's images)
     /// </summary>
-    /// <returns>All of the records</returns>
-    Task<MbChapter[]> Get();
+    /// <param name="id">The ID of the chapter</param>
+    /// <returns>The number of records deleted</returns>
+    Task<int> Delete(Guid id);
+
+	/// <summary>
+	/// Gets all of the records from the mb_chapters table
+	/// </summary>
+	/// <returns>All of the records</returns>
+	Task<MbChapter[]> Get();
 
 	/// <summary>
 	/// Gets all of the chapters of a manga after a specific date
@@ -128,4 +135,12 @@ WHERE
 ORDER BY ordinal;";
         return Get(QUERY, new { mangaId, after });
 	}
+
+    public override Task<int> Delete(Guid id)
+    {
+        const string QUERY = @"
+UPDATE mb_chapters SET deleted_at = CURRENT_TIMESTAMP WHERE id = :id;
+UPDATE mb_images SET deleted_at = CURRENT_TIMESTAMP WHERE chapter_id = :id;";
+        return Execute(QUERY, new { id });
+    }
 }

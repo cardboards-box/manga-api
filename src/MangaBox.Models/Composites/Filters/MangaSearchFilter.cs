@@ -65,13 +65,49 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 	/// The minimum number of chapters the manga should have
 	/// </summary>
 	[JsonPropertyName("chapMin")]
-	public int? ChapMin { get; set; }
+	public int? ChapMin { get; set; } = null;
 
 	/// <summary>
 	/// The maximum number of chapters the manga should have
 	/// </summary>
 	[JsonPropertyName("chapMax")]
-	public int? ChapMax { get; set; }
+	public int? ChapMax { get; set; } = null;
+
+	/// <summary>
+	/// Ensure the manga was created after this date
+	/// </summary>
+	[JsonPropertyName("mAfter")]
+	public DateTime? MAfter { get; set; } = null;
+
+	/// <summary>
+	/// Ensure the manga was created before this date
+	/// </summary>
+	[JsonPropertyName("mBefore")]
+	public DateTime? MBefore { get; set; } = null;
+
+	/// <summary>
+	/// Ensure the latest chapter was created after this date
+	/// </summary>
+	[JsonPropertyName("cLastAfter")]
+	public DateTime? CLastAfter { get; set; } = null;
+
+	/// <summary>
+	/// Ensure the latest chapter was created before this date
+	/// </summary>
+	[JsonPropertyName("cLastBefore")]
+	public DateTime? CLastBefore { get; set; } = null;
+
+	/// <summary>
+	/// Ensure the first chapter was created after this date
+	/// </summary>
+	[JsonPropertyName("cFirstAfter")]
+	public DateTime? CFirstAfter { get; set; } = null;
+
+	/// <summary>
+	/// Ensure the first chapter was created before this date
+	/// </summary>
+	[JsonPropertyName("cFirstBefore")]
+	public DateTime? CFirstBefore { get; set; } = null;
 
 	/// <summary>
 	/// Converts the order by enum to a column name
@@ -216,6 +252,45 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 			bob.AppendLine("\t)");
 		}
 
+		void HandleDates(StringBuilder bob, DynamicParameters parameters)
+		{
+			if (MAfter.HasValue)
+			{
+				parameters.Add("mAfter", MAfter.Value);
+				bob.AppendLine("\tAND m.created_at >= :mAfter");
+			}
+
+			if (MBefore.HasValue)
+			{
+				parameters.Add("mBefore", MBefore.Value);
+				bob.AppendLine("\tAND m.created_at <= :mBefore");
+			}
+
+			if (CLastAfter.HasValue)
+			{
+				parameters.Add("cLastAfter", CLastAfter.Value);
+				bob.AppendLine("\tAND ext.last_chapter_created >= :cLastAfter");
+			}
+
+			if (CLastBefore.HasValue)
+			{
+				parameters.Add("cLastBefore", CLastBefore.Value);
+				bob.AppendLine("\tAND ext.last_chapter_created <= :cLastBefore");
+			}
+
+			if (CFirstAfter.HasValue)
+			{
+				parameters.Add("cFirstAfter", CFirstAfter.Value);
+				bob.AppendLine("\tAND ext.first_chapter_created >= :cFirstAfter");
+			}
+
+			if (CFirstBefore.HasValue)
+			{
+				parameters.Add("cFirstBefore", CFirstBefore.Value);
+				bob.AppendLine("\tAND ext.first_chapter_created <= :cFirstBefore");
+			}
+		}
+
 		parameters = new DynamicParameters();
 		var bob = new StringBuilder();
 		
@@ -290,6 +365,7 @@ WHERE
 			bob.AppendLine("\tAND ext.unique_chapter_count <= :chapMax");
 		}
 
+		HandleDates(bob, parameters);
 		HandleTags(bob, parameters);
 		HandleTagsEx(bob, parameters);
 		HandleStates(bob, parameters);

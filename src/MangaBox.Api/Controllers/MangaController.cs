@@ -57,6 +57,24 @@ public class MangaController(
 	});
 
 	/// <summary>
+	/// Deletes a manga by it's ID
+	/// </summary>
+	/// <param name="id">The ID of the manga</param>
+	/// <returns>The number of records deleted</returns>
+	[HttpDelete, Route("manga/{id}")]
+	[ProducesBox<int>, ProducesError(400), ProducesError(404), ProducesError(401)]
+	public Task<IActionResult> Delete([FromRoute] string id) => Box(async () =>
+	{
+		if (!this.IsAdmin())
+			return Boxed.Unauthorized("You cannot perform this action");
+
+		if (!Guid.TryParse(id, out var mid))
+			return Boxed.Bad("Manga ID is not a valid GUID.");
+		var deleted = await _db.Manga.Delete(mid);
+		return Boxed.Ok(deleted);
+	});
+
+	/// <summary>
 	/// Fetches all of the chapters of the given manga
 	/// </summary>
 	/// <param name="id">The ID of the manga</param>
@@ -122,7 +140,7 @@ public class MangaController(
 	/// <param name="id">The ID of the manga to favorite</param>
 	/// <returns>The manga progress</returns>
 	[HttpGet, Route("manga/{id}/favorite")]
-	[ProducesBox<MbMangaProgress>, ProducesError(400), ProducesError(401)]
+	[ProducesBox<MangaBoxType<MbMangaProgress>>, ProducesError(400), ProducesError(401)]
 	public Task<IActionResult> Favorite([FromRoute] string id) => Box(async () =>
 	{
 		if (!Guid.TryParse(id, out var mid))
@@ -142,7 +160,7 @@ public class MangaController(
 	/// <param name="id">The ID of the manga to unfavorite</param>
 	/// <returns>The manga progress</returns>
 	[HttpDelete, Route("manga/{id}/favorite")]
-	[ProducesBox<MbMangaProgress>, ProducesError(400), ProducesError(401)]
+	[ProducesBox<MangaBoxType<MbMangaProgress>>, ProducesError(400), ProducesError(401)]
 	public Task<IActionResult> Unfavorite([FromRoute] string id) => Box(async () =>
 	{
 		if (!Guid.TryParse(id, out var mid))
@@ -157,6 +175,47 @@ public class MangaController(
 	});
 
 	/// <summary>
+	/// Recomputes the extension data for the given manga
+	/// </summary>
+	/// <param name="ids">The IDs of the manga to recompute</param>
+	/// <param name="since">The number of days old the manga data should be to be updated</param>
+	/// <returns>The updated records</returns>
+	[HttpGet, Route("manga/recompute")]
+	[ProducesArray<MbMangaExt[]>, ProducesError(400), ProducesError(401)]
+	public Task<IActionResult> Recompute([FromQuery] Guid[]? ids = null, [FromQuery] double? since = null) => Box(async () =>
+	{
+		if (!this.IsAdmin())
+			return Boxed.Unauthorized("You cannot perform this action");
+
+		List<MbMangaExt> output = [];
+		if (ids is not null && ids.Length > 0)
+			output.AddRange(await _db.MangaExt.Update(ids));
+		if (since.HasValue)
+			output.AddRange(await _db.MangaExt.Update(since.Value));
+
+		if ((ids is null || ids.Length == 0) && !since.HasValue)
+			output.AddRange(await _db.MangaExt.MassUpdate());
+
+		return Boxed.Ok(output.ToArray());
+	});
+
+	/// <summary>
+	/// Sets the display title of the given manga
+	/// </summary>
+	/// <param name="request">The body of the request</param>
+	/// <returns>The response</returns>
+	[HttpPut, Route("manga/display-title")]
+	[ProducesBox<MbMangaExt>, ProducesError(400), ProducesError(404), ProducesError(401)]
+	public Task<IActionResult> Set([FromBody] SetDisplayRequest request) => Box(async () =>
+	{
+		if (!this.IsAdmin())
+			return Boxed.Unauthorized("You cannot perform this action");
+
+		var updated = await _db.MangaExt.SetDisplayTitle(request.MangaId, request.Title);
+		return Boxed.Ok(updated);
+	});
+
+	/// <summary>
 	/// The request body to load a manga
 	/// </summary>
 	/// <param name="Url">The url of the manga to load</param>
@@ -164,4 +223,13 @@ public class MangaController(
 	public record class LoadRequest(
 		[property: JsonPropertyName("url")] string Url,
 		[property: JsonPropertyName("force")] bool Force = false);
+
+	/// <summary>
+	/// The request to set the display title for the manga
+	/// </summary>
+	/// <param name="MangaId">The ID of the manga</param>
+	/// <param name="Title">The display title to set</param>
+	public record class SetDisplayRequest(
+		[property: JsonPropertyName("mangaId")] Guid MangaId,
+		[property: JsonPropertyName("display")] string? Title);
 }

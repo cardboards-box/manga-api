@@ -56,6 +56,14 @@ public interface IMbMangaExtDbService
 	/// <param name="profileId">The ID of the profile making the request</param>
 	/// <returns>The extension data and chapters</returns>
 	Task<MangaBoxType<MbMangaExt>?> ByManga(Guid mangaId, Guid? profileId);
+
+	/// <summary>
+	/// Sets the display title for a manga
+	/// </summary>
+	/// <param name="mangaId">The ID of the manga</param>
+	/// <param name="title">The display title to set</param>
+	/// <returns>The updated manga extension record</returns>
+	Task<MbMangaExt?> SetDisplayTitle(Guid mangaId, string? title);
 }
 
 internal class MbMangaExtDbService(
@@ -166,5 +174,20 @@ WHERE
 		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbChapter>());
 
         return new MangaBoxType<MbMangaExt>(item, [..related]);
+    }
+
+    public Task<MbMangaExt?> SetDisplayTitle(Guid mangaId, string? title)
+    {
+        const string QUERY = @"
+UPDATE mb_manga_ext
+SET display_title = :title
+WHERE manga_id = :mangaId;
+
+SELECT * 
+FROM mb_manga_ext 
+WHERE 
+    manga_id = :mangaId AND 
+    deleted_at IS NULL;";
+        return Fetch(QUERY, new { mangaId, title });
     }
 }

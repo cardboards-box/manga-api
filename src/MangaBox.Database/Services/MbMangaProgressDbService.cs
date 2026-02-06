@@ -2,6 +2,7 @@ namespace MangaBox.Database.Services;
 
 using Models;
 using Models.Composites;
+using System.Collections;
 
 /// <summary>
 /// The service for interacting with the mb_manga_progress table
@@ -42,13 +43,21 @@ public interface IMbMangaProgressDbService
     /// <returns>All of the records</returns>
     Task<MbMangaProgress[]> Get();
 
-    /// <summary>
-    /// Fetches the record and all related records
-    /// </summary>
-    /// <param name="profileId">The ID of the profile</param>
-    /// <param name="ids">The IDs of the manga to fetch</param>
-    /// <returns>The record and all related records</returns>
-    Task<MangaBoxType<MbMangaProgress>[]> FetchByManga(Guid profileId, params Guid[] ids);
+	/// <summary>
+	/// Fetches a single progress by profile and manga ID
+	/// </summary>
+	/// <param name="profileId">The ID of the profile</param>
+	/// <param name="mangaId">The ID of the manga</param>
+	/// <returns>The updated manga progress</returns>
+	Task<MangaBoxType<MbMangaProgress>?> Fetch(Guid profileId, Guid mangaId);
+
+	/// <summary>
+	/// Fetches the record and all related records
+	/// </summary>
+	/// <param name="profileId">The ID of the profile</param>
+	/// <param name="ids">The IDs of the manga to fetch</param>
+	/// <returns>The record and all related records</returns>
+	Task<MangaBoxType<MbMangaProgress>[]> FetchByManga(Guid profileId, params Guid[] ids);
 
 	/// <summary>
 	/// Updates the favourite status of a manga progress record
@@ -57,27 +66,54 @@ public interface IMbMangaProgressDbService
     /// <param name="mangaId">The ID of the manga to favorite</param>
     /// <param name="favorite">The favorite status</param>
 	/// <returns>The updated manga progress</returns>
-	Task<MbMangaProgress?> Favourite(Guid profileId, Guid mangaId, bool favorite);
+	Task<MangaBoxType<MbMangaProgress>?> Favourite(Guid profileId, Guid mangaId, bool favorite);
+
+	/// <summary>
+	/// Force sets the progress for the given manga and profile
+	/// </summary>
+	/// <param name="profileId">The ID of the profile</param>
+	/// <param name="mangaId">The ID of the manga</param>
+	/// <param name="completed">Whether or not the manga has been read</param>
+	/// <returns>The updated manga progress</returns>
+	Task<MangaBoxType<MbMangaProgress>?> SetProgress(Guid profileId, Guid mangaId, bool completed);
 }
 
 internal class MbMangaProgressDbService(
     IOrmService orm,
     IQueryCacheService _cache) : Orm<MbMangaProgress>(orm), IMbMangaProgressDbService
 {
-	public async Task<MbMangaProgress?> Favourite(Guid profileId, Guid mangaId, bool favorite)
+	public async Task<MangaBoxType<MbMangaProgress>?> Favourite(Guid profileId, Guid mangaId, bool favorite)
 	{
         var query = await _cache.Required("upsert_favorite");
-        return await Fetch(query, new
+		Guid[] ids = [mangaId];
+		return (await FetchWithQuery(query, new
         {
             profileId,
-            mangaId,
+			ids,
 			favorite
-		});
+		})).FirstOrDefault();
 	}
 
-	public async Task<MangaBoxType<MbMangaProgress>[]> FetchByManga(Guid profileId, params Guid[] ids)
+    public async Task<MangaBoxType<MbMangaProgress>?> SetProgress(Guid profileId, Guid mangaId, bool completed)
     {
-        const string QUERY = @"
+        var query = await _cache.Required("upsert_progress");
+        Guid[] ids = [mangaId];
+        return (await FetchWithQuery(query, new 
+        { 
+            profileId, 
+            ids, 
+            completed 
+        })).FirstOrDefault();
+	}
+
+    public async Task<MangaBoxType<MbMangaProgress>?> Fetch(Guid profileId, Guid mangaId)
+    {
+        return (await FetchByManga(profileId, mangaId)).FirstOrDefault();
+	}
+
+    public async Task<MangaBoxType<MbMangaProgress>[]> FetchWithQuery(string? query, object? pars)
+    {
+        const string BASE_QUERY = @"
 SELECT DISTINCT c.*
 FROM mb_chapter_progress c
 JOIN mb_manga_progress p ON c.progress_id = p.id
@@ -97,18 +133,26 @@ WHERE
     p.profile_id = :profileId AND
     p.deleted_at IS NULL AND
     m.deleted_at IS NULL;";
-        using var con = await _sql.CreateConnection();
-        using var rdr = await con.QueryMultipleAsync(QUERY, new { ids, profileId });
 
-        var chapters = (await rdr.ReadAsync<MbChapterProgress>()).ToGDictionary(t => t.ProgressId);
-        var results = new List<MangaBoxType<MbMangaProgress>>();
-        foreach(var progress in await rdr.ReadAsync<MbMangaProgress>())
-        {
-            var relationships = new List<MangaBoxRelationship>();
-            MangaBoxRelationship.Apply(relationships, chapters.GetValueOrDefault(progress.Id, []));
-            results.Add(new(progress, [.. relationships]));
+        query = (query ?? "") + BASE_QUERY;
+
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(query, pars);
+
+		var chapters = (await rdr.ReadAsync<MbChapterProgress>()).ToGDictionary(t => t.ProgressId);
+		var results = new List<MangaBoxType<MbMangaProgress>>();
+		foreach (var progress in await rdr.ReadAsync<MbMangaProgress>())
+		{
+			var relationships = new List<MangaBoxRelationship>();
+			MangaBoxRelationship.Apply(relationships, chapters.GetValueOrDefault(progress.Id, []));
+			results.Add(new(progress, [.. relationships]));
 		}
 
-        return [.. results];
+		return [.. results];
+	}
+
+	public Task<MangaBoxType<MbMangaProgress>[]> FetchByManga(Guid profileId, params Guid[] ids)
+    {
+        return FetchWithQuery(null, new { profileId, ids });
 	}
 }

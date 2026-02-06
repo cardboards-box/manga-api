@@ -45,11 +45,18 @@ public interface IMbMangaDbService
     /// <returns>The ID of the inserted/updated record</returns>
     Task<Guid> Upsert(MbManga item);
 
-    /// <summary>
-    /// Gets all of the records from the mb_manga table
-    /// </summary>
-    /// <returns>All of the records</returns>
-    Task<MbManga[]> Get();
+	/// <summary>
+	/// Deletes a manga by it's ID (and all of it's chapters and images)
+	/// </summary>
+	/// <param name="id">The ID to delete</param>
+	/// <returns>The number of records deleted</returns>
+	Task<int> Delete(Guid id);
+
+	/// <summary>
+	/// Gets all of the records from the mb_manga table
+	/// </summary>
+	/// <returns>All of the records</returns>
+	Task<MbManga[]> Get();
 
     /// <summary>
     /// Fetches the record and all related records
@@ -267,6 +274,15 @@ WHERE
 		}
 
         return new(pages, total, [.. results]);
+	}
+
+	public override Task<int> Delete(Guid id)
+	{
+        const string QUERY = @"
+UPDATE mb_manga SET deleted_at = CURRENT_TIMESTAMP WHERE id = :id;
+UPDATE mb_chapters SET deleted_at = CURRENT_TIMESTAMP WHERE manga_id = :id;
+UPDATE mb_images SET deleted_at = CURRENT_TIMESTAMP WHERE manga_id = :id;";
+        return Execute(QUERY, new { id });
 	}
 
     public class TagMap
