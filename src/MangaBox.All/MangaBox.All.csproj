@@ -7,6 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\MangaBox.Match\MangaBox.Match.csproj" />
         <ProjectReference Include="..\MangaBox.Providers\MangaBox.Providers.csproj" />
         <ProjectReference Include="..\MangaBox.Utilities.Auth\MangaBox.Utilities.Auth.csproj" />
         <ProjectReference Include="..\MangaBox.Utilities.Flare\MangaBox.Utilities.Flare.csproj" />
@@ -15,6 +16,9 @@
     <ItemGroup>
         <None Update="appsettings.json">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Update="creds.json">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
     </ItemGroup>
 

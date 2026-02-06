@@ -6,8 +6,9 @@ namespace MangaBox.All;
 
 using Core;
 using Database;
-using Providers;
 using Jwt;
+using Match;
+using Providers;
 using Services;
 using Utilities.Auth;
 using Utilities.Flare;
@@ -30,7 +31,8 @@ public static class DiExtensions
 			.AddGeneralServices()
 			.AddSources()
 			.AddFlareSolver()
-			.AddOAuthServices();
+			.AddOAuthServices()
+			.AddMatch();
 
 		await services.AddServices(config, c => c.AddDatabase());
 	}

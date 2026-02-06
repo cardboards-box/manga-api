@@ -18,6 +18,11 @@ public class MangaController(
 	[ProducesPaged<MangaBoxType<MbManga>>, ProducesError(400)]
 	public Task<IActionResult> Search([FromBody] MangaSearchFilter filter) => Box(async () =>
 	{
+		if (filter.Page <= 0)
+			return Boxed.Bad("Page must be greater than 0.");
+		if (filter.Size <= 0 || filter.Size > 100)
+			return Boxed.Bad("Size must be between 1 and 100.");
+
 		filter.ProfileId = this.GetProfileId();
 		if (!filter.ProfileId.HasValue && 
 			(filter.States.Length != 0 ||

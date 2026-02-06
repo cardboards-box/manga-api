@@ -1,5 +1,6 @@
 namespace MangaBox.Database.Services;
 
+using Flurl;
 using Models;
 using Models.Composites;
 using Models.Composites.Filters;
@@ -80,6 +81,21 @@ public interface IMbMangaDbService
     /// <param name="filter">The manga filter</param>
     /// <returns>The searched manga</returns>
     Task<PaginatedResult<MangaBoxType<MbManga>>> Search(MangaSearchFilter filter);
+
+    /// <summary>
+    /// Fetches manga by their URLs
+    /// </summary>
+    /// <param name="urls">The urls to search for</param>
+    /// <returns>The manga matching</returns>
+    Task<MangaBoxType<MbManga>[]> ByUrls(params string[] urls);
+
+    /// <summary>
+    /// Fetches manga by source and Ids
+    /// </summary>
+    /// <param name="source">The source ID</param>
+    /// <param name="mangaIds">The manga IDs</param>
+    /// <returns>The manga matching</returns>
+    Task<MangaBoxType<MbManga>[]> ByIds(Guid source, string[] mangaIds);
 }
 
 internal class MbMangaDbService(
@@ -248,32 +264,37 @@ WHERE
         if (total == 0) return new();
 		var pages = (int)Math.Ceiling((double)total / filter.Size);
 
-        var images = (await rdr.ReadAsync<MbImage>()).ToGDictionary(t => t.MangaId);
-        var extensions = (await rdr.ReadAsync<MbMangaExt>()).ToGDictionary(t => t.MangaId);
-        var sources = (await rdr.ReadAsync<MbSource>()).ToDictionary(t => t.Id);
-        var tags = (await rdr.ReadAsync<MbTag>()).ToDictionary(t => t.Id);
-        var tagMap = (await rdr.ReadAsync<TagMap>()).ToGDictionary(t => t.MangaId);
+        var results = await FromMulti(rdr);
+        return new(pages, total, results);
+	}
+
+    public static async Task<MangaBoxType<MbManga>[]> FromMulti(SqlMapper.GridReader rdr)
+    {
+		var images = (await rdr.ReadAsync<MbImage>()).ToGDictionary(t => t.MangaId);
+		var extensions = (await rdr.ReadAsync<MbMangaExt>()).ToGDictionary(t => t.MangaId);
+		var sources = (await rdr.ReadAsync<MbSource>()).ToDictionary(t => t.Id);
+		var tags = (await rdr.ReadAsync<MbTag>()).ToDictionary(t => t.Id);
+		var tagMap = (await rdr.ReadAsync<TagMap>()).ToGDictionary(t => t.MangaId);
 
 		var results = new List<MangaBoxType<MbManga>>();
 
-        foreach(var manga in await rdr.ReadAsync<MbManga>())
+		foreach (var manga in await rdr.ReadAsync<MbManga>())
 		{
 			var related = new List<MangaBoxRelationship>();
-            if (images.TryGetValue(manga.Id, out var imgs))
-                MangaBoxRelationship.Apply(related, imgs);
-            if (extensions.TryGetValue(manga.Id, out var exts))
-                MangaBoxRelationship.Apply(related, exts);
-            if (sources.TryGetValue(manga.SourceId, out var src))
-                MangaBoxRelationship.Apply(related, src);
-            if (tagMap.TryGetValue(manga.Id, out var tmap))
-                MangaBoxRelationship.Apply(related, tmap
+			if (images.TryGetValue(manga.Id, out var imgs))
+				MangaBoxRelationship.Apply(related, imgs);
+			if (extensions.TryGetValue(manga.Id, out var exts))
+				MangaBoxRelationship.Apply(related, exts);
+			if (sources.TryGetValue(manga.SourceId, out var src))
+				MangaBoxRelationship.Apply(related, src);
+			if (tagMap.TryGetValue(manga.Id, out var tmap))
+				MangaBoxRelationship.Apply(related, tmap
 					.Select(t => tags.TryGetValue(t.TagId, out var tag) ? tag : null)
 					.Where(t => t is not null));
 
-            results.Add(new(manga, [.. related]));
+			results.Add(new(manga, [.. related]));
 		}
-
-        return new(pages, total, [.. results]);
+        return [.. results];
 	}
 
 	public override Task<int> Delete(Guid id)
@@ -285,7 +306,136 @@ UPDATE mb_images SET deleted_at = CURRENT_TIMESTAMP WHERE manga_id = :id;";
         return Execute(QUERY, new { id });
 	}
 
-    public class TagMap
+	public async Task<MangaBoxType<MbManga>[]> ByUrls(params string[] urls)
+	{
+        urls = [..urls.Select(t => t.ToLower())];
+
+        if (urls.Length == 0) return [];
+
+        var suffix = SearchFilter<MangaOrderBy>.TableSuffix();
+
+        string query = $@"BEGIN;
+DROP TABLE IF EXISTS tmp_manga_results_{suffix};
+
+CREATE TEMP TABLE tmp_manga_results_{suffix} ON COMMIT DROP AS
+SELECT
+    DISTINCT
+    m.id
+FROM mb_manga m
+JOIN mb_chapters c ON m.id = c.manga_id
+WHERE
+    m.deleted_at IS NULL AND
+    c.deleted_at IS NULL AND (
+        LOWER(m.url) = ANY(:urls) OR
+        LOWER(c.url) = ANY(:urls)
+    );
+
+SELECT i.*
+FROM mb_images i
+JOIN tmp_manga_results_{suffix} p ON p.id = i.manga_id
+WHERE i.chapter_id IS NULL AND i.deleted_at IS NULL;
+
+SELECT e.*
+FROM mb_manga_ext e
+JOIN tmp_manga_results_{suffix} p ON p.id = e.manga_id
+WHERE e.deleted_at IS NULL;
+
+SELECT DISTINCT s.*
+FROM mb_sources s
+JOIN mb_manga m ON m.source_id = s.id
+JOIN tmp_manga_results_{suffix} p ON p.id = m.id
+WHERE 
+	m.deleted_at IS NULL AND
+	s.deleted_at IS NULL;
+
+SELECT DISTINCT t.*
+FROM mb_tags t 
+JOIN mb_manga_tags mt ON mt.tag_id = t.id
+JOIN tmp_manga_results_{suffix} p ON p.id = mt.manga_id
+WHERE t.deleted_at IS NULL AND mt.deleted_at IS NULL;
+
+SELECT DISTINCT mt.manga_id, mt.tag_id
+FROM mb_manga_tags mt
+JOIN tmp_manga_results_{suffix} p ON p.id = mt.manga_id
+WHERE mt.deleted_at IS NULL;
+
+SELECT m.*
+FROM mb_manga m
+JOIN tmp_manga_results_{suffix} t ON m.id = t.id;
+
+DROP TABLE tmp_manga_results_{suffix};
+COMMIT;";
+
+        using var con = await _sql.CreateConnection();
+        using var rdr = await con.QueryMultipleAsync(query, new { urls });
+
+        return await FromMulti(rdr);
+	}
+
+    public async Task<MangaBoxType<MbManga>[]> ByIds(Guid source, string[] mangaIds)
+    {
+		mangaIds = [.. mangaIds.Select(t => t.ToLower())];
+
+		if (mangaIds.Length == 0) return [];
+
+		var suffix = SearchFilter<MangaOrderBy>.TableSuffix();
+
+		string query = $@"BEGIN;
+DROP TABLE IF EXISTS tmp_manga_results_{suffix};
+
+CREATE TEMP TABLE tmp_manga_results_{suffix} ON COMMIT DROP AS
+SELECT
+    DISTINCT
+    m.id
+FROM mb_manga m
+WHERE
+    m.source_id = :source AND
+    LOWER(m.original_source_id) = ANY(:mangaIds) AND
+    m.deleted_at IS NULL;
+
+SELECT i.*
+FROM mb_images i
+JOIN tmp_manga_results_{suffix} p ON p.id = i.manga_id
+WHERE i.chapter_id IS NULL AND i.deleted_at IS NULL;
+
+SELECT e.*
+FROM mb_manga_ext e
+JOIN tmp_manga_results_{suffix} p ON p.id = e.manga_id
+WHERE e.deleted_at IS NULL;
+
+SELECT DISTINCT s.*
+FROM mb_sources s
+JOIN mb_manga m ON m.source_id = s.id
+JOIN tmp_manga_results_{suffix} p ON p.id = m.id
+WHERE 
+	m.deleted_at IS NULL AND
+	s.deleted_at IS NULL;
+
+SELECT DISTINCT t.*
+FROM mb_tags t 
+JOIN mb_manga_tags mt ON mt.tag_id = t.id
+JOIN tmp_manga_results_{suffix} p ON p.id = mt.manga_id
+WHERE t.deleted_at IS NULL AND mt.deleted_at IS NULL;
+
+SELECT DISTINCT mt.manga_id, mt.tag_id
+FROM mb_manga_tags mt
+JOIN tmp_manga_results_{suffix} p ON p.id = mt.manga_id
+WHERE mt.deleted_at IS NULL;
+
+SELECT m.*
+FROM mb_manga m
+JOIN tmp_manga_results_{suffix} t ON m.id = t.id;
+
+DROP TABLE tmp_manga_results_{suffix};
+COMMIT;";
+
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(query, new { mangaIds, source });
+
+		return await FromMulti(rdr);
+	}
+
+	public class TagMap
     {
         public Guid MangaId { get; set; }
         public Guid TagId { get; set; }

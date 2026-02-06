@@ -8,7 +8,7 @@ public static class PolyfillExtensions
 {
 	private static IJsonService _json = new SystemTextJsonService(new JsonSerializerOptions());
 
-	public const string USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36";
+	public const string USER_AGENT = Constants.USER_AGENT;
 
 	public static readonly Dictionary<string, string> HEADERS_FOR_REFERS = new()
 	{

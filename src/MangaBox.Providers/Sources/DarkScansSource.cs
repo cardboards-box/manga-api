@@ -11,7 +11,7 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 {
 	public string HomeUrl => "https://dark-scan.com/";
 
-	public string MangaBaseUri => "https://dark-scan.com/manga/";
+	public string MangaBaseUri => $"{HomeUrl}manga/";
 
 	public string Provider => "dark-scans";
 

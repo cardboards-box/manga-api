@@ -16,6 +16,11 @@ public static class Constants
 	public const string APPLICATION_URL = "mangabox.app";
 
 	/// <summary>
+	/// The default user-agent for scraper requests
+	/// </summary>
+	public const string USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36";
+
+	/// <summary>
 	/// The role name for administrators
 	/// </summary>
 	public const string ROLE_ADMIN = "Admin";

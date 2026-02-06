@@ -23,6 +23,7 @@
   <Project Path="MangaBox.Api/MangaBox.Api.csproj" />
   <Project Path="MangaBox.Cli/MangaBox.Cli.csproj" Id="ab43be56-774c-4675-a513-ed2b69f13af3" />
   <Project Path="MangaBox.Database/MangaBox.Database.csproj" Id="84e1e62a-b9c2-4b61-b073-c0f856d9eb81" />
+  <Project Path="MangaBox.Match/MangaBox.Match.csproj" Id="9935d8a2-7cb1-4a44-9081-bec67761f7bf" />
   <Project Path="MangaBox.Models/MangaBox.Models.csproj" Id="a6ae4190-433a-47a1-82f2-e706a30fe1b3" />
   <Project Path="MangaBox.Providers/MangaBox.Providers.csproj" Id="666940c2-dfa6-4df1-984c-8eb7363645c7" />
   <Project Path="MangaBox.Services/MangaBox.Services.csproj" Id="e7629490-9781-4f0f-9637-d867007b4838" />
