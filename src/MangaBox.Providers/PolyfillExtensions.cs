@@ -20,87 +20,13 @@ public static class PolyfillExtensions
 
 	public static RateLimiter DefaultRateLimiter()  => new TokenBucketRateLimiter(new()
 	{
-		TokenLimit = 25,
+		TokenLimit = 15,
+		TokensPerPeriod = 15,
 		QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
 		QueueLimit = int.MaxValue,
 		ReplenishmentPeriod = TimeSpan.FromSeconds(5),
-		TokensPerPeriod = 25,
 		AutoReplenishment = true
 	});
-
-	public static string Join(this IEnumerable<HtmlNode> nodes, bool checkWs = false)
-	{
-		try
-		{
-			var doc = new HtmlDocument();
-			foreach (var node in nodes)
-				if (!checkWs || !string.IsNullOrWhiteSpace(node.InnerText))
-					doc.DocumentNode.AppendChild(node);
-
-			return doc.DocumentNode?.InnerHtml?.Trim() ?? string.Empty;
-		}
-		catch
-		{
-			return string.Empty;
-		}
-	}
-
-	public static void CleanupNode(this HtmlNode parent)
-	{
-		parent.SelectNodes("./noscript")?
-			.ToList()
-			.ForEach(t => t.Remove());
-
-		parent.SelectNodes("./img")?
-			.ToList()
-			.ForEach(t =>
-			{
-				foreach (var attr in t.Attributes.ToArray())
-					if (attr.Name != "src" && attr.Name != "alt")
-						t.Attributes.Remove(attr);
-			});
-
-		if (parent.ChildNodes.Count == 0)
-		{
-			parent.Remove();
-			return;
-		}
-
-		if (parent.ParentNode != null &&
-			parent.ChildNodes.Count == 1 &&
-			parent.FirstChild.Name == "img")
-		{
-			parent.ParentNode.InsertBefore(parent.FirstChild, parent);
-			parent.Remove();
-			return;
-		}
-	}
-
-	public static async IAsyncEnumerable<T> WhereA<T>(this IAsyncEnumerable<T> source, Func<T, bool> predicate)
-	{
-		await foreach (var item in source)
-		{
-			if (predicate(item))
-				yield return item;
-		}
-	}
-
-	public static async IAsyncEnumerable<T> SkipWhileA<T>(this IAsyncEnumerable<T> source, Func<T, bool> predicate)
-	{
-		var skipping = true;
-		await foreach (var item in source)
-		{
-			if (skipping && predicate(item))
-				continue;
-			skipping = false;
-			yield return item;
-		}
-	}
-
-	public static async Task<T[]> ToArrayA<T>(this IAsyncEnumerable<T> source)
-	{
-		return [..await ToListA(source)];
-	}
 
 	public static async Task<List<T>> ToListA<T>(this IAsyncEnumerable<T> source)
 	{
@@ -110,24 +36,6 @@ public static class PolyfillExtensions
 		return items;
 	}
 
-	public static async Task<T?> FirstOrDefaultA<T>(this IAsyncEnumerable<T> source)
-	{
-		await foreach (var item in source)
-			return item;
-
-		return default;
-	}
-
-
-	//
-	public static async Task<HtmlDocument?> GetHtml(this IHttpBuilder builder, CancellationToken token = default)
-	{
-		using var resp = await builder.Result();
-		if (resp == null || !resp.IsSuccessStatusCode) return null;
-
-		var data = await resp.Content.ReadAsStringAsync(token);
-		return data.ParseHtml();
-	}
 	//
 	public static HtmlDocument ParseHtml(this string html)
 	{
@@ -146,27 +54,6 @@ public static class PolyfillExtensions
 		return HttpUtility.HtmlDecode(text).Trim('\n');
 	}
 
-	public static string SafeSubString(this string text, int length, int start = 0)
-	{
-		if (start + length > text.Length)
-			return text[start..];
-
-		return text.Substring(start, length);
-	}
-	//
-	public static string GetRootUrl(this string url)
-	{
-		if (!Uri.TryCreate(url, UriKind.RelativeOrAbsolute, out var uri))
-			throw new UriFormatException(url);
-
-		return uri.GetRootUrl();
-	}
-	//
-	public static string GetRootUrl(this Uri uri)
-	{
-		var port = uri.IsDefaultPort ? "" : ":" + uri.Port;
-		return $"{uri.Scheme}://{uri.Host}{port}";
-	}
 	//
 	public static string? InnerText(this HtmlDocument doc, string xpath)
 	{
@@ -278,7 +165,7 @@ public static class PolyfillExtensions
 
 		return doc;
 	}
-	//
+
 	public static async Task<(Stream data, long length, string filename, string type)> GetData(this IApiService api, string url, 
 		Action<HttpRequestMessage>? config = null, CancellationToken token = default)
 	{

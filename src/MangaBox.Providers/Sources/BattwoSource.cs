@@ -2,7 +2,7 @@
 
 namespace MangaBox.Providers.Sources;
 
-using static Services.MangaSource;
+using static MangaSource;
 
 public interface IBattwoSource : IMangaUrlSource { }
 

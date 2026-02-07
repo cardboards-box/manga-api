@@ -12,6 +12,7 @@ using Providers;
 using Services;
 using Utilities.Auth;
 using Utilities.Flare;
+using Utilities.MangaDex;
 
 /// <summary>
 /// Dependency injection services
@@ -32,7 +33,8 @@ public static class DiExtensions
 			.AddSources()
 			.AddFlareSolver()
 			.AddOAuthServices()
-			.AddMatch();
+			.AddMatch()
+			.AddMangaDex();
 
 		await services.AddServices(config, c => c.AddDatabase());
 	}

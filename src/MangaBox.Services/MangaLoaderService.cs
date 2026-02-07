@@ -49,6 +49,12 @@ public interface IMangaLoaderService
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>A boxed result of <see cref="MangaBoxType{MbChapter}"/></returns>
 	Task<Boxed> Pages(Guid chapterId, bool force, CancellationToken token);
+
+	/// <summary>
+	/// Runs the <see cref="IIndexableMangaSource.Index(LoaderSource, CancellationToken)"/> function for all applicable sources
+	/// </summary>
+	/// <param name="token">The cancellation token for the request</param>
+	Task RunIndex(CancellationToken token);
 }
 
 internal class MangaLoaderService(
@@ -116,7 +122,7 @@ internal class MangaLoaderService(
 		{
 			token.ThrowIfCancellationRequested();
 			var page = pages[i];
-			await _db.Image.Upsert(new()
+			var id = await _db.Image.Upsert(new()
 			{
 				Url = page.Page,
 				MangaId = manga.Id,
@@ -125,6 +131,7 @@ internal class MangaLoaderService(
 				ImageWidth = page.Width,
 				ImageHeight = page.Height,
 			});
+			await _publish.NewImages.Publish(new(id, DateTime.UtcNow));
 		}
 
 		if (chapter.PageCount != pages.Length)
@@ -212,9 +219,10 @@ internal class MangaLoaderService(
 		if (manga is null)
 			return Boxed.Exception("An unknown error occurred while fetching the manga after upsert.");
 
-		await (result.MangaIsNew ? _publish.MangaNew(manga) : _publish.MangaUpdate(manga));
+		if (result.MangaIsNew)
+			await _publish.NewManga.Publish(manga);
 		foreach (var chapter in result.ChaptersNew)
-			await _publish.ChapterNew(chapter);
+			await _publish.NewChapters.Publish(chapter);
 		return Boxed.Ok(manga);
 	}
 
@@ -225,5 +233,22 @@ internal class MangaLoaderService(
 			return Boxed.NotFound(nameof(MbManga), "Could not load manga from source");
 		
 		return await Load(before, found.Info.Id, profileId, null);
+	}
+
+	public Task RunIndex(CancellationToken token)
+	{
+		var opts = new ParallelOptions
+		{
+			MaxDegreeOfParallelism = 4,
+			CancellationToken = token
+		};
+		return Parallel.ForEachAsync(_sources.All(token), opts, async (source, ct) =>
+		{
+			if (source.Service is not IIndexableMangaSource indexable)
+				return;
+
+			await foreach(var manga in indexable.Index(source, ct))
+				await Load(manga, source.Info.Id, null, null);
+		});
 	}
 }

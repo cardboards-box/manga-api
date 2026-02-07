@@ -35,12 +35,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="MangaDexSharp" Version="1.3.5" />
 	  <PackageReference Include="WeebDexSharp" Version="0.0.3" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\MangaBox.Services\MangaBox.Services.csproj" />
+	  <ProjectReference Include="..\MangaBox.Match\MangaBox.Match.csproj" />
 	  <ProjectReference Include="..\MangaBox.Utilities.Flare\MangaBox.Utilities.Flare.csproj" />
 	</ItemGroup>
 

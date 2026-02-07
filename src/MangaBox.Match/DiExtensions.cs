@@ -33,6 +33,7 @@ public static class DiExtensions
 	{
 		return services
 			.AddTransient<IReverseImageSearchService, ReverseImageSearchService>()
+			.AddTransient<IRISIndexService, RISIndexService>()
 
 			//Add internal RIS service
 			.AddTransient<IRISApiService, RISApiService>()

@@ -6,11 +6,13 @@ using Image = Google.Cloud.Vision.V1.Image;
 
 namespace MangaBox.Match;
 
+using Utilities.MangaDex;
+
 using TaskType = Func<Task<Image>>;
 
 internal class VisionSearchService(
 	IDbService _db,
-	IMangaDex _api,
+	IMangaDexService _api,
 	IMangaLoaderService _loader,
 	ILogger<VisionSearchService> _logger) : IImageSearchService
 {
@@ -113,8 +115,7 @@ internal class VisionSearchService(
 			},
 			Limit = 5
 		};
-		var result = (await _api.Manga.List(filter))?
-			.Data?.FirstOrDefault();
+		var result = (await _api.Search(filter))?.Data?.FirstOrDefault();
 		if (result is null) return null;
 
 		var load = await _loader.Load(null, $"https://mangadex.org/title/{result.Id}", false, token);
@@ -184,7 +185,6 @@ internal class VisionSearchService(
 		}
 	}
 }
-
 
 /// <summary>
 /// A image url and it's score

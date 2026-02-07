@@ -37,11 +37,11 @@
 	<ItemGroup>
 	  <PackageReference Include="F23.StringSimilarity" Version="7.0.1" />
 	  <PackageReference Include="Google.Cloud.Vision.V1" Version="3.8.0" />
-	  <PackageReference Include="MangaDexSharp" Version="1.3.5" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\MangaBox.Services\MangaBox.Services.csproj" />
+		<ProjectReference Include="..\MangaBox.Utilities.MangaDex\MangaBox.Utilities.MangaDex.csproj" />
 	</ItemGroup>
 
 </Project>

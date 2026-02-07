@@ -1,10 +1,8 @@
-﻿using MangaDexSharp;
-using WeebDexSharp;
+﻿using WeebDexSharp;
 
 namespace MangaBox.Providers;
 
 using Sources;
-using Sources.MD;
 
 public static class DiExtensions
 {
@@ -21,8 +19,6 @@ public static class DiExtensions
 	{
 		return services
 			//Register everything MangaDex related
-			.AddMangaDex(c => c.WithApiConfig(userAgent: "mb-api"))
-			.AddTransient<IMangaDexService, MangaDexService>()
 			.AddSource<IMangaDexSource, MangaDexSource>()
 
 			//Register everything WeebDex related

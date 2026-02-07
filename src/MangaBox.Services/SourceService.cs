@@ -37,7 +37,6 @@ public interface ISourceService
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>All of the sources</returns>
 	IAsyncEnumerable<LoaderSource> All(CancellationToken token);
-
 }
 
 /// <inheritdoc cref="ISourceService" />

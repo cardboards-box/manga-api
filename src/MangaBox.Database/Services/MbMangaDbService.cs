@@ -1,6 +1,5 @@
 namespace MangaBox.Database.Services;
 
-using Flurl;
 using Models;
 using Models.Composites;
 using Models.Composites.Filters;
@@ -96,6 +95,12 @@ public interface IMbMangaDbService
     /// <param name="mangaIds">The manga IDs</param>
     /// <returns>The manga matching</returns>
     Task<MangaBoxType<MbManga>[]> ByIds(Guid source, string[] mangaIds);
+
+    /// <summary>
+    /// Get the manga that need to be refreshed
+    /// </summary>
+    /// <returns>The manga to be refreshed</returns>
+    Task<MbManga[]> ToRefresh();
 }
 
 internal class MbMangaDbService(
@@ -433,6 +438,12 @@ COMMIT;";
 		using var rdr = await con.QueryMultipleAsync(query, new { mangaIds, source });
 
 		return await FromMulti(rdr);
+	}
+
+	public async Task<MbManga[]> ToRefresh()
+	{
+        var query = await _cache.Required("fetch_refresh_manga");
+        return await Get(query);
 	}
 
 	public class TagMap

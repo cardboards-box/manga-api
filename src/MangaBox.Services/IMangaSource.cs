@@ -86,6 +86,20 @@ public interface IMangaUrlSource : IMangaSource
 }
 
 /// <summary>
+/// Represents a manga source that can be scanned for new manga to add to the database
+/// </summary>
+public interface IIndexableMangaSource : IMangaSource
+{
+	/// <summary>
+	/// Triggers the indexing process for the source
+	/// </summary>
+	/// <param name="source">The source being indexed</param>
+	/// <param name="token">The token for when to stop processing</param>
+	/// <returns>The updated manga</returns>
+	IAsyncEnumerable<Manga> Index(LoaderSource source, CancellationToken token);
+}
+
+/// <summary>
 /// A class scoping for manga source classes
 /// </summary>
 /// <remarks>TODO: Rename these later and find a proper home for them</remarks>

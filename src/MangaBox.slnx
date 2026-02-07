@@ -18,6 +18,7 @@
     <Project Path="MangaBox.Jwt/MangaBox.Jwt.csproj" Id="ac902022-2bd8-44bc-85c3-74d0eb9c9c20" />
     <Project Path="MangaBox.Utilities.Auth/MangaBox.Utilities.Auth.csproj" Id="bf383eb9-4b37-4924-9b02-eb9f4a359cdc" />
     <Project Path="MangaBox.Utilities.Flare/MangaBox.Utilities.Flare.csproj" Id="db74b20f-792d-4b32-b52c-606edab687e7" />
+    <Project Path="MangaBox.Utilities.MangaDex/MangaBox.Utilities.MangaDex.csproj" Id="aa22c82e-5ba3-40fe-a6bd-c001c6aacdb6" />
   </Folder>
   <Project Path="MangaBox.All/MangaBox.All.csproj" Id="0bdc79c3-d321-47dd-a17e-a1dcc607deea" />
   <Project Path="MangaBox.Api/MangaBox.Api.csproj" />

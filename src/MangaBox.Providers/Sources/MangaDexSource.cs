@@ -1,24 +1,26 @@
 ﻿using System.Threading.RateLimiting;
 
-namespace MangaBox.Providers.Sources.MD;
+namespace MangaBox.Providers.Sources;
 
+using Models.Types;
+using Utilities.MangaDex;
 using static Services.MangaSource;
 
-using MManga = MangaDexSharp.Manga;
-using MangaFilter = MangaDexSharp.MangaFilter;
+//I need to fix the naming convention in MD#... It's way too generic :'(
+using ChapterList = MangaDexSharp.ChapterList;
 using CoverArtRelationship = MangaDexSharp.CoverArtRelationship;
-using Models.Types;
+using MangaFeedFilter = MangaDexSharp.MangaFeedFilter;
+using MManga = MangaDexSharp.Manga;
+using Chapter = MangaDexSharp.Chapter;
+using RelatedDataRelationship = MangaDexSharp.RelatedDataRelationship;
 
-public interface IMangaDexSource : IMangaSource
+public interface IMangaDexSource : IIndexableMangaSource
 {
-	Task<Manga[]> Search(string title, CancellationToken token);
 
-	Task<Manga[]> Search(MangaFilter filter, CancellationToken token);
-
-	Task<Manga> Convert(MManga manga, CancellationToken token, bool getChaps = true);
 }
 
-public class MangaDexSource(IMangaDexService _mangadex) : IMangaDexSource
+public class MangaDexSource(
+	IMangaDexService _mangadex) : IMangaDexSource
 {
 	private const string DEFAULT_LANG = "en";
 	public string HomeUrl => "https://mangadex.org";
@@ -36,15 +38,15 @@ public class MangaDexSource(IMangaDexService _mangadex) : IMangaDexSource
 		return [..pages.Images.Select(t => new MangaChapterPage(t))];
 	}
 
-	public async Task<Manga> Convert(MManga manga, CancellationToken token, bool getChaps = true)
+	public async Task<Manga> Convert(MManga manga, CancellationToken token, List<MangaChapter>? chapters = null)
 	{
 		var id = manga.Id;
 		var coverFile = (manga.Relationships.FirstOrDefault(t => t is CoverArtRelationship) as CoverArtRelationship)?.Attributes?.FileName;
 		var coverUrl = $"{HomeUrl}/covers/{id}/{coverFile}";
 
-		var chapters = getChaps ? await GetChapters(id, token, DEFAULT_LANG)
+		chapters ??= await GetChapters(id, token, DEFAULT_LANG)
 			.OrderBy(t => t.Number)
-			.ToListAsync(token) : [];
+			.ToListAsync(token);
 
 		var title = DetermineTitle(manga);
 
@@ -93,28 +95,6 @@ public class MangaDexSource(IMangaDexService _mangadex) : IMangaDexSource
 		};
 	}
 
-	public Task<Manga[]> Search(string title, CancellationToken token)
-	{
-		var filter = new MangaFilter
-		{
-			Title = title,
-			Order = new()
-			{
-				[MangaFilter.OrderKey.relevance] = MangaDexSharp.OrderValue.asc
-			}
-		};
-		return Search(filter, token);
-	}
-
-	public async Task<Manga[]> Search(MangaFilter filter, CancellationToken token)
-	{
-		var results = await _mangadex.Search(filter);
-		if (results == null || results.Data == null || results.Data.Count == 0)
-			return [];
-
-		return await results.Data.Select(t => Convert(t, token, false)).WhenAll();
-	}
-
 	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
 		var manga = await _mangadex.Manga(id);
@@ -136,17 +116,9 @@ public class MangaDexSource(IMangaDexService _mangadex) : IMangaDexSource
 		return title.Value;
 	}
 
-	public async IAsyncEnumerable<MangaChapter> GetChapters(string id, [EnumeratorCancellation] CancellationToken token, params string[] languages)
+	public IEnumerable<MangaChapter> ConvertChapters(IEnumerable<Chapter> chapters)
 	{
-		var filter = new MangaDexSharp.MangaFeedFilter { TranslatedLanguage = languages };
-		while (true)
-		{
-			token.ThrowIfCancellationRequested();
-			var chapters = await _mangadex.Chapters(id, filter);
-			if (chapters == null) yield break;
-
-			var sortedChapters = chapters
-				.Data
+		var sortedChapters = chapters
 				.Where(t => t.Attributes is not null)!
 				.GroupBy(t => t.Attributes!.Chapter + t.Attributes.Volume)
 				.Select(t => t.PreferredOrFirst(t => t.Attributes!.TranslatedLanguage == DEFAULT_LANG))
@@ -159,13 +131,29 @@ public class MangaDexSource(IMangaDexService _mangadex) : IMangaDexSource
 					Number = double.TryParse(t?.Attributes!.Chapter, out var a) ? a : 0,
 					Volume = double.TryParse(t?.Attributes!.Volume, out var b) ? b : null,
 					ExternalUrl = t?.Attributes!.ExternalUrl,
-					Attributes = [..GetChapterAttributes(t)]
+					Attributes = [.. GetChapterAttributes(t)]
 				})
 				.OrderBy(t => t.Volume)
 				.OrderBy(t => t.Number);
 
-			foreach (var chap in sortedChapters)
-				yield return chap;
+		foreach (var chap in sortedChapters)
+			yield return chap;
+	}
+
+	public async IAsyncEnumerable<MangaChapter> GetChapters(string id, [EnumeratorCancellation] CancellationToken token, params string[] languages)
+	{
+		var filter = new MangaFeedFilter { TranslatedLanguage = languages };
+		while (true)
+		{
+			token.ThrowIfCancellationRequested();
+			var chapters = await _mangadex.Chapters(id, filter);
+			if (chapters == null || 
+				chapters.Data is null || 
+				chapters.Data.Count == 0) 
+				yield break;
+
+			foreach(var chapter in ConvertChapters(chapters.Data))
+				yield return chapter;
 
 			int current = chapters.Offset + chapters.Limit;
 			if (chapters.Total <= current) yield break;
@@ -174,7 +162,7 @@ public class MangaDexSource(IMangaDexService _mangadex) : IMangaDexSource
 		}
 	}
 
-	public static IEnumerable<MangaAttribute> GetChapterAttributes(MangaDexSharp.Chapter? chapter)
+	public static IEnumerable<MangaAttribute> GetChapterAttributes(Chapter? chapter)
 	{
 		if (chapter is null) yield break;
 
@@ -248,4 +236,66 @@ public class MangaDexSource(IMangaDexService _mangadex) : IMangaDexSource
 	}
 
 	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+
+	public static MManga? GetMangaRel(Chapter chapter)
+	{
+		var m = chapter.Relationships.FirstOrDefault(t => t is MManga);
+		if (m == null) return null;
+
+		return (MManga)m;
+	}
+
+	public async Task PolyfillCoverArt(ChapterList data)
+	{
+		var ids = new List<string>();
+		foreach (var chapter in data.Data)
+		{
+			var m = GetMangaRel(chapter);
+			if (m == null) continue;
+
+			ids.Add(m.Id);
+		}
+
+		var manga = await _mangadex.AllManga([..ids.Distinct()]);
+		if (manga == null || manga.Data.Count == 0)
+			return;
+
+		foreach (var chapter in data.Data)
+		{
+			foreach (var rel in chapter.Relationships)
+			{
+				if (rel is not RelatedDataRelationship mr) continue;
+
+				var existing = manga.Data.FirstOrDefault(t => t.Id == mr.Id);
+				if (existing == null) continue;
+
+				mr.Attributes = existing.Attributes;
+				mr.Relationships = existing.Relationships;
+			}
+		}
+	}
+
+	public async IAsyncEnumerable<Manga> Index(LoaderSource source, [EnumeratorCancellation] CancellationToken token)
+	{
+		var latest = await _mangadex.ChaptersLatest();
+		if (latest is null || latest.Data.Count == 0)
+			yield break;
+
+		await PolyfillCoverArt(latest);
+
+		var grouped = latest.Data.GroupBy(t => GetMangaRel(t)?.Id)
+			.Where(t => t.Key is not null);
+
+		foreach(var chapters in grouped)
+		{
+			token.ThrowIfCancellationRequested();
+
+			var chapter = chapters.First();
+			var manga = GetMangaRel(chapter);
+			if (manga == null) continue;
+
+			yield return await Convert(manga, token, 
+				[.. ConvertChapters(chapters)]);
+		}
+	}
 }
