@@ -103,14 +103,14 @@ public class MbManga : MbDbObjectLegacy
 	/// </summary>
 	[Column("referer", ExcludeUpdates = true)]
 	[MaxLength(MAX_URL_LENGTH), Url]
-	[JsonPropertyName("referer")]
+	[JsonIgnore]
 	public string? Referer { get; set; }
 
 	/// <summary>
 	/// The optional user-agent to use when making requests
 	/// </summary>
 	[Column("user_agent", ExcludeUpdates = true)]
-	[JsonPropertyName("userAgent")]
+	[JsonIgnore]
 	public string? UserAgent { get; set; }
 
 	/// <summary>

@@ -26,7 +26,6 @@ public class MbImage : MbDbObject
 	/// <summary>
 	/// The ID of the manga this image belongs to
 	/// </summary>
-	/// <remarks>If the image is a cover, this will be filled in.</remarks>
 	[Column("manga_id", Unique = true), Fk<MbManga>]
 	[JsonPropertyName("mangaId")]
 	public Guid MangaId { get; set; }

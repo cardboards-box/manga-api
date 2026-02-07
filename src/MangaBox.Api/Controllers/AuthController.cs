@@ -14,7 +14,7 @@ public class AuthController(
 	private const string? DEFAULT_REDIRECT = "https://localhost:7115/resolve";
 
 	/// <summary>
-	/// Attempts to resolve the code and log the user in
+	/// (TEMP) Attempts to resolve the code and log the user in
 	/// </summary>
 	/// <param name="code">The OAuth platform code</param>
 	/// <param name="token">The cancellation token for the request</param>
@@ -72,4 +72,29 @@ public class AuthController(
 
 		return Boxed.Ok(profile);
 	});
+
+	/// <summary>
+	/// Update the settings blob for the user's profile
+	/// </summary>
+	/// <param name="settings">The settings blob</param>
+	/// <returns>The user's profile</returns>
+	[HttpPut, Route("auth/settings")]
+	[ProducesBox<MbProfile>, ProducesError(401), ProducesError(404)]
+	public Task<IActionResult> Settings([FromBody] SetSettings settings) => Box(async () =>
+	{
+		var id = this.GetBaseProfileId();
+		if (!id.HasValue) return Boxed.Unauthorized("Not logged in.");
+
+		var profile = await _db.Profile.Settings(id.Value, settings.Settings);
+		if (profile is null) return Boxed.NotFound("Profile was not found");
+
+		return Boxed.Ok(profile);
+	});
+
+	/// <summary>
+	/// The request to set the settings blob
+	/// </summary>
+	/// <param name="Settings">The settings blob</param>
+	public record class SetSettings(
+		[property: JsonPropertyName("settings")] string? Settings);
 }

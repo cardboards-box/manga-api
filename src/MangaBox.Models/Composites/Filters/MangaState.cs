@@ -10,23 +10,23 @@ public enum MangaState
 	/// </summary>
 	[Display(Name = "Favorited")]
 	[Description("All of the manga you have marked as a favorite")]
-	Favorited,
+	Favorited = 0,
 	/// <summary>
 	/// All of the manga the user has read completely
 	/// </summary>
 	[Display(Name = "Completed")]
 	[Description("All of the manga you have read completely")]
-	Completed,
+	Completed = 1,
 	/// <summary>
 	/// All of the manga the user is currently reading but hasn't completed yet
 	/// </summary>
 	[Display(Name = "In Progress")]
 	[Description("All of the manga you are currently reading but haven't completed yet")]
-	InProgress,
+	InProgress = 2,
 	/// <summary>
 	/// All of the manga the user has book marked
 	/// </summary>
 	[Display(Name = "Bookmarked")]
 	[Description("All of the manga you have book marked")]
-	Bookmarked
+	Bookmarked = 3
 }

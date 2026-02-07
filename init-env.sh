@@ -1,7 +1,7 @@
 #!/bin/sh
 
 app_name="mangabox"
-root_dir="temp-env"
+root_dir="$app_name"
 
 create_dirs() {
   mkdir -p "./$root_dir"
@@ -10,6 +10,7 @@ create_dirs() {
   mkdir -p "./$root_dir/postgres"
   mkdir -p "./$root_dir/file-cache"
   mkdir -p "./$root_dir/jwt-key"
+  mkdir -p "./$root_dir/logs"
 }
 
 create_env() {
@@ -20,7 +21,7 @@ create_env() {
   fi
 
   echo "Creating $filename file..."
-  starting_port=9991
+  starting_port=10100
   api_port=$((starting_port + 1))
   db_port=$((starting_port + 2))
   redis_port=$((starting_port + 3))
@@ -43,6 +44,9 @@ PORT_REDIS=$redis_port
 
 OAUTH_APPID=
 OAUTH_SECRET=
+MATCH_URL=
+FLARE_URL=
+SAUCE_TOKEN=
 EOF
   echo "$filename created"
 }
@@ -100,13 +104,19 @@ services:
     volumes:
       - ./file-cache:/app/file-cache
       - ./jwt-key:/app/jwt-key
+      - ./creds.json:/app/creds.json
+      - ./logs:/app/logs
     environment:
       - Database:ConnectionString=User ID=${POSTGRES_USERNAME};Password=${POSTGRES_PASSWORD};Host=app-db;Database=${POSTGRES_SCHEMA};
       - Redis:Connection=app-redis,password=${REDIS_PASSWORD}
-      - Imaging:CacheDir=./file-cache
+      - FlareSolver:Url=${FLARE_URL}
       - OAuth:Jwt:KeyPath=./jwt-key/key.pem
       - OAuth:AppId=${OAUTH_APPID}
       - OAuth:Secret=${OAUTH_SECRET}
+      - Match:Url=${MATCH_URL}
+      - Match:SauceToken=${SAUCE_TOKEN}
+      - GOOGLE_APPLICATION_CREDENTIALS=creds.json
+      - Imaging:CacheDir=./file-cache
     networks:
       - app-network
     depends_on:
@@ -126,6 +136,6 @@ chmod 777 -R "./$root_dir"
 cd "./$root_dir"
 
 docker pull ghcr.io/cardboards-box/manga-api/api:latest
-docker compose up -d
+#docker compose up -d
 
 cd ..

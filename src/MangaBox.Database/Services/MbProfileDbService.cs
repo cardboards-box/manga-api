@@ -55,6 +55,14 @@ public interface IMbProfileDbService
     /// </summary>
     /// <returns>The admins</returns>
     Task<MbProfile[]> Admins();
+
+    /// <summary>
+    /// Update the settings for the given profile
+    /// </summary>
+    /// <param name="profileId">The ID of the profile</param>
+    /// <param name="settings">The settings blob</param>
+    /// <returns>The profile that was updated</returns>
+    Task<MbProfile?> Settings(Guid profileId, string? settings);
 }
 
 internal class MbProfileDbService(
@@ -67,6 +75,23 @@ internal class MbProfileDbService(
         _queryAdmins ??= Map.Select(t => t.With(a => a.Admin));
         return Get(_queryAdmins, new { Admin = true });
 	}
+
+    public Task<MbProfile?> Settings(Guid profileId, string? settings)
+    {
+        const string QUERY = @"
+UPDATE mb_profiles 
+SET settings_blob = :settings 
+WHERE 
+    id = :profileId AND
+    deleted_at IS NULL;
+
+SELECT * 
+FROM mb_profiles 
+WHERE 
+    id = :profileId AND
+    deleted_at IS NULL;";
+        return Fetch(QUERY, new { profileId, settings });
+    }
 
     public async Task<MangaBoxType<MbProfile>?> FetchWithRelationships(Guid id)
     {
