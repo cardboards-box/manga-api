@@ -136,6 +136,6 @@ chmod 777 -R "./$root_dir"
 cd "./$root_dir"
 
 docker pull ghcr.io/cardboards-box/manga-api/api:latest
-#docker compose up -d
+docker compose up -d
 
 cd ..

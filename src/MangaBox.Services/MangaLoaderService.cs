@@ -214,6 +214,7 @@ internal class MangaLoaderService(
 			return Boxed.Exception("An unknown error occurred while upserting the manga.");
 
 		await _db.MangaExt.Update(result.Manga.Id);
+		await _db.MangaProgress.UpdateInProgress();
 
 		var manga = await _db.Manga.FetchWithRelationships(result.Manga.Id);
 		if (manga is null)

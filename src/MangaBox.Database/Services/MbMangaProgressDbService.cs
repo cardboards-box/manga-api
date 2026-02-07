@@ -76,6 +76,12 @@ public interface IMbMangaProgressDbService
 	/// <param name="completed">Whether or not the manga has been read</param>
 	/// <returns>The updated manga progress</returns>
 	Task<MangaBoxType<MbMangaProgress>?> SetProgress(Guid profileId, Guid mangaId, bool completed);
+
+    /// <summary>
+    /// Updates the is_completed fields where necessary
+    /// </summary>
+    /// <returns>The progresses that were updated</returns>
+    Task<MbMangaProgress[]> UpdateInProgress();
 }
 
 internal class MbMangaProgressDbService(
@@ -155,4 +161,10 @@ WHERE
     {
         return FetchWithQuery(null, new { profileId, ids });
 	}
+
+    public async Task<MbMangaProgress[]> UpdateInProgress()
+    {
+        var query = await _cache.Required("update_in_progress");
+        return await Get(query);
+    }
 }
