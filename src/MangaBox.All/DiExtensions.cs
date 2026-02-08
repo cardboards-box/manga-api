@@ -32,7 +32,7 @@ public static class DiExtensions
 			.AddGeneralServices()
 			.AddSources()
 			.AddFlareSolver()
-			.AddOAuthServices()
+			.AddOAuthServices(config)
 			.AddMatch()
 			.AddMangaDex();
 

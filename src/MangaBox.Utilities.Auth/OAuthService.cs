@@ -39,13 +39,8 @@ internal class OAuthService(
 	IDbService _db,
 	IApiService _api,
 	IJwtTokenService _token,
-	IConfiguration _config) : IOAuthService
+	IOptions<OAuthOptions> _config) : IOAuthService
 {
-	public string AppId => field ??= _config["OAuth:AppId"] ?? throw new ArgumentNullException("OAuth:AppId");
-	public string Secret => field ??= _config["OAuth:Secret"] ?? throw new ArgumentNullException("OAuth:Secret");
-	public string OAuthUrl => field ??= _config["OAuth:Url"]?.ForceNull()?.TrimEnd('/') ?? "https://auth.index-0.com";
-	public string[] ReturnUrls => field ??= _config.GetValue<string[]>("OAuth:ReturnUrls") ?? ["https://localhost:7115/resolve"];
-
 	public async Task<Boxed> Resolve(string code, CancellationToken cancel)
 	{
 		var res = await ResolveCode(code, cancel);
@@ -92,17 +87,17 @@ internal class OAuthService(
 
 	public Task<TokenResponse?> ResolveCode(string code, CancellationToken token)
 	{
-		var request = new TokenRequest(code, Secret, AppId);
-		return _api.Post<TokenResponse, TokenRequest>($"{OAuthUrl}/api/data", request, token: token);
+		var request = new TokenRequest(code, _config.Value.Secret, _config.Value.AppId);
+		return _api.Post<TokenResponse, TokenRequest>($"{_config.Value.Url}/api/data", request, token: token);
 	}
 
 	public string? Url(string? returnUrl)
 	{
 		if (returnUrl is not null &&
-			!ReturnUrls.Contains(returnUrl, StringComparer.InvariantCultureIgnoreCase))
+			!_config.Value.ReturnUrls.Contains(returnUrl, StringComparer.InvariantCultureIgnoreCase))
 			return null;
 
-		var url = $"{OAuthUrl}/Home/Auth/{AppId}";
+		var url = $"{_config.Value.Url}/Home/Auth/{_config.Value.AppId}";
 		if (returnUrl is not null)
 			url += $"?redirect={Uri.EscapeDataString(returnUrl)}";
 
