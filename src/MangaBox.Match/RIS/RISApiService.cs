@@ -24,7 +24,7 @@ public interface IRISApiService
 	/// <param name="id">The unique ID of the image</param>
 	/// <param name="json">The metadata value to add</param>
 	/// <returns>The results of the request</returns>
-	Task<RISResult> Add(string url, string id, string? json = null);
+	Task<RISResult> Add(string url, string id, string? json);
 
 	/// <summary>
 	/// Adds an image by stream
@@ -45,7 +45,7 @@ public interface IRISApiService
 	/// <param name="id">The unique ID of the image</param>
 	/// <param name="json">The metadata value to add</param>
 	/// <returns>The results of the request</returns>
-	Task<RISResult> Add(Stream io, string fileName, string id, string? json = null);
+	Task<RISResult> Add(Stream io, string fileName, string id, string? json);
 
 	/// <summary>
 	/// Delete an image by it's unique ID
@@ -213,7 +213,7 @@ internal class RISApiService(
 	}
 
 	/// <inheritdoc />
-	public Task<RISResult> Add(string url, string id, string? json = null)
+	public Task<RISResult> Add(string url, string id, string? json)
 	{
 		var pars = new List<(string, string)>
 		{
@@ -230,11 +230,11 @@ internal class RISApiService(
 	public Task<RISResult> Add<T>(Stream io, string fileName, string id, T json)
 	{
 		var meta = _json.Serialize(json);
-		return Add(io, fileName, meta);
+		return Add(io, fileName, id, meta);
 	}
 
 	/// <inheritdoc />
-	public async Task<RISResult> Add(Stream io, string fileName, string id, string? json = null)
+	public async Task<RISResult> Add(Stream io, string fileName, string id, string? json)
 	{
 		var pars = new List<(string, string)>
 		{
