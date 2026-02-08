@@ -216,14 +216,14 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 
 			if (States.Contains(MangaState.Completed))
 			{
-				if (StatesInclude) conditions.Add("(mp.is_completed IS NOT NULL AND mp.is_completed = TRUE)");
-				else conditions.Add("(mp.is_completed IS NULL OR mp.is_completed = FALSE)");
+				if (StatesInclude) conditions.Add("(mp.progress_percentage >= 100)");
+				else conditions.Add("(mp.progress_percentage < 100)");
 			}
 
 			if (States.Contains(MangaState.InProgress))
 			{
-				if (StatesInclude) conditions.Add(@"(mp.last_read_chapter_id IS NOT NULL AND mp.is_completed IS NOT NULL AND mp.is_completed = FALSE)");
-				else conditions.Add("(mp.last_read_chapter_id IS NULL OR mp.is_completed IS NULL OR mp.is_completed = FALSE)");
+				if (StatesInclude) conditions.Add(@"(mp.progress_percentage > 0 AND mp.progress_percentage < 100)");
+				else conditions.Add("(mp.progress_percentage <= 0 OR mp.progress_percentage >= 100)");
 			}
 
 			if (States.Contains(MangaState.Bookmarked))

@@ -9,6 +9,7 @@ WITH input AS (
 		manga_id,
 		favorited,
 		is_completed,
+		progress_percentage,
 		last_read_at,
 		last_read_ordinal,
 		last_read_chapter_id,
@@ -25,6 +26,13 @@ WITH input AS (
 				 ELSE FALSE
 			END
 		) as is_completed,
+		(
+			CASE WHEN m.id IS NULL THEN 0
+				 WHEN f.manga_id IS NULL THEN 0
+				 WHEN a.manga_id IS NULL THEN 0
+				 ELSE CAST(a.number as NUMERIC) / f.number * 100
+			END
+		) as progress_percentage,
 		CURRENT_TIMESTAMP as last_read_at,
 		c.ordinal as last_read_ordinal,
 		c.id as last_read_chapter_id,
@@ -34,8 +42,15 @@ WITH input AS (
 	JOIN mb_chapters c ON c.id = i.chapter_id
 	JOIN mb_profiles p ON p.id = i.profile_id
 	LEFT JOIN mb_manga_ext m ON m.manga_id = c.manga_id
+	LEFT JOIN mb_vw_chapter_numbers f ON
+        f.manga_id = m.manga_id AND
+        f.ordinal = m.last_chapter_ordinal
+    LEFT JOIN mb_vw_chapter_numbers a ON
+        a.manga_id = m.manga_id AND
+        a.ordinal = c.ordinal
 	ON CONFLICT (profile_id, manga_id) DO UPDATE SET
 		is_completed = EXCLUDED.is_completed,
+		progress_percentage = EXCLUDED.progress_percentage,
 		last_read_at = CURRENT_TIMESTAMP,
 	    last_read_ordinal = EXCLUDED.last_read_ordinal,
 	    last_read_chapter_id = EXCLUDED.last_read_chapter_id,

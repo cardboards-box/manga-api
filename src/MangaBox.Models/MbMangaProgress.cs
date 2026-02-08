@@ -58,6 +58,13 @@ public class MbMangaProgress : MbDbObject
 	public bool Favorited { get; set; }
 
 	/// <summary>
+	/// The user's progress through the manga
+	/// </summary>
+	[Column("progress_percentage")]
+	[JsonPropertyName("progressPercentage")]
+	public double ProgressPercentage { get; set; } = 0;
+
+	/// <summary>
 	/// The request to update a favourite manga
 	/// </summary>
 	public class UpdateFavourite

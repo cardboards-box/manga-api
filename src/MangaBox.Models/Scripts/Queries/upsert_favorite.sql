@@ -3,6 +3,7 @@ INSERT INTO mb_manga_progress (
 	manga_id, 
 	favorited, 
 	is_completed,
+    progress_percentage,
 	updated_at,
 	created_at
 )
@@ -11,13 +12,14 @@ SELECT
     m.id as manga_id,
     :favorite as favorited,
     FALSE as is_completed,
+    0 as progress_percentage,
     CURRENT_TIMESTAMP as updated_at,
     CURRENT_TIMESTAMP as created_at
 FROM mb_manga m
 JOIN mb_manga_ext e ON e.manga_id = m.id
 JOIN mb_profiles p ON p.id = :profileId
 WHERE 
-    m.id = ANY(:ids) AND
+    m.id = :mangaId AND
     m.deleted_at IS NULL AND
     p.deleted_at IS NULL AND
     e.deleted_at IS NULL

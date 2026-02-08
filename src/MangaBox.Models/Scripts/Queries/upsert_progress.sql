@@ -4,6 +4,7 @@ INSERT INTO mb_manga_progress
     manga_id,
     favorited,
     is_completed,
+    progress_percentage,
     last_read_ordinal,
     last_read_chapter_id,
     last_read_at,
@@ -16,17 +17,22 @@ SELECT
     FALSE as favorited,
     :completed as is_completed,
     (
-        CASE WHEN :completed THEN e.last_chapter_ordinal
+        CASE WHEN :completed = TRUE THEN 100
+             ELSE 0
+        END
+    ) as progress_percentage,
+    (
+        CASE WHEN :completed = TRUE THEN e.last_chapter_ordinal
              ELSE NULL 
         END
     ) as last_read_ordinal,
     (
-        CASE WHEN :completed THEN e.last_chapter_id
+        CASE WHEN :completed = TRUE THEN e.last_chapter_id
              ELSE NULL 
         END
     ) as last_read_chapter_id,
     (
-        CASE WHEN :completed THEN CURRENT_TIMESTAMP
+        CASE WHEN :completed = TRUE THEN CURRENT_TIMESTAMP
              ELSE NULL 
         END
     ) as last_read_at,
@@ -36,13 +42,14 @@ FROM mb_manga m
 JOIN mb_manga_ext e ON e.manga_id = m.id
 JOIN mb_profiles p ON p.id = :profileId
 WHERE 
-    m.id = ANY(:ids) AND
+    m.id = :mangaId AND
     m.deleted_at IS NULL AND
     p.deleted_at IS NULL AND
     e.deleted_at IS NULL
 ON CONFLICT (profile_id, manga_id) 
 DO UPDATE SET
     is_completed = EXCLUDED.is_completed,
+    progress_percentage = EXCLUDED.progress_percentage,
     last_read_ordinal = EXCLUDED.last_read_ordinal,
     last_read_chapter_id = EXCLUDED.last_read_chapter_id,
     last_read_at = EXCLUDED.last_read_at,
