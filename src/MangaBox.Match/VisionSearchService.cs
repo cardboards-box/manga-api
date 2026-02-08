@@ -152,6 +152,11 @@ internal class VisionSearchService(
 		int mdResults = 0;
 		foreach(var page in detection.PagesWithMatchingImages)
 		{
+			//Why the fuck are they shoving shorts in my face?
+			if (page.FullMatchingImages.Count == 0 &&
+				page.PartialMatchingImages.Count == 0)
+				continue;
+
 			var image = page.FullMatchingImages.OrderByDescending(t => t.Score).FirstOrDefault()?.Url
 				?? page.PartialMatchingImages.OrderByDescending(t => t.Score).FirstOrDefault()?.Url;
 			var title = PurgeTitle(page.PageTitle ?? string.Empty);
