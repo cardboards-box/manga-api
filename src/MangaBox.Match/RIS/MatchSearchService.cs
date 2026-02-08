@@ -11,6 +11,22 @@ internal class MatchSearchService(
 
 	public RISServices Type => RISServices.MatchRIS;
 
+	public static void FixBadMetadata(MatchMetaData<MangaMetadata> meta)
+	{
+		try
+		{
+			if (!meta.FilePath.Contains('{'))
+				return;
+
+			var metadata = JsonSerializer.Deserialize<MangaMetadata>(meta.FilePath);
+			if (metadata is null) return;
+
+			meta.FilePath = RISIndexService.GenerateId(metadata);
+			meta.MetaData = metadata;
+		}
+		catch { }
+	}
+
 	public IAsyncEnumerable<ImageSearchResult> Search(string url, CancellationToken token)
 	{
 		return Search(() => _api.Search<MangaMetadata>(url), token);
@@ -38,7 +54,13 @@ internal class MatchSearchService(
 
 		var sources = await _sources.All(token).ToList(token);
 
-		var bySource = response.Result.GroupBy(r => r.MetaData?.Source, StringComparer.OrdinalIgnoreCase);
+		var bySource = response.Result
+			.Select(t =>
+			{
+				FixBadMetadata(t);
+				return t;
+			})
+			.GroupBy(r => r.MetaData?.Source, StringComparer.OrdinalIgnoreCase);
 		foreach(var group in bySource)
 		{
 			token.ThrowIfCancellationRequested();

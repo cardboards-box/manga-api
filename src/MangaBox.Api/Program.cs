@@ -21,10 +21,12 @@ builder.Services
 
 await builder.Services.AddMangaBox(builder.Configuration);
 
+#if !DEBUG
 builder.Services.AddHostedService<RISBackgroundService>();
 builder.Services.AddHostedService<IndexBackgroundService>();
 builder.Services.AddHostedService<RefreshBackgroundService>();
 builder.Services.AddHostedService<NewChapterBackgroundService>();
+#endif
 
 var app = builder.Build();
 
