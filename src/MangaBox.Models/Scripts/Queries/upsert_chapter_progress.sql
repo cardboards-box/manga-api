@@ -22,7 +22,7 @@ WITH input AS (
 		false as favorited,
 		(
 			CASE WHEN m.id IS NULL THEN FALSE
-				 WHEN m.last_chapter_ordinal >= c.ordinal THEN TRUE
+				 WHEN m.last_chapter_ordinal <= c.ordinal THEN TRUE
 				 ELSE FALSE
 			END
 		) as is_completed,
