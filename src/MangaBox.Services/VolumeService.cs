@@ -189,6 +189,17 @@ internal class VolumeService(
 			return new(ordinal, state, [..chapters]);
 		}
 
+		static double DetermineChapterProgress(ProgressChapter chapter)
+		{
+			if (chapter.Progress is null || chapter.Progress.PageOrdinal is null) return 0;
+
+			var pageCount = chapter.Chapter.PageCount ?? 0;
+			if (chapter.Progress.PageOrdinal >= pageCount) return 100;
+
+			var result = Math.Clamp((double)chapter.Progress.PageOrdinal.Value / pageCount * 100, 0, 100);
+			return double.Parse(result.ToString("0.00"));
+		}
+
 		var iterator = chapters.GetEnumerator();
 
 		List<VolumeChapter> current = [];
@@ -213,18 +224,9 @@ internal class VolumeService(
 				.First();
 			//Lazily set the volume number
 			volume ??= versions.PreferredOrFirst(t => t.Chapter.Volume is not null)?.Chapter.Volume;
-			//Determine how far through the chapter the user is
-			var progPrec = firstChap.Chapter.PageCount is null || 
-				firstChap.Chapter.PageCount == 0 ||
-				firstChap.Progress?.PageOrdinal is null
-				? 0
-				: double.Parse((
-					(double)firstChap.Progress.PageOrdinal.Value 
-					/ firstChap.Chapter.PageCount.Value 
-					* 100).ToString("0.00"));
 			//Check to see if the current chapter has been read
 			var chap = new VolumeChapter(
-				Math.Clamp(progPrec, 0, 100),
+				DetermineChapterProgress(firstChap),
 				firstChap.Chapter.Ordinal,
 				[.. versions.Select(t => t.Chapter.Id)]);
 			current.Add(chap);
