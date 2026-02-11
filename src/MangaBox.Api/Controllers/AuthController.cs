@@ -13,7 +13,7 @@ public class AuthController(
 #if DEBUG
 	private const string DEFAULT_REDIRECT = "https://localhost:7115/auth/resolve";
 #else
-	private const string DEFAULT_REDIRECT = string.Empty;
+	private const string DEFAULT_REDIRECT = "https://mangabox.app/auth";
 #endif
 
 	/// <summary>
