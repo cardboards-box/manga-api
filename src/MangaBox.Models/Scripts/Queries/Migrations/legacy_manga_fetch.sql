@@ -1,4 +1,16 @@
-WITH tag_src AS (
+WITH manga_to_migrate AS (
+    SELECT
+        DISTINCT
+        c.manga_id as id
+    FROM manga_chapter c
+    JOIN manga m ON m.id = c.manga_id
+    WHERE 
+        c.deleted_at IS NULL AND
+        (
+            c.updated_at > '2026-02-03T00:00:00.000' OR
+            m.updated_at > '2026-02-03T00:00:00.000'
+        )
+), tag_src AS (
   SELECT
     m.id AS manga_legacy_id,
     btrim(t) AS tag_name
@@ -100,7 +112,9 @@ SELECT
   ) AS manga_json,
   m.url as manga_url
 FROM manga m
+JOIN manga_to_migrate mtm ON mtm.id = m.id
 LEFT JOIN chapters_json cj ON cj.manga_legacy_id = m.id
 LEFT JOIN tags_json tj ON tj.manga_legacy_id = m.id
-WHERE m.deleted_at IS NULL
+WHERE 
+    m.deleted_at IS NULL
 ORDER BY m.id;

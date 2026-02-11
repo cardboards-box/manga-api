@@ -75,4 +75,19 @@ public class MbProfile : MbDbObjectLegacy
 	[Column("can_read", ExcludeUpdates = true)]
 	[JsonPropertyName("canRead")]
 	public bool CanRead { get; set; } = false;
+
+	/// <summary>
+	/// A partial profile used for authentication
+	/// </summary>
+	/// <param name="Provider">The provider serving the profile</param>
+	/// <param name="ProviderId">The unique Id of the user on the platform</param>
+	/// <param name="Email">The email address of the user</param>
+	/// <param name="Username">The username of the user</param>
+	/// <param name="Avatar">The avatar of the user</param>
+	public record class ProfilePartial(
+		[property: JsonPropertyName("provider")] string Provider,
+		[property: JsonPropertyName("providerId")] string ProviderId,
+		[property: JsonPropertyName("email")] string Email,
+		[property: JsonPropertyName("username")] string Username,
+		[property: JsonPropertyName("avatar")] string? Avatar);
 }

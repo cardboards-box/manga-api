@@ -8,8 +8,18 @@
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
 
+    <ItemGroup>
+      <Content Remove="appsettings.json" />
+    </ItemGroup>
+
 	<ItemGroup>
 		<Compile Include="./../global.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Include="appsettings.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
 	</ItemGroup>
 
     <ItemGroup>

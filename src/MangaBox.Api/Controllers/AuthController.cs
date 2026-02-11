@@ -11,49 +11,58 @@ public class AuthController(
 	ILogger<AuthController> logger) : BaseController(logger)
 {
 #if DEBUG
-	private const string? DEFAULT_REDIRECT = "https://localhost:7115/resolve";
-
-	/// <summary>
-	/// (TEMP) Attempts to resolve the code and log the user in
-	/// </summary>
-	/// <param name="code">The OAuth platform code</param>
-	/// <param name="token">The cancellation token for the request</param>
-	/// <returns>The response</returns>
-	[HttpGet, Route("resolve")]
-	[ProducesBox<AuthResponse>, ProducesError(401)]
-	public Task<IActionResult> ResolveTemp([FromQuery] string code, CancellationToken token) => Box(() =>
-	{
-		return _oauth.Resolve(code, token);
-	});
+	private const string DEFAULT_REDIRECT = "https://localhost:7115/auth/resolve";
 #else
-	private const string? DEFAULT_REDIRECT = null;
+	private const string DEFAULT_REDIRECT = string.Empty;
 #endif
 
 	/// <summary>
 	/// Redirects to the OAuth login URL
 	/// </summary>
+	/// <param name="provider">The OAuth provider platform</param>
 	/// <param name="redirect">The redirect URL</param>
 	/// <returns>The redirect or the error</returns>
-	[HttpGet, Route("auth/login"), ProducesError(400)]
-	public IActionResult Login([FromQuery] string? redirect = DEFAULT_REDIRECT)
+	[HttpGet, Route("auth/login/{provider}"), ProducesError(400)]
+	public async Task<IActionResult> Login([FromRoute] string provider, [FromQuery] string redirect = DEFAULT_REDIRECT)
 	{
-		var url = _oauth.Url(redirect);
-		return string.IsNullOrEmpty(url)
-			? BadRequest(new { error = "Invalid redirect URL." })
+		var (error, url) = await _oauth.Start(redirect, provider);
+		return !string.IsNullOrEmpty(error) || string.IsNullOrEmpty(url)
+			? BadRequest(new { error = error ?? "Invalid redirect URL." })
 			: Redirect(url);
 	}
 
 	/// <summary>
 	/// Attempts to resolve the code and log the user in
 	/// </summary>
+	/// <param name="provider">The OAuth provider platform</param>
+	/// <param name="state">The OAuth state</param>
 	/// <param name="code">The OAuth platform code</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The response</returns>
-	[HttpGet, Route("auth/resolve/{code}")]
-	[ProducesBox<AuthResponse>, ProducesError(401)]
-	public Task<IActionResult> Resolve([FromRoute] string code, CancellationToken token) => Box(() =>
+	[HttpGet, Route("auth/resolve/{provider}"), ProducesError(400)]
+	public async Task<IActionResult> Resolve([FromRoute] string provider, [FromQuery] string state, [FromQuery] string code, CancellationToken token)
 	{
-		return _oauth.Resolve(code, token);
+		var (error, url) = await _oauth.HandleCallBack(provider, code, state, token);
+		if (!string.IsNullOrEmpty(error) || url is null)
+			return BadRequest(new { error = error ?? "Failed to resolve OAuth callback." });
+
+		return Redirect(url);
+	}
+
+	/// <summary>
+	/// Attempts to resolve the code and log the user in
+	/// </summary>
+	/// <param name="code">The resolve code</param>
+	/// <param name="token">The cancellation token</param>
+	/// <returns>The auth response</returns>
+	[HttpGet, Route("auth/resolve")]
+	[ProducesBox<AuthResponse>, ProducesError(401)]
+	public Task<IActionResult> ResolveCode([FromQuery] string code, CancellationToken token) => Box(async () =>
+	{
+		var (error, auth) = await _oauth.ResolveCode(code, token);
+		if (!string.IsNullOrEmpty(error) || auth is null)
+			return Boxed.Exception(error ?? "Auth was null");
+		return Boxed.Ok(auth);
 	});
 
 	/// <summary>

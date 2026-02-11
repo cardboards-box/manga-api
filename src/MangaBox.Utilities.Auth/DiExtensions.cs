@@ -1,5 +1,7 @@
 ﻿namespace MangaBox.Utilities.Auth;
 
+using Providers;
+
 /// <summary>
 /// Dependency injection extensions
 /// </summary>
@@ -15,6 +17,7 @@ public static class DiExtensions
 	{
 		return services
 			.AddTransient<IOAuthService, OAuthService>()
-			.Configure<OAuthOptions>(settings => config.GetSection("OAuth").Bind(settings));
+			.AddTransient<IAuthProviderService, DiscordProviderService>()
+			.Configure<AuthOptions>(t => config.GetSection("OAuth").Bind(t));
 	}
 }

@@ -85,6 +85,7 @@ WITH input AS (
         attributes = EXCLUDED.attributes,
         content_rating = EXCLUDED.content_rating,
         nsfw = EXCLUDED.nsfw,
+        legacy_id = COALESCE(EXCLUDED.legacy_id, mb_manga.legacy_id),
         updated_at = CURRENT_TIMESTAMP
     RETURNING mb_manga.*, (xmax = 0) AS is_new
 ), chapters_in AS (
@@ -156,7 +157,8 @@ WITH input AS (
                  ELSE EXCLUDED.page_count
             END
         ),
-        updated_at = CURRENT_TIMESTAMP
+        updated_at = CURRENT_TIMESTAMP,
+        legacy_id = COALESCE(EXCLUDED.legacy_id, mb_chapters.legacy_id)
     RETURNING mb_chapters.*, (xmax = 0) AS is_new
 ), pages_in AS (
     SELECT
