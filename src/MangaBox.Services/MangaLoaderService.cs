@@ -134,7 +134,7 @@ internal class MangaLoaderService(
 			await _publish.NewImages.Publish(new(id, DateTime.UtcNow));
 		}
 
-		if (chapter.PageCount != pages.Length)
+		if (chapter.PageCount != pages.Length && pages.Length > 0)
 		{
 			chapter.PageCount = pages.Length;
 			await _db.Chapter.Update(chapter);

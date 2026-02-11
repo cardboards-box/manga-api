@@ -150,7 +150,12 @@ WITH input AS (
         language = EXCLUDED.language,
         external_url = EXCLUDED.external_url,
         attributes = EXCLUDED.attributes,
-        page_count = COALESCE(EXCLUDED.page_count, mb_chapters.page_count),
+        page_count = (
+            CASE WHEN EXCLUDED.page_count IS NULL THEN mb_chapters.page_count
+                 WHEN EXCLUDED.page_count = 0 THEN mb_chapters.page_count
+                 ELSE EXCLUDED.page_count
+            END
+        ),
         updated_at = CURRENT_TIMESTAMP
     RETURNING mb_chapters.*, (xmax = 0) AS is_new
 ), pages_in AS (
@@ -192,6 +197,20 @@ WITH input AS (
         updated_at = CURRENT_TIMESTAMP,
         deleted_at = NULL
     RETURNING id
+), chapters_page_updates AS (
+    UPDATE mb_chapters c
+    SET
+        updated_at = CURRENT_TIMESTAMP,
+        page_count = (
+            SELECT COUNT(*)
+            FROM mb_images i
+            WHERE 
+                i.chapter_id = c.id AND 
+                i.deleted_at IS NULL
+        )
+    WHERE c.manga_id IN (
+        SELECT id FROM upsert_manga
+    )
 ), cover_existing AS (
     SELECT
         img.id,
@@ -415,29 +434,30 @@ manga_tags_upsert AS (
     SELECT
         cu.is_new,
         jsonb_build_object(
-            'legacyId', cu.legacy_id,
-            'id', cu.id,
-            'createdAt', cu.created_at,
-            'updatedAt', cu.updated_at,
-            'deletedAt', cu.deleted_at,
-            'mangaId', cu.manga_id,
-            'title', cu.title,
-            'url', cu.url,
-            'sourceId', cu.source_id,
-            'ordinal', cu.ordinal,
-            'volume', cu.volume,
-            'language', cu.language,
-            'externalUrl', cu.external_url,
-            'pageCount', cu.page_count,
+            'legacyId', c.legacy_id,
+            'id', c.id,
+            'createdAt', c.created_at,
+            'updatedAt', c.updated_at,
+            'deletedAt', c.deleted_at,
+            'mangaId', c.manga_id,
+            'title', c.title,
+            'url', c.url,
+            'sourceId', c.source_id,
+            'ordinal', c.ordinal,
+            'volume', c.volume,
+            'language', c.language,
+            'externalUrl', c.external_url,
+            'pageCount', c.page_count,
             'attributes', COALESCE(
                 (
                     SELECT jsonb_agg(jsonb_build_object('name', a.name, 'value', a.value))
-                    FROM unnest(cu.attributes) AS a
+                    FROM unnest(c.attributes) AS a
                 ),
                 '[]'::jsonb
             )
         ) AS j
     FROM chapters_upsert cu
+    JOIN mb_chapters c ON c.id = cu.id
 )
 SELECT jsonb_build_object(
     'manga', (SELECT j FROM manga_json),
