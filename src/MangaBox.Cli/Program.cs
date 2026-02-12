@@ -17,4 +17,7 @@ return await services
 		.Add<TestVerb>()
 		.Add<MigrateVerb>()
 		.Add<SetupDbVerb>()
+		.Add<ClearImageQueueVerb>()
+		.Add<HandleImageQueueVerb>()
+		.Add<InitVerb>()
 		.AddDatabaseGeneration());

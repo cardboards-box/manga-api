@@ -2,7 +2,7 @@
 
 using Database;
 
-[Verb("setup", isDefault: true, HelpText = "Sets up the MangaBox database schema")]
+[Verb("setup", HelpText = "Sets up the MangaBox database schema")]
 internal class SetupDbOptions { }
 
 internal class SetupDbVerb(
