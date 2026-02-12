@@ -41,19 +41,26 @@ public class NewChapterBackgroundService(
 	/// <param name="token">The cancellation token</param>
 	public async Task HandleNewChapter(MbChapter chapter, CancellationToken token)
 	{
-		//Load all of the images for the chapter
-		var response = await _loader.Pages(chapter.Id, false, token);
-		if (response is null || !response.Success ||
-			response is not Boxed<MangaBoxType<MbChapter>> fullChap)
+		try
 		{
-			var errors = string.Join("; ", response?.Errors ?? []).ForceNull() ?? "Unknown error";
-			_logger.LogError("Failed to load chapter {ChapterId}: {Errors}", chapter.Id, errors);
-			return;
+			//Load all of the images for the chapter
+			var response = await _loader.Pages(chapter.Id, false, token);
+			if (response is null || !response.Success ||
+				response is not Boxed<MangaBoxType<MbChapter>> fullChap)
+			{
+				var errors = string.Join("; ", response?.Errors ?? []).ForceNull() ?? "Unknown error";
+				_logger.LogError("Failed to load chapter {ChapterId}: {Errors}", chapter.Id, errors);
+				return;
+			}
+
+			if (!await CanPush(chapter.MangaId)) return;
+
+			//Do the discord / push notification updates
 		}
-
-		if (!await CanPush(chapter.MangaId)) return;
-
-		//Do the discord / push notification updates
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Error handling new chapter {ChapterId}", chapter.Id);
+		}
 	}
 
 	/// <inheritdoc />

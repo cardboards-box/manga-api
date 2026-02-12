@@ -26,11 +26,18 @@ public class RefreshBackgroundService(
 	/// <param name="token">The cancellation token</param>
 	public async ValueTask DoRefresh(MbManga manga, CancellationToken token)
 	{
-		var response = await _loader.Refresh(null, manga.Id, token);
-		if (response is not null && response.Success) return;
+		try
+		{
+			var response = await _loader.Refresh(null, manga.Id, token);
+			if (response is not null && response.Success) return;
 
-		var errors = string.Join("; ", response?.Errors ?? [])?.ForceNull() ?? "Unknown error";
-		_logger.LogWarning("Failed to refresh manga {MangaId}: {ErrorMessage}", manga.Id, errors);
+			var errors = string.Join("; ", response?.Errors ?? [])?.ForceNull() ?? "Unknown error";
+			_logger.LogWarning("Failed to refresh manga {MangaId}: {ErrorMessage}", manga.Id, errors);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "An error occurred while refreshing manga {MangaId}", manga.Id);
+		}
 	}
 
 	/// <inheritdoc />

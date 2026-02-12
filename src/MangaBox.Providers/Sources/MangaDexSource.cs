@@ -98,7 +98,7 @@ public class MangaDexSource(
 	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
 		var manga = await _mangadex.Manga(id);
-		if (manga == null || manga.Data == null) return null;
+		if (manga == null || manga.Data == null || manga.Data.Attributes is null) return null;
 
 		return await Convert(manga.Data, token);
 	}
