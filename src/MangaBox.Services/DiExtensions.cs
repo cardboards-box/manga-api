@@ -14,6 +14,7 @@ public static class DiExtensions
 	{
 		return services
 			.AddSingleton<ISourceService, SourceService>()
+			.AddSingleton<IStatsService, StatsService>()
 			.AddTransient<IMangaLoaderService, MangaLoaderService>()
 			.AddTransient<IImageService, ImageService>()
 			.AddTransient<IVolumeService, VolumeService>();

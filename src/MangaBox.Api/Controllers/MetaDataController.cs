@@ -7,8 +7,20 @@ using Services.CBZModels;
 /// </summary>
 public class MetaDataController(
 	IDbService _db,
+	IStatsService _stats,
 	ILogger<MetaDataController> logger) : BaseController(logger)
 {
+	/// <summary>
+	/// Gets the stats snapshot of the application
+	/// </summary>
+	/// <returns>The stats snapshots</returns>
+	[HttpGet, Route("metadata/stats")]
+	[ProducesArray<StatsItem>]
+	public Task<IActionResult> GetStats() => Box(() =>
+	{
+		return Boxed.Ok(_stats.Snapshot);
+	});
+
 	/// <summary>
 	/// Gets the metadata for the <see cref="ContentRating"/> enum
 	/// </summary>
