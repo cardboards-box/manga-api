@@ -101,6 +101,14 @@ public interface IMbMangaDbService
     /// </summary>
     /// <returns>The manga to be refreshed</returns>
     Task<MbManga[]> ToRefresh();
+
+	/// <summary>
+	/// Fetches the recommended manga
+	/// </summary>
+	/// <param name="mangaId">The manga to find recommendations for</param>
+	/// <param name="limit">The total number of manga to return</param>
+	/// <returns>The recommended manga</returns>
+	Task<MangaBoxType<MbManga>[]> Recommended(Guid mangaId, int limit);
 }
 
 internal class MbMangaDbService(
@@ -300,6 +308,17 @@ WHERE
 			results.Add(new(manga, [.. related]));
 		}
         return [.. results];
+	}
+
+    public async Task<MangaBoxType<MbManga>[]> Recommended(Guid mangaId, int limit)
+    {
+        var query = await _cache.Required("recommended_manga");
+        query = string.Format(query, SearchFilter<MangaOrderBy>.TableSuffix());
+
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(query, new { mangaId, limit });
+
+		return await FromMulti(rdr);
 	}
 
 	public override Task<int> Delete(Guid id)

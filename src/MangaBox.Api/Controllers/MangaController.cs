@@ -62,6 +62,26 @@ public class MangaController(
 	});
 
 	/// <summary>
+	/// Finds the recommended manga
+	/// </summary>
+	/// <param name="id">The ID of the manga to compare to</param>
+	/// <param name="size">The number of related items to return</param>
+	/// <returns>The recommended manga</returns>
+	[HttpGet, Route("manga/{id}/recommended")]
+	[ProducesArray<MangaBoxType<MbManga>>, ProducesError(400), ProducesError(404)]
+	public Task<IActionResult> Recommended([FromRoute] string id, [FromQuery] int size = 20) => Box(async () =>
+	{
+		if (size <= 0 || size > 100)
+			return Boxed.Bad("Size must be between 1 and 100.");
+
+		if (!Guid.TryParse(id, out var mid))
+			return Boxed.Bad("Manga ID is not a valid GUID.");
+
+		var manga = await _db.Manga.Recommended(mid, size);
+		return Boxed.Ok(manga);
+	});
+
+	/// <summary>
 	/// Deletes a manga by it's ID
 	/// </summary>
 	/// <param name="id">The ID of the manga</param>
