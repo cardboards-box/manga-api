@@ -2,7 +2,13 @@ using MangaBox.All;
 
 var builder = WebApplication.CreateBuilder(args);
 
+#if DEBUG
+var appFile = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+builder.Configuration.AddJsonFile(appFile, false, true);
+#endif
+
 builder.Configuration.AddUserSecrets<Program>();
+
 
 builder.Services.AddControllers()
 	.AddJsonOptions(opts =>
