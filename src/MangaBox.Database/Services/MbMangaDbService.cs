@@ -109,6 +109,14 @@ public interface IMbMangaDbService
 	/// <param name="limit">The total number of manga to return</param>
 	/// <returns>The recommended manga</returns>
 	Task<MangaBoxType<MbManga>[]> Recommended(Guid mangaId, int limit);
+
+	/// <summary>
+	/// Fetches the recommended manga for a profile
+	/// </summary>
+	/// <param name="profileId">The ID of the profile</param>
+	/// <param name="limit">The total number of manga to return</param>
+	/// <returns>The recommended manga</returns>
+	Task<MangaBoxType<MbManga>[]> RecommendedByProfile(Guid profileId, int limit);
 }
 
 internal class MbMangaDbService(
@@ -317,6 +325,17 @@ WHERE
 
 		using var con = await _sql.CreateConnection();
 		using var rdr = await con.QueryMultipleAsync(query, new { mangaId, limit });
+
+		return await FromMulti(rdr);
+	}
+
+    public async Task<MangaBoxType<MbManga>[]> RecommendedByProfile(Guid profileId, int limit)
+	{
+		var query = await _cache.Required("recommended_manga_profile");
+		query = string.Format(query, SearchFilter<MangaOrderBy>.TableSuffix());
+
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(query, new { profileId, limit });
 
 		return await FromMulti(rdr);
 	}

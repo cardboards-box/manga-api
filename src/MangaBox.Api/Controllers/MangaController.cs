@@ -82,6 +82,26 @@ public class MangaController(
 	});
 
 	/// <summary>
+	/// Finds the recommended manga
+	/// </summary>
+	/// <param name="size">The number of related items to return</param>
+	/// <returns>The recommended manga</returns>
+	[HttpGet, Route("manga/recommended")]
+	[ProducesArray<MangaBoxType<MbManga>>, ProducesError(400), ProducesError(404)]
+	public Task<IActionResult> RecommendedProfile([FromQuery] int size = 20) => Box(async () =>
+	{
+		if (size <= 0 || size > 100)
+			return Boxed.Bad("Size must be between 1 and 100.");
+
+		var pid = this.GetProfileId();
+		if (!pid.HasValue)
+			return Boxed.Unauthorized("You must be logged in to use this!");
+
+		var manga = await _db.Manga.RecommendedByProfile(pid.Value, size);
+		return Boxed.Ok(manga);
+	});
+
+	/// <summary>
 	/// Deletes a manga by it's ID
 	/// </summary>
 	/// <param name="id">The ID of the manga</param>
