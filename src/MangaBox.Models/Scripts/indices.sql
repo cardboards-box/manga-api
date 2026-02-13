@@ -13,3 +13,10 @@ CREATE INDEX IF NOT EXISTS idx_tags_source ON mb_tags (source_id) WHERE deleted_
 CREATE INDEX IF NOT EXISTS idx_people_profile ON mb_people (profile_id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_image_manga ON mb_images (manga_id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_image_chapter ON mb_images (chapter_id) WHERE deleted_at IS NULL;
+
+--Create created_at indices
+CREATE INDEX IF NOT EXISTS idx_manga_created_at ON mb_manga (created_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_chapters_created_at ON mb_chapters (created_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_images_created_at ON mb_images (created_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_sources_created_at ON mb_sources (created_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_people_created_at ON mb_people (created_at) WHERE deleted_at IS NULL;

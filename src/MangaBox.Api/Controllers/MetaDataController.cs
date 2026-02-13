@@ -15,7 +15,7 @@ public class MetaDataController(
 	/// </summary>
 	/// <returns>The stats snapshots</returns>
 	[HttpGet, Route("metadata/stats")]
-	[ProducesArray<StatsItem>]
+	[ProducesBox<StatsItem>]
 	public Task<IActionResult> GetStats() => Box(() =>
 	{
 		return Boxed.Ok(_stats.Snapshot);

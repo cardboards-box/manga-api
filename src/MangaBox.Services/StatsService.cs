@@ -8,7 +8,7 @@ public interface IStatsService
 	/// <summary>
 	/// The snapshots of the stats
 	/// </summary>
-	StatsItem[] Snapshot { get; }
+	StatsItem Snapshot { get; }
 
 	/// <summary>
 	/// Takes a snapshot of the current stats
@@ -20,43 +20,52 @@ internal class StatsService(
 	ISqlService _sql,
 	IMangaPublishService _publish) : IStatsService
 {
-	private readonly CapacityCollection<StatsItem> _stats = new(30);
+	private readonly CapacityCollection<QueueStats> _queueStats = new(20);
+	private DatabaseStats[]? _dbStats;
 
 	public Task<DatabaseStats[]> DatabaseStats()
 	{
-		const string QUERY = @"WITH meta AS (
-    SELECT
-        '2026-01-01T00:00:00.000' as span,
-        'All Time' as period
+		const string QUERY = @"WITH input AS (
+    SELECT 
+        '24 Hours' AS period, 
+        'hour'::text AS trunc_unit,
+        '1 hour'::interval AS bucket, 
+        24::int AS n
     UNION ALL
-    SELECT
-        CURRENT_TIMESTAMP - interval '1 hour' as span,
-        '1 Hour' as period
-    UNION ALL
-    SELECT
-        CURRENT_TIMESTAMP - interval '24 hours' as span,
-        '24 Hours' as period
-    UNION ALL
-    SELECT
-        CURRENT_TIMESTAMP - interval '7 days' as span,
-        '1 Week' as period
-    UNION ALL
-    SELECT
-        CURRENT_TIMESTAMP - interval '30 days' as span,
-        '30 Days' as period
-    UNION ALL
-    SELECT
-        CURRENT_TIMESTAMP - interval '365 days' as span,
-        '1 Year' as period
+    SELECT '1 Week',    'day'::text,   '1 day'::interval,   7::int UNION ALL
+    SELECT '4 Weeks',   'week'::text,  '1 week'::interval,  4::int UNION ALL
+    SELECT '12 Months', 'month'::text, '1 month'::interval, 12::int
+), bounds AS (
+    SELECT period, bucket, n, date_trunc(trunc_unit, now()) AS end_ts FROM input
+), series AS (
+    SELECT b.period, gs AS span_s, gs + b.bucket AS span_e FROM bounds b
+    CROSS JOIN LATERAL generate_series(b.end_ts - (b.n - 1) * b.bucket, b.end_ts, b.bucket) AS gs
 )
 SELECT
-    period,
-    (SELECT COUNT(*) as count FROM mb_manga WHERE deleted_at IS NULL AND created_at > span) as manga_count,
-    (SELECT COUNT(*) as count FROM mb_chapters WHERE deleted_at IS NULL AND created_at > span) as chapter_count,
-    (SELECT COUNT(*) as count FROM mb_images WHERE deleted_at IS NULL AND created_at > span) as image_count,
-    (SELECT COUNT(*) as count FROM mb_sources WHERE deleted_at IS NULL AND created_at > span) as source_count,
-    (SELECT COUNT(*) as count FROM mb_people WHERE deleted_at IS NULL AND created_at > span) as people_count
-FROM meta";
+    s.period, s.span_s AS period_start, s.span_e AS period_end,
+    m.manga_count, c.chapter_count, i.image_count, so.source_count, p.people_count
+FROM series s
+LEFT JOIN LATERAL (
+    SELECT count(*) AS manga_count FROM mb_manga
+    WHERE deleted_at IS NULL AND created_at >= s.span_s AND created_at <  s.span_e
+) m ON true
+LEFT JOIN LATERAL (
+    SELECT count(*) AS chapter_count FROM mb_chapters
+    WHERE deleted_at IS NULL AND created_at >= s.span_s AND created_at <  s.span_e
+) c ON true
+LEFT JOIN LATERAL (
+    SELECT count(*) AS image_count FROM mb_images
+    WHERE deleted_at IS NULL AND created_at >= s.span_s AND created_at <  s.span_e
+) i ON true
+LEFT JOIN LATERAL (
+    SELECT count(*) AS source_count FROM mb_sources
+    WHERE deleted_at IS NULL AND created_at >= s.span_s AND created_at <  s.span_e
+) so ON true
+LEFT JOIN LATERAL (
+    SELECT count(*) AS people_count FROM mb_people
+    WHERE deleted_at IS NULL AND created_at >= s.span_s AND created_at <  s.span_e
+) p ON true
+ORDER BY s.period, s.span_s";
 		return _sql.Get<DatabaseStats>(QUERY);
 	}
 
@@ -67,6 +76,7 @@ FROM meta";
 		var images = await _publish.NewImages.Queue.Length();
 		return new QueueStats
 		{
+			Timestamp = DateTime.UtcNow,
 			Manga = (int)manga,
 			Chapters = (int)chapters,
 			Images = (int)images
@@ -75,13 +85,11 @@ FROM meta";
 
 	public async Task TakeSnapshot()
 	{
-		var database = await DatabaseStats();
-		var queue = await QueueStats();
-		var item = new StatsItem(DateTime.UtcNow, queue, database);
-		_stats.Add(item);
+		_dbStats = await DatabaseStats();
+		_queueStats.Add(await QueueStats());
 	}
 
-	public StatsItem[] Snapshot => [.._stats];
+	public StatsItem Snapshot => new([.. _queueStats], [.._dbStats ?? []]);
 }
 
 /// <summary>
@@ -94,6 +102,18 @@ public class DatabaseStats
 	/// </summary>
 	[JsonPropertyName("period")]
 	public string Period { get; set; } = string.Empty;
+
+	/// <summary>
+	/// The start of the time period
+	/// </summary>
+	[JsonPropertyName("start")]
+	public DateTime PeriodStart { get; set; }
+
+	/// <summary>
+	/// The end of the time period
+	/// </summary>
+	[JsonPropertyName("end")]
+	public DateTime PeriodEnd { get; set; }
 
 	/// <summary>
 	/// The number of new manga loaded during the period
@@ -132,6 +152,12 @@ public class DatabaseStats
 public class QueueStats
 {
 	/// <summary>
+	/// When the snapshot was taken
+	/// </summary>
+	[JsonPropertyName("timestamp")]
+	public DateTime Timestamp { get; set; }
+
+	/// <summary>
 	/// The number of new manga in the queue
 	/// </summary>
 	[JsonPropertyName("manga")]
@@ -153,10 +179,8 @@ public class QueueStats
 /// <summary>
 /// A snapshot of the current stats
 /// </summary>
-/// <param name="Timestamp">When the snapshot was taken</param>
 /// <param name="Queue">The queue stats</param>
 /// <param name="Database">The database stats</param>
 public record class StatsItem(
-	[property: JsonPropertyName("timestamp")] DateTime Timestamp,
-	[property: JsonPropertyName("queue")] QueueStats Queue,
+	[property: JsonPropertyName("queue")] QueueStats[] Queue,
 	[property: JsonPropertyName("database")] DatabaseStats[] Database);
