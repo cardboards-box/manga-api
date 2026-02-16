@@ -35,7 +35,7 @@ WITH manga_to_update AS (
         c.deleted_at IS NULL
 ), chapter_time_between AS (
     SELECT
-         EXTRACT(EPOCH FROM (MAX(created_at) - MIN(created_at)) / nullif(COUNT(*) - 1, 0)) / 86400.0 as average,
+         EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MIN(created_at)) / nullif(COUNT(*), 0)) / 86400.0 as average,
          manga_id
     FROM chapter_time_between_fp
     WHERE chapter_row = 1
