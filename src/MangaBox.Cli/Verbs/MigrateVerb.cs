@@ -193,6 +193,65 @@ SELECT id, legacy_id FROM mb_profiles WHERE legacy_id IS NOT NULL AND legacy_id 
 		_logger.LogInformation("Finished!");
 	}
 
+	public async Task FixedCreated(bool manga, CancellationToken token)
+	{
+		static IEnumerable<LegacyCreatedMap[]> Chunk(IEnumerable<LegacyCreatedMap> data, int length)
+		{
+			List<LegacyCreatedMap> batch = [];
+			foreach(var item in data)
+			{
+				batch.Add(item);
+				if (batch.Count == length)
+				{
+					yield return batch.ToArray();
+					batch.Clear();
+				}
+			}
+
+			if (batch.Count > 0) yield return batch.ToArray();
+		}
+
+		const string QUERY_MANAGA = "UPDATE mb_manga SET created_at = :created_at_{0} WHERE legacy_id = :legacy_id_{0};";
+		const string QUERY_CHAPTER = "UPDATE mb_chapters SET created_at = :created_at_{0} WHERE legacy_id = :legacy_id_{0};";
+
+		var query = manga ? QUERY_MANAGA : QUERY_CHAPTER;
+		var perBatch = 500;
+
+		_ = await _db.Source.Get();
+		var records = await _legacy.CreatedMap(manga);
+		_logger.LogInformation("Found records to map: {Count}", records.Length);
+
+		var batched = Chunk(records, perBatch).ToArray();
+
+		var opts = new ParallelOptions
+		{
+			MaxDegreeOfParallelism = 4,
+			CancellationToken = token,
+		};
+
+		int processed = 0;
+
+		_logger.LogInformation("Starting to process batches of {BatchSize} records", perBatch);
+		await Parallel.ForEachAsync(batched, opts, async (batch, ct) =>
+		{
+			_logger.LogInformation("Starting batch with legacy ids from {StartId} to {EndId}", batch.First().LegacyId, batch.Last().LegacyId);
+			var bob = new StringBuilder();
+			var pars = new DynamicParameters();
+			for (var i = 0; i < batch.Length; i++)
+			{
+				var record = batch[i];
+				bob.AppendLine(string.Format(query, i));
+				pars.Add($"created_at_{i}", record.CreatedAt);
+				pars.Add($"legacy_id_{i}", record.LegacyId);
+			}
+
+			_logger.LogInformation("Starting database write for batch with legacy ids from {StartId} to {EndId}", batch.First().LegacyId, batch.Last().LegacyId);
+			await _sql.Execute(bob.ToString(), pars);
+			Interlocked.Add(ref processed, batch.Length);
+			_logger.LogInformation("Processed {Count}/{Total} ({Percentage:P2})", processed, records.Length, (double)processed / records.Length);
+		});
+	}
+
 	public override async Task<bool> Execute(MigrateOptions options, CancellationToken token)
 	{
 		(string name, Func<CancellationToken, Task> action)[] actions =
@@ -201,6 +260,8 @@ SELECT id, legacy_id FROM mb_profiles WHERE legacy_id IS NOT NULL AND legacy_id 
 			("load-manga-cache", ct => LoadManga(true, ct)),
 			("load-profiles", ct => LoadProfiles()),
 			("load-progress", LoadProgress),
+			("fix-created-at-manga", ct => FixedCreated(true, ct)),
+			("fix-created-at-chapter", ct => FixedCreated(false, ct))
 		];
 
 		var migrations = (options.Methods ?? []).ToArray();
@@ -222,6 +283,13 @@ SELECT id, legacy_id FROM mb_profiles WHERE legacy_id IS NOT NULL AND legacy_id 
 
 		return true;
 	}
+}
+
+internal class LegacyCreatedMap
+{
+	public int LegacyId { get; set; }
+
+	public DateTime CreatedAt { get; set; }
 }
 
 internal class LegacyManga
@@ -339,6 +407,20 @@ FROM profiles;";
 		}
 
 		return progresses;
+	}
+
+	public Task<LegacyCreatedMap[]> CreatedMap(bool manga)
+	{
+		const string QUERY_CHAPTER = @"
+SELECT id as legacy_id, created_at FROM manga_chapter
+UNION ALL
+SELECT id * -1 as legacy_id, created_at FROM manga_chapter_cache";
+		const string QUERY_MANGA = @"
+SELECT id as legacy_id, created_at FROM manga
+UNION ALL
+SELECT id * -1 as legacy_id, created_at FROM manga_cache";
+		var query = manga ? QUERY_MANGA : QUERY_CHAPTER;
+		return Get<LegacyCreatedMap>(query);
 	}
 
 	public override async Task<IDbConnection> CreateConnection()

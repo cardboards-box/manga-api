@@ -65,9 +65,9 @@ public class ImageController(
 	[HttpGet, Route("image/strip")]
 	[ProducesError(500), ProducesError(404), ProducesError(400)]
 	[ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
-	public async Task<IActionResult> Strip([FromQuery] Guid[] ids, CancellationToken token)
+	public async Task<IActionResult> Strip([FromQuery] Dictionary<int, Guid> ids, CancellationToken token)
 	{
-		var results = await _image.Combine(ids, token);
+		var results = await _image.Combine([..ids.OrderBy(t => t.Key).Select(t => t.Value)], token);
 		if (results.Stream is null)
 			return await Box(() => Boxed.Exception(results.Error ?? "Image stream is missing"));
 

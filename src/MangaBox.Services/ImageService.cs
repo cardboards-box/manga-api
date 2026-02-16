@@ -459,6 +459,7 @@ internal class ImageService(
 			.ToList();
 		var images = results
 			.Where(t => t.Stream is not null)
+			.OrderBy(t => ids.IndexOf(t.Image.Id))
 			.Select(t =>
 			{
 				try
