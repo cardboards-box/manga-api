@@ -100,6 +100,17 @@ public interface IIndexableMangaSource : IMangaSource
 }
 
 /// <summary>
+/// Represents a manga source that has a default content rating
+/// </summary>
+public interface IRatedSource
+{
+	/// <summary>
+	/// The rating to apply
+	/// </summary>
+	ContentRating DefaultRating { get; }
+}
+
+/// <summary>
 /// A class scoping for manga source classes
 /// </summary>
 /// <remarks>TODO: Rename these later and find a proper home for them</remarks>
@@ -147,15 +158,15 @@ public class MangaSource
 		public string[] Uploaders { get; set; } = [];
 
 		[JsonPropertyName("rating")]
-		public ContentRating Rating { get; set; } = ContentRating.Safe;
+		public ContentRating? Rating { get; set; } = null;
 
 		[JsonPropertyName("chapters")]
 		public List<MangaChapter> Chapters { get; set; } = [];
 
 		[JsonPropertyName("nsfw")]
-		public bool Nsfw
+		public bool? Nsfw
 		{
-			get => _nsfw ?? (Rating != ContentRating.Safe);
+			get => _nsfw ?? (Rating is null ? null : (Rating != ContentRating.Safe));
 			set => _nsfw = value;
 		}
 		

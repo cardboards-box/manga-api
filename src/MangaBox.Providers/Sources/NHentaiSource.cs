@@ -2,13 +2,14 @@
 
 namespace MangaBox.Providers.Sources;
 
+using MangaBox.Models.Types;
 using Utilities.Flare;
 
 using static Services.MangaSource;
 
 public interface INhentaiSource : IMangaSource { }
 
-public class NhentaiSource : INhentaiSource
+public class NhentaiSource : INhentaiSource, IRatedSource
 {
 	private const string DEFAULT_CHAPTER_TITLE = "Chapter 1";
 	public string HomeUrl => "https://nhentai.to/";
@@ -24,6 +25,8 @@ public class NhentaiSource : INhentaiSource
 	public string? UserAgent => PolyfillExtensions.USER_AGENT;
 
 	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+
+	public ContentRating DefaultRating => ContentRating.Pornographic;
 
 	private readonly FlareSolverInstance _api;
 
@@ -71,7 +74,6 @@ public class NhentaiSource : INhentaiSource
 			Provider = Provider,
 			HomePage = url,
 			Cover = doc.Attribute("//div[@id='cover']/a/img", "src") ?? "",
-			Rating = Models.Types.ContentRating.Pornographic,
 			Tags = doc.DocumentNode
 					  .SelectNodes("//span[@class='tags']/a[contains(@href, '/tag')]/span[@class='name']")
 					  .Select(t => t.InnerText.Trim())

@@ -49,6 +49,13 @@ public class MbSource : MbDbObject, IDbCacheTable
 	public bool Enabled { get; set; } = true;
 
 	/// <summary>
+	/// The default content rating for the source
+	/// </summary>
+	[Column("default_rating")]
+	[JsonPropertyName("defaultRating")]
+	public ContentRating DefaultRating { get; set; } = ContentRating.Safe;
+
+	/// <summary>
 	/// The referer to add as a header when making requests
 	/// </summary>
 	[Column("referer")]

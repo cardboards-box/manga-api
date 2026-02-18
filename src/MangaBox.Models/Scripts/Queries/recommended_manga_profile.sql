@@ -116,21 +116,28 @@ WITH progress_rows AS (
     UNION
     SELECT manga_id FROM cand_by_title
 ), candidates AS MATERIALIZED (
-    SELECT
-        m.id,
-        m.title,
-        m.content_rating,
-        m.nsfw
+    SELECT m.id, m.title, m.content_rating, m.nsfw
     FROM mb_manga m
     JOIN candidate_ids ci ON ci.manga_id = m.id
     WHERE
-        m.deleted_at IS NULL AND NOT m.is_hidden AND
+        m.deleted_at IS NULL AND 
+        NOT m.is_hidden AND 
         NOT EXISTS (
-            SELECT 1 FROM mb_manga_progress p
-            WHERE
-                p.profile_id = :profileId AND
-                p.manga_id = m.id AND
-                p.deleted_at IS NULL
+            SELECT 1
+            FROM mb_manga_progress p
+            WHERE p.profile_id = :profileId
+            AND p.manga_id = m.id
+            AND p.deleted_at IS NULL
+        ) AND (
+            :tagExcludes IS NULL OR 
+            cardinality(:tagExcludes) = 0 OR 
+            NOT EXISTS (
+                SELECT 1
+                FROM mb_manga_tags x
+                WHERE 
+                    x.manga_id = m.id AND 
+                    x.tag_id = ANY(:tagExcludes::uuid[])
+            )
         )
 ), candidate_tag_score AS (
     SELECT
@@ -140,8 +147,7 @@ WITH progress_rows AS (
     JOIN mb_manga_tags mt ON mt.manga_id = c.id
     JOIN seed_tag_weights stw ON stw.tag_id = mt.tag_id
     GROUP BY c.id
-),
-candidate_people_score AS (
+), candidate_people_score AS (
     SELECT
         c.id AS manga_id,
         COALESCE(SUM(spw.w), 0)::numeric AS people_score

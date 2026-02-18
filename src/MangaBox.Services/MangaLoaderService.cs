@@ -203,6 +203,8 @@ internal class MangaLoaderService(
 		var cr = manga.Attributes.FirstOrDefault(t => t.Name.EqualsIc("Content Rating"))?.Value;
 		if (Enum.TryParse<ContentRating>(cr, true, out var rating))
 			manga.Rating = rating;
+	
+		manga.Rating ??= ContentRating.Safe;
 	}
 
 	public async Task<Boxed> Load(MangaSource.Manga input, Guid sourceId, Guid? profileId, LegacyIds? ids)
@@ -227,12 +229,27 @@ internal class MangaLoaderService(
 		return Boxed.Ok(manga);
 	}
 
+	public static void ApplySourceChanges(IMangaSource found, MangaSource.Manga manga)
+	{
+		static void ApplyRated(IRatedSource source, MangaSource.Manga manga)
+		{
+			if (manga.Rating is not null) return;
+
+			manga.Rating = source.DefaultRating;
+		}
+
+		if (found is IRatedSource src)
+			ApplyRated(src, manga);
+	}
+
 	public async Task<Boxed> Load(IdedSource found, Guid? profileId, CancellationToken token)
 	{
 		var before = await found.Service.Manga(found.Id, token);
 		if (before is null)
 			return Boxed.NotFound(nameof(MbManga), "Could not load manga from source");
-		
+
+		ApplySourceChanges(found.Service, before);
+
 		return await Load(before, found.Info.Id, profileId, null);
 	}
 
@@ -248,8 +265,11 @@ internal class MangaLoaderService(
 			if (source.Service is not IIndexableMangaSource indexable)
 				return;
 
-			await foreach(var manga in indexable.Index(source, ct))
+			await foreach (var manga in indexable.Index(source, ct))
+			{
+				ApplySourceChanges(source.Service, manga);
 				await Load(manga, source.Info.Id, null, null);
+			}
 		});
 	}
 }

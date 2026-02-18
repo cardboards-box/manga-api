@@ -107,16 +107,18 @@ public interface IMbMangaDbService
 	/// </summary>
 	/// <param name="mangaId">The manga to find recommendations for</param>
 	/// <param name="limit">The total number of manga to return</param>
+    /// <param name="tagExcludes">The tags to exclude from the recommendations</param>
 	/// <returns>The recommended manga</returns>
-	Task<MangaBoxType<MbManga>[]> Recommended(Guid mangaId, int limit);
+	Task<MangaBoxType<MbManga>[]> Recommended(Guid mangaId, int limit, Guid[] tagExcludes);
 
 	/// <summary>
 	/// Fetches the recommended manga for a profile
 	/// </summary>
 	/// <param name="profileId">The ID of the profile</param>
 	/// <param name="limit">The total number of manga to return</param>
+	/// <param name="tagExcludes">The tags to exclude from the recommendations</param>
 	/// <returns>The recommended manga</returns>
-	Task<MangaBoxType<MbManga>[]> RecommendedByProfile(Guid profileId, int limit);
+	Task<MangaBoxType<MbManga>[]> RecommendedByProfile(Guid profileId, int limit, Guid[] tagExcludes);
 }
 
 internal class MbMangaDbService(
@@ -318,24 +320,24 @@ WHERE
         return [.. results];
 	}
 
-    public async Task<MangaBoxType<MbManga>[]> Recommended(Guid mangaId, int limit)
+    public async Task<MangaBoxType<MbManga>[]> Recommended(Guid mangaId, int limit, Guid[] tagExcludes)
     {
         var query = await _cache.Required("recommended_manga");
         query = string.Format(query, SearchFilter<MangaOrderBy>.TableSuffix());
 
 		using var con = await _sql.CreateConnection();
-		using var rdr = await con.QueryMultipleAsync(query, new { mangaId, limit });
+		using var rdr = await con.QueryMultipleAsync(query, new { mangaId, limit, tagExcludes });
 
 		return await FromMulti(rdr);
 	}
 
-    public async Task<MangaBoxType<MbManga>[]> RecommendedByProfile(Guid profileId, int limit)
+    public async Task<MangaBoxType<MbManga>[]> RecommendedByProfile(Guid profileId, int limit, Guid[] tagExcludes)
 	{
 		var query = await _cache.Required("recommended_manga_profile");
 		query = string.Format(query, SearchFilter<MangaOrderBy>.TableSuffix());
 
 		using var con = await _sql.CreateConnection();
-		using var rdr = await con.QueryMultipleAsync(query, new { profileId, limit });
+		using var rdr = await con.QueryMultipleAsync(query, new { profileId, limit, tagExcludes });
 
 		return await FromMulti(rdr);
 	}

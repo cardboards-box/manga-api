@@ -35,9 +35,20 @@ WITH seed AS (
         m.title
     FROM mb_manga m
     JOIN seed s ON TRUE
-    WHERE m.id <> s.id
-      AND m.deleted_at IS NULL
-      AND NOT m.is_hidden
+    WHERE 
+        m.id <> s.id AND 
+        m.deleted_at IS NULL AND 
+        NOT m.is_hidden AND (
+            :tagExcludes IS NULL OR 
+            cardinality(:tagExcludes) = 0 OR 
+            NOT EXISTS (
+                SELECT 1
+                FROM mb_manga_tags x
+                WHERE 
+                    x.manga_id = m.id AND 
+                    x.tag_id = ANY(:tagExcludes::uuid[])
+            )
+        )
 ), cand_tag_counts AS (
     SELECT mt.manga_id, COUNT(*)::numeric AS tag_cnt
     FROM mb_manga_tags mt
@@ -65,9 +76,7 @@ WITH seed AS (
         COUNT(*)::numeric AS people_match_cnt
     FROM candidate_base c
     JOIN mb_manga_relationships mr ON mr.manga_id = c.id
-    JOIN seed_people sp
-      ON sp.person_id = mr.person_id
-     AND sp.type      = mr.type
+    JOIN seed_people sp ON sp.person_id = mr.person_id AND sp.type = mr.type
     GROUP BY c.id
 )
 SELECT

@@ -105,6 +105,7 @@ internal class SourceService(
 						Key = h.Key,
 						Value = h.Value,
 					}).ToArray() ?? [],
+					DefaultRating = source is IRatedSource rated ? rated.DefaultRating : ContentRating.Safe,
 				};
 				match.Id = await _db.Source.Upsert(match);
 			}

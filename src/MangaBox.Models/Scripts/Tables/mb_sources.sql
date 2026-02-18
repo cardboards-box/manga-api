@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS mb_sources (
 	referer TEXT NULL,
 	user_agent TEXT NULL,
 	headers mb_headers[] DEFAULT '{}',
+	default_rating INT NOT NULL DEFAULT 0,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	deleted_at TIMESTAMP NULL
