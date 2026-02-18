@@ -13,7 +13,7 @@ public class CatchupIndexingBackgroundService(
 	/// <summary>
 	/// The amount of time to delay between each indexing operation, in seconds
 	/// </summary>
-	public double DelaySec => double.TryParse(_config["ImageReindexDelaySec"], out var sec) ? sec : 60 * 5;
+	public double DelaySec => double.TryParse(_config["ImageReindexDelaySec"], out var sec) ? sec : 60 * 20;
 
 	/// <summary>
 	/// The amount of time to delay between each indexing operation
