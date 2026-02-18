@@ -1,4 +1,4 @@
-﻿namespace MangaBox.Api.Middleware;
+﻿namespace MangaBox.Api.Middleware.Background;
 
 /// <summary>
 /// The background service for indexing manga
@@ -21,20 +21,20 @@ public class IndexBackgroundService(
 	/// <inheritdoc />
 	protected override async Task ExecuteAsync(CancellationToken stoppingToken)
 	{
-		_logger.LogInformation("Starting index loop with a delay of {DelaySec} seconds", DelaySec);
+		_logger.LogInformation("[Updates Indexing] Starting index loop with a delay of {DelaySec} seconds", DelaySec);
 		while (!stoppingToken.IsCancellationRequested)
 		{
 			try
 			{
 				await _loader.RunIndex(stoppingToken);
+				await Task.Delay(Delay, stoppingToken);
 			}
 			catch (OperationCanceledException) { }
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "An error occurred while running the index background service");
+				_logger.LogError(ex, "[Updates Indexing] An error occurred while running the index background service");
+				await Task.Delay(Delay, stoppingToken);
 			}
-
-			await Task.Delay(Delay, stoppingToken);
 		}
 	}
 }

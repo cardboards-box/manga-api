@@ -28,7 +28,7 @@ internal class HandleImageQueueVerb(
 				var item = await ImageQueue.Pop();
 				if (item is null) return;
 
-				await _index.Index(item.Id, token);
+				await _index.Index(item.Id, item.Force ?? false, token);
 			}
 		}
 		catch (Exception ex)

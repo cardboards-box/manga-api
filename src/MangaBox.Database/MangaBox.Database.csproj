@@ -38,8 +38,4 @@
 		<ProjectReference Include="..\MangaBox.Models\MangaBox.Models.csproj" />
 	</ItemGroup>
 
-	<ItemGroup>
-	  <Folder Include="Services\" />
-	</ItemGroup>
-
 </Project>

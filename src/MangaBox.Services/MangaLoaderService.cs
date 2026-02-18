@@ -131,7 +131,7 @@ internal class MangaLoaderService(
 				ImageWidth = page.Width,
 				ImageHeight = page.Height,
 			});
-			await _publish.NewImages.Publish(new(id, DateTime.UtcNow));
+			await _publish.NewImages.Publish(new(id, DateTime.UtcNow, false));
 		}
 
 		if (chapter.PageCount != pages.Length && pages.Length > 0)

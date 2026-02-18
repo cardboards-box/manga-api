@@ -1,4 +1,4 @@
-﻿namespace MangaBox.Api.Middleware;
+﻿namespace MangaBox.Api.Middleware.Background;
 
 /// <summary>
 /// A background service for refreshing manga
@@ -32,11 +32,11 @@ public class RefreshBackgroundService(
 			if (response is not null && response.Success) return;
 
 			var errors = string.Join("; ", response?.Errors ?? [])?.ForceNull() ?? "Unknown error";
-			_logger.LogWarning("Failed to refresh manga {MangaId}: {ErrorMessage}", manga.Id, errors);
+			_logger.LogWarning("[Refresh Service] Failed to refresh manga {MangaId}: {ErrorMessage}", manga.Id, errors);
 		}
 		catch (Exception ex)
 		{
-			_logger.LogError(ex, "An error occurred while refreshing manga {MangaId}", manga.Id);
+			_logger.LogError(ex, "[Refresh Service] An error occurred while refreshing manga {MangaId}", manga.Id);
 		}
 	}
 
@@ -45,7 +45,7 @@ public class RefreshBackgroundService(
 	{
 		try
 		{
-			_logger.LogInformation("Starting refresh loop with a delay of {DelaySec} seconds", RefreshSec);
+			_logger.LogInformation("[Refresh Service] Starting refresh loop with a delay of {DelaySec} seconds", RefreshSec);
 			var opts = new ParallelOptions
 			{
 				CancellationToken = stoppingToken,
@@ -62,7 +62,7 @@ public class RefreshBackgroundService(
 		catch (OperationCanceledException) { }
 		catch (Exception ex)
 		{
-			_logger.LogError(ex, "An error occurred while running the refresh background service");
+			_logger.LogError(ex, "[Refresh Service] An error occurred while running the refresh background service");
 			throw;
 		}
 	}

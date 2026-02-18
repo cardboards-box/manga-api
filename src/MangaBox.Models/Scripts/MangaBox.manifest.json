@@ -6,6 +6,7 @@
         "Functions/attributes_array_join.sql",
         "Types/mb_headers.sql",
         "Functions/headers_array_join.sql",
+        "Tables/mb_logs.sql",
         "Tables/mb_sources.sql",
         "Tables/mb_profiles.sql",
         "Tables/mb_tags.sql",

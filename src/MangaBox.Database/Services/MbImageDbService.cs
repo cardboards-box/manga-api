@@ -55,6 +55,18 @@ public interface IMbImageDbService
 	/// <param name="ids">The IDs of the images</param>
 	/// <returns>The image set</returns>
 	Task<MangaImageSet> FetchSet(params Guid[] ids);
+
+    /// <summary>
+    /// Indicates that the image is indexed
+    /// </summary>
+    /// <param name="id">The ID of the image</param>
+    Task Indexed(Guid id);
+
+    /// <summary>
+    /// Fetches all of the non-indexed images
+    /// </summary>
+    /// <returns>The non-indexed images</returns>
+    Task<MbImage[]> NotIndexed();
 }
 
 internal class MbImageDbService(
@@ -136,5 +148,16 @@ WHERE
 		var manga = (await rdr.ReadAsync<MbManga>()).ToArray();
         var sources = (await rdr.ReadAsync<MbSource>()).ToArray();
         return new(manga, sources, images);
+	}
+
+    public Task Indexed(Guid id)
+    {
+        return _sql.Execute("UPDATE mb_images SET indexed = TRUE WHERE id = :id", new { id });
+    }
+
+	public Task<MbImage[]> NotIndexed()
+	{
+        const string QUERY = @"SELECT * FROM mb_images WHERE indexed = FALSE AND deleted_at IS NULL;";
+        return Get(QUERY);
 	}
 }

@@ -1,6 +1,6 @@
 ﻿using CardboardBox.Redis;
 
-namespace MangaBox.Api.Middleware;
+namespace MangaBox.Api.Middleware.Background;
 
 /// <summary>
 /// The background service for handling new chapters
@@ -49,7 +49,7 @@ public class NewChapterBackgroundService(
 				response is not Boxed<MangaBoxType<MbChapter>> fullChap)
 			{
 				var errors = string.Join("; ", response?.Errors ?? []).ForceNull() ?? "Unknown error";
-				_logger.LogError("Failed to load chapter {ChapterId}: {Errors}", chapter.Id, errors);
+				_logger.LogError("[New Chapter Indexing] Failed to load chapter {ChapterId}: {Errors}", chapter.Id, errors);
 				return;
 			}
 
@@ -59,14 +59,14 @@ public class NewChapterBackgroundService(
 		}
 		catch (Exception ex)
 		{
-			_logger.LogError(ex, "Error handling new chapter {ChapterId}", chapter.Id);
+			_logger.LogError(ex, "[New Chapter Indexing] Error handling new chapter {ChapterId}", chapter.Id);
 		}
 	}
 
 	/// <inheritdoc />
 	protected override Task ExecuteAsync(CancellationToken stoppingToken)
 	{
-		_logger.LogInformation("Starting new chapter background service");
+		_logger.LogInformation("[New Chapter Indexing] Starting new chapter background service");
 		return _service.NewChapters.Process(
 			(c) => HandleNewChapter(c, stoppingToken), 
 			stoppingToken);

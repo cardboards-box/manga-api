@@ -23,3 +23,4 @@ CREATE INDEX IF NOT EXISTS idx_chapters_created_at ON mb_chapters (created_at) W
 CREATE INDEX IF NOT EXISTS idx_images_created_at ON mb_images (created_at) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_sources_created_at ON mb_sources (created_at) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_people_created_at ON mb_people (created_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_logs_created_at ON mb_logs (created_at) WHERE deleted_at IS NULL;

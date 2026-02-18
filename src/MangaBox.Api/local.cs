@@ -1,6 +1,7 @@
 ﻿global using CardboardBox.Extensions.AspNetCore;
 
 global using MangaBox.Api.Middleware;
+global using MangaBox.Api.Middleware.Background;
 global using MangaBox.Core;
 global using MangaBox.Database;
 global using MangaBox.Models;

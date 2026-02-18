@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
@@ -54,7 +53,7 @@ internal class AuthMiddleware(
 		}
 		catch (Exception ex)
 		{
-			_logger.LogError(ex, "Error while authenticating request");
+			_logger.LogError(ex, "[Auth Middleware] Error while authenticating request");
 			return AuthenticateResult.Fail(ex);
 		}
 	}

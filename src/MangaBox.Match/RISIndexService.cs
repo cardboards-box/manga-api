@@ -11,17 +11,19 @@ public interface IRISIndexService
 	/// Indexes the image by it's ID
 	/// </summary>
 	/// <param name="id">The ID of the image</param>
+	/// <param name="force">Whether to force reindexing even if the image is already indexed</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The result of the indexing operation</returns>
-	Task<Boxed> Index(Guid id, CancellationToken token);
+	Task<Boxed> Index(Guid id, bool force, CancellationToken token);
 
 	/// <summary>
 	/// Indexes the given image
 	/// </summary>
 	/// <param name="image">The image to index</param>
+	/// <param name="force">Whether to force reindexing even if the image is already indexed</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The result of the indexing operation</returns>
-	Task<Boxed> Index(MangaBoxType<MbImage> image, CancellationToken token);
+	Task<Boxed> Index(MangaBoxType<MbImage> image, bool force, CancellationToken token);
 }
 
 /// <inheritdoc cref="IRISIndexService" />
@@ -71,17 +73,19 @@ internal class RISIndexService(
 	}
 
 	/// <inheritdoc />
-	public async Task<Boxed> Index(Guid id, CancellationToken token)
+	public async Task<Boxed> Index(Guid id, bool force, CancellationToken token)
 	{
 		var image = await _db.Image.FetchWithRelationships(id);
 		if (image is null) return Boxed.NotFound(nameof(MbImage), "Image not found");
 
-		return await Index(image, token);
+		return await Index(image, force, token);
 	}
 
 	/// <inheritdoc />
-	public async Task<Boxed> Index(MangaBoxType<MbImage> image, CancellationToken token)
+	public async Task<Boxed> Index(MangaBoxType<MbImage> image, bool force, CancellationToken token)
 	{
+		if (image.Entity.Indexed && !force) return Boxed.Conflict("Image is already indexed");
+
 		var result = await _image.Get(image, token);
 		if (!string.IsNullOrEmpty(result.Error) || result.Stream is null)
 		{
@@ -98,6 +102,7 @@ internal class RISIndexService(
 			return Boxed.Exception(post.Error != null ? string.Join("; ", post.Error) : "Unknown error");
 		}
 
+		await _db.Image.Indexed(image.Entity.Id);
 		return Boxed.Ok(metadata);
 	}
 }

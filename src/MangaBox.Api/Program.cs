@@ -28,6 +28,7 @@ builder.Services
 await builder.Services.AddMangaBox(builder.Configuration);
 
 builder.Services.AddHostedService<StatsBackgroundService>();
+builder.Services.AddHostedService<LogLoaderBackgroundService>();
 
 #if !DEBUG
 builder.Services.AddHostedService<RISBackgroundService>();

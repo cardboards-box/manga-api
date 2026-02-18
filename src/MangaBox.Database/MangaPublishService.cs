@@ -145,6 +145,8 @@ public record class RedisQueue<T>(
 /// </summary>
 /// <param name="Id">The ID of the image</param>
 /// <param name="Created">The date and time the image was queued</param>
+/// <param name="Force">Whether or not to force indexing of the image</param>
 public record class QueueImage(
 	[property: JsonPropertyName("id")] Guid Id,
-	[property: JsonPropertyName("created")] DateTime Created);
+	[property: JsonPropertyName("created")] DateTime Created,
+	[property: JsonPropertyName("force")] bool? Force = null);

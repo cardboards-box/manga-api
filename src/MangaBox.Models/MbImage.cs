@@ -78,4 +78,11 @@ public class MbImage : MbDbObject
 	[Column("mime_type")]
 	[JsonPropertyName("mimeType")]
 	public string? MimeType { get; set; }
+
+	/// <summary>
+	/// Whether or not the image has been indexed
+	/// </summary>
+	[Column("indexed", ExcludeUpdates = true)]
+	[JsonPropertyName("indexed")]
+	public bool Indexed { get; set; } = false;
 }

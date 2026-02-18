@@ -1,4 +1,4 @@
-﻿namespace MangaBox.Api.Middleware;
+﻿namespace MangaBox.Api.Middleware.Background;
 
 /// <summary>
 /// The background service for taking stats snapshots
@@ -21,19 +21,20 @@ public class StatsBackgroundService(
 	/// <inheritdoc />
 	protected override async Task ExecuteAsync(CancellationToken stoppingToken)
 	{
-		_logger.LogInformation("Starting stats loop with a delay of {DelaySec} seconds", DelaySec);
+		_logger.LogInformation("[Stats Refresh] Starting stats loop with a delay of {DelaySec} seconds", DelaySec);
 		while(!stoppingToken.IsCancellationRequested)
 		{
 			try
 			{
 				await _stats.TakeSnapshot();
+				await Task.Delay(Delay, stoppingToken);
 			}
 			catch (OperationCanceledException) { }
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "An error occurred while running the stats background service");
+				_logger.LogError(ex, "[Stats Refresh] An error occurred while running the stats background service");
+				await Task.Delay(Delay, stoppingToken);
 			}
-			await Task.Delay(Delay, stoppingToken);
 		}
 	}
 }

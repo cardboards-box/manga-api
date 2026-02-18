@@ -25,6 +25,12 @@ public static class DiExtensions
 		DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 		return resolver
+			.Logger(c =>
+			{
+				c.WriteTo.Sink(new DbLoggerSink(), Serilog.Events.LogEventLevel.Information)
+				 .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning);
+			})
+			
 			.SetDefaultConvention(t => t.CaseConvention<NoChangeConvention>())
 			
 			.Transient<IDbService, DbService>()
@@ -33,6 +39,7 @@ public static class DiExtensions
 			.AddType<MbAttribute>()
 			.AddType<MbHeader>()
 
+			.Add<IMbLogDbService, MbLogDbService, MbLog>()
 			.Add<IMbTagDbService, MbTagDbService, MbTag>()
 			.Add<IMbImageDbService, MbImageDbService, MbImage>()
 			.Add<IMbMangaDbService, MbMangaDbService, MbManga>()
@@ -49,6 +56,7 @@ public static class DiExtensions
 			.Model<MbRelatedPerson>()
 
 			.Mapping(c => c
+				.Enum<MbLogLevel>()
 				.Enum<ContentRating>()
 				.Enum<RelationshipType>()
 				.PolyfillGuidArrays());
