@@ -35,6 +35,7 @@ builder.Services.AddHostedService<RISBackgroundService>();
 builder.Services.AddHostedService<IndexBackgroundService>();
 builder.Services.AddHostedService<RefreshBackgroundService>();
 builder.Services.AddHostedService<NewChapterBackgroundService>();
+builder.Services.AddHostedService<CatchupIndexingBackgroundService>();
 #endif
 
 var app = builder.Build();
