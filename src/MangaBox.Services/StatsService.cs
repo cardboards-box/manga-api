@@ -20,7 +20,7 @@ internal class StatsService(
 	ISqlService _sql,
 	IMangaPublishService _publish) : IStatsService
 {
-	private readonly CapacityCollection<QueueStats> _queueStats = new(20);
+	private readonly CapacityCollection<QueueStats> _queueStats = new(30);
 	private DatabaseStats[]? _dbStats;
 
 	public Task<DatabaseStats[]> DatabaseStats()

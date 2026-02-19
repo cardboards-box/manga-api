@@ -70,6 +70,12 @@ public interface IMbChapterDbService
     /// <param name="id">The ID of the record to fetch</param>
     /// <returns>The record and all related records</returns>
     Task<MangaBoxType<MbChapter>?> FetchWithRelationships(Guid id);
+
+    /// <summary>
+    /// Gets all of the 0 page chapters
+    /// </summary>
+    /// <returns>The chapters with 0 pages</returns>
+    Task<MbChapter[]> GetZeroPageChapters();
 }
 
 internal class MbChapterDbService(
@@ -143,4 +149,17 @@ UPDATE mb_chapters SET deleted_at = CURRENT_TIMESTAMP WHERE id = :id;
 UPDATE mb_images SET deleted_at = CURRENT_TIMESTAMP WHERE chapter_id = :id;";
         return Execute(QUERY, new { id });
     }
+
+	public Task<MbChapter[]> GetZeroPageChapters()
+	{
+        const string QUERY = @"SELECT DISTINCT c.*
+FROM mb_chapters c
+LEFT JOIN mb_images i ON i.chapter_id = c.id AND i.manga_id = c.manga_id
+WHERE
+    c.page_count = 0 AND
+    NULLIF(c.external_url, '') IS NULL AND
+    i.id IS NULL AND
+    c.deleted_at IS NULL;";
+        return Get(QUERY);
+	}
 }

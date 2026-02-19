@@ -36,6 +36,7 @@ builder.Services.AddHostedService<IndexBackgroundService>();
 builder.Services.AddHostedService<RefreshBackgroundService>();
 builder.Services.AddHostedService<NewChapterBackgroundService>();
 builder.Services.AddHostedService<CatchupIndexingBackgroundService>();
+builder.Services.AddHostedService<ChapterIndexBackgroundService>();
 #endif
 
 var app = builder.Build();
