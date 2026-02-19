@@ -9,6 +9,7 @@ public interface IMangaKatanaSource : IMangaSource { }
 
 public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 {
+	private static RateLimiter? _limiter;
 	public string HomeUrl => "https://mangakatana.com/";
 
 	public string MangaBaseUri => "https://mangakatana.com/manga/";
@@ -127,5 +128,5 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

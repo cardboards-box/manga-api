@@ -33,7 +33,6 @@ public class CatchupIndexingBackgroundService(
 					await _publish.NewImages.Publish(new(image.Id, DateTime.UtcNow, false));
 
 				await Task.Delay(Delay, stoppingToken);
-
 			}
 			catch (OperationCanceledException) { }
 			catch (Exception ex)

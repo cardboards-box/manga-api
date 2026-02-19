@@ -10,6 +10,7 @@ public interface IMangaClashSource : IMangaSource { }
 public class MangaClashSource(
 	IFlareSolverService _flare) : IMangaClashSource
 {
+	private static RateLimiter? _limiter;
 	public string HomeUrl => "https://mangaclash.com/";
 
 	public string MangaBaseUri => "https://mangaclash.com/manga/";
@@ -124,5 +125,5 @@ public class MangaClashSource(
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

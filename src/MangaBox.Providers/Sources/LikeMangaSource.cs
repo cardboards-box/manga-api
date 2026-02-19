@@ -14,6 +14,8 @@ internal class LikeMangaSource(
 	IFlareSolverService _flare,
 	ILogger<LikeMangaSource> _logger) : ILikeMangaSource
 {
+	private static RateLimiter? _limiter;
+
 	public string HomeUrl => "https://likemanga.in";
 
 	public string Provider => "like-manga";
@@ -253,5 +255,5 @@ internal class LikeMangaSource(
 				? d : double.NaN;
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

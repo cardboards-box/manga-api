@@ -9,6 +9,7 @@ public interface IDarkScansSource : IMangaSource { }
 
 public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 {
+	private static RateLimiter? _limiter;
 	public string HomeUrl => "https://dark-scan.com/";
 
 	public string MangaBaseUri => $"{HomeUrl}manga/";
@@ -124,5 +125,5 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

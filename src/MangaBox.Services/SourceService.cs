@@ -44,6 +44,7 @@ internal class SourceService(
 	IDbService _db,
 	IEnumerable<IMangaSource> _sources) : ISourceService
 {
+	private static SemaphoreSlim _semaphore = new(1, 1);
 	private readonly ConcurrentDictionary<string, RateLimiter> _limiter = [];
 
 	/// <inheritdoc />
@@ -91,23 +92,31 @@ internal class SourceService(
 			var match = sources.FirstOrDefault(s => s.Slug.EqualsIc(source.Provider));
 			if (match is null)
 			{
-				match = new()
+				try
 				{
-					Slug = source.Provider,
-					Name = source.Name,
-					BaseUrl = source.HomeUrl,
-					Enabled = true,
-					IsHidden = false,
-					Referer = source.Referer,
-					UserAgent = source.UserAgent,
-					Headers = source.Headers?.Select(h => new MbHeader
+					await _semaphore.WaitAsync(token);
+					match = new()
 					{
-						Key = h.Key,
-						Value = h.Value,
-					}).ToArray() ?? [],
-					DefaultRating = source is IRatedSource rated ? rated.DefaultRating : ContentRating.Safe,
-				};
-				match.Id = await _db.Source.Upsert(match);
+						Slug = source.Provider,
+						Name = source.Name,
+						BaseUrl = source.HomeUrl,
+						Enabled = true,
+						IsHidden = false,
+						Referer = source.Referer,
+						UserAgent = source.UserAgent,
+						Headers = source.Headers?.Select(h => new MbHeader
+						{
+							Key = h.Key,
+							Value = h.Value,
+						}).ToArray() ?? [],
+						DefaultRating = source is IRatedSource rated ? rated.DefaultRating : ContentRating.Safe,
+					};
+					match.Id = await _db.Source.Upsert(match);
+				}
+				finally
+				{
+					_semaphore.Release();
+				}
 			}
 
 			var limiter = _limiter.GetOrAdd(match.Slug, _ => source.GetRateLimiter());

@@ -9,6 +9,7 @@ public abstract class MangakakalotComBase(
 	IFlareSolverService _flare, 
 	ILogger<MangakakalotComBase> _logger) : IMangaUrlSource
 {
+	private static RateLimiter? _limiter;
 	public virtual string HomeUrl => "https://mangakakalot.com/";
 
 	public abstract string MangaBaseUri { get; }
@@ -121,7 +122,7 @@ public abstract class MangakakalotComBase(
 		return (true, domain);
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }
 
 public interface IMangakakalotComSource : IMangaUrlSource { }

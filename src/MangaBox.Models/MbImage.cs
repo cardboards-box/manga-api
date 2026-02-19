@@ -85,4 +85,25 @@ public class MbImage : MbDbObject
 	[Column("indexed", ExcludeUpdates = true)]
 	[JsonPropertyName("indexed")]
 	public bool Indexed { get; set; } = false;
+
+	/// <summary>
+	/// The last time the image failed to be fetched
+	/// </summary>
+	[Column("last_failed_at")]
+	[JsonPropertyName("lastFailedAt")]
+	public DateTime? LastFailedAt { get; set; }
+
+	/// <summary>
+	/// The reason the image failed to be fetched
+	/// </summary>
+	[Column("failed_reason")]
+	[JsonPropertyName("failedReason")]
+	public string? FailedReason { get; set; }
+
+	/// <summary>
+	/// The number of times the image has failed to be fetched
+	/// </summary>
+	[Column("failed_count")]
+	[JsonPropertyName("failedCount")]
+	public int FailedCount { get; set; } = 0;
 }

@@ -9,6 +9,7 @@ public interface IMangakakalotTvSource : IMangaUrlSource { }
 
 public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvSource
 {
+	private static RateLimiter? _limiter;
 	public string HomeUrl => "https://ww4.mangakakalot.tv/";
 
 	public string ChapterBaseUri => $"{HomeUrl}chapter/";
@@ -120,5 +121,5 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

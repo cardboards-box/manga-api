@@ -37,6 +37,12 @@ public interface IMbImageDbService
     Task<Guid> Upsert(MbImage item);
 
     /// <summary>
+    /// Soft deletes the record
+    /// </summary>
+    /// <param name="id">The ID of the record to soft delete</param>
+    Task<int> Delete(Guid id);
+
+    /// <summary>
     /// Gets all of the records from the mb_images table
     /// </summary>
     /// <returns>All of the records</returns>
@@ -159,5 +165,10 @@ WHERE
 	{
         const string QUERY = @"SELECT * FROM mb_images WHERE indexed = FALSE AND deleted_at IS NULL;";
         return Get(QUERY);
+	}
+
+	public override Task<int> Delete(Guid id)
+	{
+		return Execute("UPDATE mb_images SET deleted_at = CURRENT_TIMESTAMP WHERE id = :id", new { id });
 	}
 }

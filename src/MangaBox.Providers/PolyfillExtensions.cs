@@ -20,8 +20,8 @@ public static class PolyfillExtensions
 
 	public static RateLimiter DefaultRateLimiter()  => new TokenBucketRateLimiter(new()
 	{
-		TokenLimit = 15,
-		TokensPerPeriod = 15,
+		TokenLimit = 10,
+		TokensPerPeriod = 10,
 		QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
 		QueueLimit = int.MaxValue,
 		ReplenishmentPeriod = TimeSpan.FromSeconds(5),

@@ -11,6 +11,8 @@ public class ChapmanganatoSource(
 	IFlareSolverService _flare,
 	ILogger<ChapmanganatoSource> _logger) : IChapmanganatoSource
 {
+	private static RateLimiter? _limiter;
+
 	public string HomeUrl => "https://www.natomanga.com";
 
 	public string ChapterBaseUri => $"{HomeUrl}";
@@ -137,5 +139,5 @@ public class ChapmanganatoSource(
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

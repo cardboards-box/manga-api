@@ -36,7 +36,9 @@ public class ImageController(
 	[HttpGet, Route("image/{id}")]
 	[ProducesError(500), ProducesError(404), ProducesError(400)]
 	[ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+#if !DEBUG
 	[ResponseCache(Duration = 31536000, Location = ResponseCacheLocation.Any)]
+#endif
 	public async Task<IActionResult> Get([FromRoute] string id, CancellationToken token)
 	{
 		if (!Guid.TryParse(id, out var guid))

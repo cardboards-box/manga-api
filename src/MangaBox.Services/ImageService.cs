@@ -82,10 +82,28 @@ internal class ImageService(
 	public const string DIR_EXTERNAL = "external";
 	public const string EXT_DAT = "dat";
 
+	private int? _failures;
+	private TimeSpan? _waitPeriod;
+
 	/// <summary>
 	/// The place where the image cache is stored
 	/// </summary>
 	public string StoragePath => field ??= _config["Imaging:CacheDir"]?.ForceNull() ?? "file-cache";
+
+	/// <summary>
+	/// The number of times to wait before the image gets deleted
+	/// </summary>
+	public int FailuresBeforeDelete => _failures ??= int.TryParse(_config["Imaging:FailuresBeforeDelete"], out var f) ? f : 4;
+
+	/// <summary>
+	/// How long to wait between requesting failed images in seconds
+	/// </summary>
+	public double ErrorWaitPeriodSeconds => double.TryParse(_config["Imaging:ErrorWaitPeriod"], out var sec) ? sec : 60 * 60 * 24;
+
+	/// <summary>
+	/// How long to wait between requesting failed images
+	/// </summary>
+	public TimeSpan ErrorWaitPeriod => _waitPeriod ??= TimeSpan.FromSeconds(ErrorWaitPeriodSeconds);
 
 	/// <summary>
 	/// Gets the response of the image download request
@@ -159,6 +177,24 @@ internal class ImageService(
 	/// <returns>The result of the image</returns>
 	public async Task<ImageResult> Get(MbSource source, MbManga manga, MbImage image, int? overrideOrdinal, CancellationToken token)
 	{
+		async Task<ImageResult> HandleError(string reason)
+		{
+			image.LastFailedAt = DateTime.UtcNow;
+
+			if (!string.IsNullOrEmpty(image.FailedReason))
+				image.FailedReason += "\n" + reason;
+			else image.FailedReason = reason;
+
+			image.FailedCount += 1;
+			await _db.Image.Update(image);
+
+			if (image.FailedCount > FailuresBeforeDelete)
+				await _db.Image.Delete(image.Id);
+
+			_logger.LogWarning("Image failed to load: {Id} ({Count}) >> {Url} >> {Reason}", image.Id, image.FailedCount, image.Url, reason);
+			return new(reason, image, OverrideOrdinal: overrideOrdinal);
+		}
+
 		try
 		{
 			var path = GetCachePath(image, out var hash);
@@ -167,26 +203,31 @@ internal class ImageService(
 				!string.IsNullOrEmpty(image.MimeType))
 				return new(null, image, File.OpenRead(path), true, overrideOrdinal);
 
+			if (image.LastFailedAt is not null && image.LastFailedAt.Value + ErrorWaitPeriod > DateTime.UtcNow)
+			{
+				var waitTime = (image.LastFailedAt.Value + ErrorWaitPeriod) - DateTime.UtcNow;
+				return new($"Image is in cooldown period. Retry after {waitTime.TotalSeconds:F0} seconds", image, OverrideOrdinal: overrideOrdinal);
+			}
+
 			var loader = await _sources.FindById(source.Id, token);
 			if (loader is null)
-				return new("Could not find source provider for image", image, OverrideOrdinal: overrideOrdinal);
+				return await HandleError("Could not find source provider for image");
 
 			using var lease = await loader.RateLimits.AcquireAsync(1, token);
 			if (!lease.IsAcquired)
 			{
-				_logger.LogWarning("Rate limit timeout reached when fetching image >> {URL}", image.Url);
 				var after = lease.TryGetMetadata(MetadataName.RetryAfter, out var val) ? val : TimeSpan.FromSeconds(5);
-				return new("Rate Limits Reached - Retry after " + after, image, OverrideOrdinal: overrideOrdinal);
+				return await HandleError("Rate Limits Reached - Retry after " + after);
 			}
 
 			using var response = await GetResponse(image, manga, source, token);
-			if (response is null) return new("Image not found (2)", image, OverrideOrdinal: overrideOrdinal);
+			if (response is null) 
+				return await HandleError("Image not found (2) - Response was null");
+
 			if (!response.IsSuccessStatusCode)
 			{
 				var content = await response.Content.ReadAsStringAsync(token);
-				_logger.LogWarning("Failed to fetch image >> {URL} >> {Status}: {Content}",
-					image.Url, response.StatusCode, content);
-				return new("Image not found (3)", image, OverrideOrdinal: overrideOrdinal);
+				return await HandleError($"Failed to fetch image >> {response.StatusCode}: {content}");
 			}
 
 			image.MimeType ??= MimeType(response.Content.Headers);
@@ -213,7 +254,7 @@ internal class ImageService(
 		catch (Exception ex)
 		{
 			_logger.LogError(ex, "Failed to fetch image >> {URL}", image.Url);
-			return new("Image not found (4) - " + ex.Message, image, OverrideOrdinal: overrideOrdinal);
+			return await HandleError("Image not found (4) - " + ex.Message);
 		}
 	}
 

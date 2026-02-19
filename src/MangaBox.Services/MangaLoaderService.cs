@@ -68,7 +68,11 @@ internal class MangaLoaderService(
 		if (manga is null) 
 			return Boxed.NotFound(nameof(MbManga), "Manga was not found.");
 
-		return await Load(profileId, manga.Url, true, token);
+		var source = await _sources.FindById(manga.SourceId, token);
+		if (source is null)
+			return Boxed.NotFound(nameof(MbSource), "Manga's source was not found.");
+
+		return await Load(new(manga.OriginalSourceId, source), profileId, token);
 	}
 
 	public async Task<Boxed> Load(Guid? profileId, string url, bool force, CancellationToken token)

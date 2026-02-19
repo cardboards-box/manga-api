@@ -22,6 +22,8 @@ public interface IMangaDexSource : IIndexableMangaSource
 public class MangaDexSource(
 	IMangaDexService _mangadex) : IMangaDexSource
 {
+	private static RateLimiter? _limiter;
+
 	private const string DEFAULT_LANG = "en";
 	public string HomeUrl => "https://mangadex.org";
 	public string Provider => "mangadex";
@@ -235,7 +237,7 @@ public class MangaDexSource(
 		return (true, parts.First());
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 
 	public static MManga? GetMangaRel(Chapter chapter)
 	{

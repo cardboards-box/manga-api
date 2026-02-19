@@ -13,6 +13,8 @@ internal class ComixSource(
 	ComixApiService _api,
 	ILogger<ComixSource> _logger) : IComixSource
 {
+	private static RateLimiter? _limiter;
+
 	public string HomeUrl => "https://comix.to";
 
 	public string Provider => "comix-to";
@@ -97,7 +99,7 @@ internal class ComixSource(
 		return (true, parts.First());
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }
 
 internal class ComixApiService(IApiService _api)

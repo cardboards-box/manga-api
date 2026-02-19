@@ -11,6 +11,7 @@ public interface INhentaiSource : IMangaSource { }
 
 public class NhentaiSource : INhentaiSource, IRatedSource
 {
+	private static RateLimiter? _limiter;
 	private const string DEFAULT_CHAPTER_TITLE = "Chapter 1";
 	public string HomeUrl => "https://nhentai.to/";
 
@@ -109,5 +110,5 @@ public class NhentaiSource : INhentaiSource, IRatedSource
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

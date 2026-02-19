@@ -8,6 +8,8 @@ public interface IBattwoSource : IMangaUrlSource { }
 
 public class BattwoSource : IBattwoSource
 {
+	private static RateLimiter? _limiter;
+
 	public string HomeUrl => "https://battwo.com/";
 
 	public string MangaBaseUri => $"{HomeUrl}series/";
@@ -118,5 +120,5 @@ public class BattwoSource : IBattwoSource
 		return (true, id);
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

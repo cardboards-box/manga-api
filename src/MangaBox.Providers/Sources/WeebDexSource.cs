@@ -17,6 +17,7 @@ internal class WeebDexSource(
 	IWeebDex _api,
 	ILogger<WeebDexSource> _logger) : IWeebDexSource
 {
+	private static RateLimiter? _limiter;
 	private const string DEFAULT_LANG = "en";
 	public string HomeUrl => "https://weebdex.org";
 	public string Provider => "weebdex";
@@ -179,5 +180,5 @@ internal class WeebDexSource(
 		return (true, parts.First());
 	}
 
-	public RateLimiter GetRateLimiter() => PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }
