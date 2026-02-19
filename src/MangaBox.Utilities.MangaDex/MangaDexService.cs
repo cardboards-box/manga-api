@@ -85,37 +85,86 @@ public interface IMangaDexService
 
 internal class MangaDexService(
 	IMangaDex _md,
-	ILogger<MangaDexService> _logger,
-	[FromKeyedServices(MangaDexService.KEY)] RateLimiter _limiter) : IMangaDexService
+	ILogger<MangaDexService> _logger) : IMangaDexService
 {
-	public const string KEY = "MangaDexApiRateLimiter";
-
-	public async Task<IDisposable> Limit(CancellationToken token)
+	private static readonly RateLimiter _general = new TokenBucketRateLimiter(new()
 	{
-		return await _limiter.AcquireAsync(1, token);
-	}
-
-	public async Task<T> Limit<T>(Func<IMangaDex, Task<T>> func, CancellationToken token)
+		TokenLimit = 4,
+		TokensPerPeriod = 4,
+		QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+		QueueLimit = int.MaxValue,
+		ReplenishmentPeriod = TimeSpan.FromSeconds(1),
+		AutoReplenishment = true
+	});
+	private static readonly RateLimiter _page = new TokenBucketRateLimiter(new()
 	{
-		using var limit = await _limiter.AcquireAsync(1, token);
-		return await func(_md);
+		TokenLimit = 39,
+		TokensPerPeriod = 39,
+		QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+		QueueLimit = int.MaxValue,
+		ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+		AutoReplenishment = true
+	});
+
+	public async Task<T> Limit<T>(Func<IMangaDex, Task<T>> func, string context, CancellationToken token, RateLimiter? limiter = null)
+		where T : MangaDexRoot
+	{
+		List<IDisposable> disposers = [];
+		if (limiter is not null)
+			disposers.Add(await limiter.AcquireAsync(1, token));
+
+		disposers.Add(await _general.AcquireAsync(1, token));
+
+		try
+		{
+			T result;
+			int tries = 0;
+			int maxTries = 3;
+			do
+			{
+				tries++;
+				result = await func(_md);
+				if (result.IsError(out var error))
+					_logger.LogError("Manga Dex Error: {Context} - {Error}", context, error);
+
+				if (!result.RateLimit.IsLimited ||
+					result.RateLimit.RetryPassed() ||
+					result.RateLimit.RetryAfter is null ||
+					tries >= maxTries)
+					return result;
+
+				var after = result.RateLimit.RetryAfter.Value;
+				var span = after - DateTimeOffset.UtcNow;
+				_logger.LogWarning("Manga Dex Rate Limited: {Context} - Retry After: {After} ({Span}) - Try #{Tries}",
+					context, after, span, tries);
+				await Task.Delay(span, token);
+				_logger.LogWarning("Manga Dex Rate Limit Passed: {Context}", context);
+			}
+			while (result.RateLimit.IsLimited);
+
+			return result;
+		}
+		finally
+		{
+			disposers.Each(t => t.Dispose());
+		}
 	}
 
 	public Task<MangaList> Search(string title) => Search(new MangaFilter() { Title = title });
 
-	public Task<MangaList> Search(MangaFilter filter) => Limit(md => md.Manga.List(filter), CancellationToken.None);
+	public Task<MangaList> Search(MangaFilter filter) => Limit(md => md.Manga.List(filter), "Manga Search", CancellationToken.None);
 
 	public Task<MangaList> AllManga(params string[] ids) => Search(new MangaFilter { Ids = ids });
 
 	public Task<MangaDexRoot<Manga>> Manga(string id)
 	{
 		var includes = new[] { MangaIncludes.cover_art, MangaIncludes.author, MangaIncludes.artist, MangaIncludes.scanlation_group, MangaIncludes.tag, MangaIncludes.chapter };
-		return Limit(md => md.Manga.Get(id, includes), CancellationToken.None);
+		return Limit(md => md.Manga.Get(id, includes), $"Manga Fetch: {id}", CancellationToken.None);
 	}
 
-	public Task<ChapterList> Chapters(ChaptersFilter? filter = null) => Limit(md => md.Chapter.List(filter), CancellationToken.None);
+	public Task<ChapterList> Chapters(ChaptersFilter? filter = null) => Limit(md => md.Chapter.List(filter), $"Chapters List: {filter?.Offset}", CancellationToken.None);
 
-	public Task<ChapterList> Chapters(string id, MangaFeedFilter? filter = null) => Limit(md => md.Manga.Feed(id, filter), CancellationToken.None);
+	public Task<ChapterList> Chapters(string id, MangaFeedFilter? filter = null) => Limit(md => md.Manga.Feed(id, filter), $"Chapters Fetch: {id}", CancellationToken.None);
 
 	public Task<ChapterList> Chapters(string id, int limit = 500, int offset = 0)
 	{
@@ -146,14 +195,14 @@ internal class MangaDexService(
 
 	public Task<MangaDexRoot<Chapter>> Chapter(string id, string[]? includes = null)
 	{
-		return Limit(md => md.Chapter.Get(id, includes), CancellationToken.None);
+		return Limit(md => md.Chapter.Get(id, includes), $"Chapter Fetch: {id}", CancellationToken.None);
 	}
 
 	public async Task<Pages> Pages(string id)
 	{
 		try
 		{
-			return await Limit(md => md.Pages.Pages(id), CancellationToken.None);
+			return await Limit(md => md.Pages.Pages(id), $"Pages Fetch: {id}", CancellationToken.None, _page);
 		}
 		catch (Exception ex)
 		{

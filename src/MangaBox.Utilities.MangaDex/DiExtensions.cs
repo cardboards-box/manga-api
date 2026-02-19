@@ -1,5 +1,4 @@
 ﻿using MangaDexSharp;
-using System.Threading.RateLimiting;
 
 namespace MangaBox.Utilities.MangaDex;
 
@@ -18,15 +17,6 @@ public static class DiExtensions
 		return services
 			.AddMangaDex(c => c
 				.WithApiConfig(userAgent: "mb-api"))
-			.AddTransient<IMangaDexService, MangaDexService>()
-			.AddKeyedSingleton<RateLimiter>(MangaDexService.KEY, new TokenBucketRateLimiter(new()
-			{
-				TokenLimit = 5,
-				TokensPerPeriod = 5,
-				QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-				QueueLimit = int.MaxValue,
-				ReplenishmentPeriod = TimeSpan.FromSeconds(1),
-				AutoReplenishment = true
-			}));
+			.AddTransient<IMangaDexService, MangaDexService>();
 	}
 }
