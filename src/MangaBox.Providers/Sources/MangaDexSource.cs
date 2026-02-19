@@ -13,6 +13,7 @@ using MangaFeedFilter = MangaDexSharp.MangaFeedFilter;
 using MManga = MangaDexSharp.Manga;
 using Chapter = MangaDexSharp.Chapter;
 using RelatedDataRelationship = MangaDexSharp.RelatedDataRelationship;
+using MangaDexRoot = MangaDexSharp.MangaDexRoot;
 
 public interface IMangaDexSource : IIndexableMangaSource
 {
@@ -20,7 +21,8 @@ public interface IMangaDexSource : IIndexableMangaSource
 }
 
 public class MangaDexSource(
-	IMangaDexService _mangadex) : IMangaDexSource
+	IMangaDexService _mangadex,
+	ILogger<MangaDexSource> _logger) : IMangaDexSource
 {
 	private static RateLimiter? _limiter;
 
@@ -32,9 +34,18 @@ public class MangaDexSource(
 	public Dictionary<string, string>? Headers => null;
 	public string? UserAgent => "manga-box";
 
+	public void LogErrors(string context, MangaDexRoot root)
+	{
+		if (!MangaDexSharp.MangaDexRootExtensions.IsError(root, out var error))
+			return;
+
+		_logger.LogWarning("Manga Dex Error occurred: {Context} >> {Error}", context, error);
+	}
+
 	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var pages = await _mangadex.Pages(chapterId);
+		LogErrors($"Requestng Pages: M::{mangaId} >> C::{chapterId}", pages);
 		if (pages == null) return [];
 
 		return [..pages.Images.Select(t => new MangaChapterPage(t))];
@@ -100,6 +111,7 @@ public class MangaDexSource(
 	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
 		var manga = await _mangadex.Manga(id);
+		LogErrors($"Fetching manga: {id}", manga);
 		if (manga == null || manga.Data == null || manga.Data.Attributes is null) return null;
 
 		return await Convert(manga.Data, token);
@@ -149,6 +161,7 @@ public class MangaDexSource(
 		{
 			token.ThrowIfCancellationRequested();
 			var chapters = await _mangadex.Chapters(id, filter);
+			LogErrors($"Fetching Chapter Feed: C:{id} >> {filter.Offset}", chapters);
 			if (chapters == null || 
 				chapters.Data is null || 
 				chapters.Data.Count == 0) 
@@ -259,6 +272,7 @@ public class MangaDexSource(
 		}
 
 		var manga = await _mangadex.AllManga([..ids.Distinct()]);
+		LogErrors("Indexing chapters - Cover-art polyfill", manga);
 		if (manga == null || manga.Data.Count == 0)
 			return;
 
@@ -280,6 +294,7 @@ public class MangaDexSource(
 	public async IAsyncEnumerable<Manga> Index(LoaderSource source, [EnumeratorCancellation] CancellationToken token)
 	{
 		var latest = await _mangadex.ChaptersLatest();
+		LogErrors("Indexing chapters", latest);
 		if (latest is null || latest.Data.Count == 0)
 			yield break;
 

@@ -16,7 +16,8 @@ public static class DiExtensions
 	public static IServiceCollection AddMangaDex(this IServiceCollection services)
 	{
 		return services
-			.AddMangaDex(c => c.WithApiConfig(userAgent: "mb-api"))
+			.AddMangaDex(c => c
+				.WithApiConfig(userAgent: "mb-api"))
 			.AddTransient<IMangaDexService, MangaDexService>()
 			.AddKeyedSingleton<RateLimiter>(MangaDexService.KEY, new TokenBucketRateLimiter(new()
 			{
