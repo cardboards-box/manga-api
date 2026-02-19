@@ -12,7 +12,7 @@ public class ChapterIndexBackgroundService(
 	/// <summary>
 	/// The amount of time to delay between each indexing operation, in seconds
 	/// </summary>
-	public double DelaySec => double.TryParse(_config["ChapterReindexDelaySec"], out var sec) ? sec : 60;
+	public double DelaySec => double.TryParse(_config["ChapterReindexDelaySec"], out var sec) ? sec : 60 * 60 * 24;
 
 	/// <summary>
 	/// The amount of time to delay between each indexing operation
