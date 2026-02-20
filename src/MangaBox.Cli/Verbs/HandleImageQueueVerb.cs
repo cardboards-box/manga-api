@@ -3,7 +3,9 @@
 namespace MangaBox.Cli.Verbs;
 
 using Database;
+using Models;
 using Match;
+using Services;
 
 [Verb("handle-image-queue", HelpText = "Handle the image queue.")]
 internal class HandleImageQueueOptions
@@ -13,27 +15,47 @@ internal class HandleImageQueueOptions
 }
 
 internal class HandleImageQueueVerb(
-	IRedisService _redis,
 	IRISIndexService _index,
+	IMangaPublishService _publish,
+	IMangaLoaderService _loader,
 	ILogger<HandleImageQueueVerb> logger) : BooleanVerb<HandleImageQueueOptions>(logger)
 {
-	public IRedisList<QueueImage> ImageQueue => _redis.List<QueueImage>("image:new");
+	public IRedisList<QueueImage> ImageQueue => _publish.NewImages.Queue;
+	public IRedisList<MbChapter> ChapterQueue => _publish.NewChapters.Queue;
 
-	public async Task Process(CancellationToken token)
+	public async Task ProcessChapters(CancellationToken token)
 	{
-		try
+		while (true)
 		{
-			while(true)
-			{
-				var item = await ImageQueue.Pop();
-				if (item is null) return;
+			var chapter = await ChapterQueue.Pop();
+			if (chapter is null) return;
 
-				await _index.Index(item.Id, item.Force ?? false, token);
+			try
+			{
+				await _loader.Pages(chapter.Id, false, token);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "An error occurred while handling chapter {ChapterId}", chapter.Id);
 			}
 		}
-		catch (Exception ex)
+	}
+
+	public async Task ProcessImages(CancellationToken token)
+	{
+		while(true)
 		{
-			_logger.LogError(ex, "An error occurred while handling image queue");
+			var item = await ImageQueue.Pop();
+			if (item is null) return;
+
+			try
+			{
+				await _index.Index(item.Id, item.Force ?? false, token);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "An error occurred while processing image {ImageId}", item.Id);
+			}
 		}
 	}
 
@@ -48,7 +70,9 @@ internal class HandleImageQueueVerb(
 		_logger.LogInformation("Starting to process image queue with {ProcessorCount} processors", opts.MaxDegreeOfParallelism);
 		await Parallel.ForEachAsync(threads, opts, async (thread, ct) =>
 		{
-			await Process(ct);
+			await (thread % 2 == 0 
+				? ProcessImages(ct) 
+				: ProcessChapters(ct));
 		});
 		_logger.LogInformation("Finished processing image queue");
 		return true;
