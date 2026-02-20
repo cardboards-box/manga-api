@@ -20,4 +20,5 @@ return await services
 		.Add<ClearImageQueueVerb>()
 		.Add<HandleImageQueueVerb>()
 		.Add<InitVerb>()
+		.Add<ClearChapterQueueVerb>()
 		.AddDatabaseGeneration());

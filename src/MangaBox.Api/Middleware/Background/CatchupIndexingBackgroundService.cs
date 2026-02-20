@@ -13,7 +13,7 @@ public class CatchupIndexingBackgroundService(
 	/// <summary>
 	/// The amount of time to delay between each indexing operation, in seconds
 	/// </summary>
-	public double DelaySec => double.TryParse(_config["ImageReindexDelaySec"], out var sec) ? sec : 60 * 20;
+	public double DelaySec => double.TryParse(_config["ImageReindexDelaySec"], out var sec) ? sec : 60;
 
 	/// <summary>
 	/// The amount of time to delay between each indexing operation
@@ -29,8 +29,14 @@ public class CatchupIndexingBackgroundService(
 			try
 			{
 				var images = await _db.Image.NotIndexed();
+				var queued = (await _publish.NewImages.Queue.All())
+					.Select(x => x.Id)
+					.Distinct()
+					.ToHashSet();
+
 				foreach (var image in images)
-					await _publish.NewImages.Publish(new(image.Id, DateTime.UtcNow, false));
+					if (!queued.Contains(image.Id))
+						await _publish.NewImages.Publish(new(image.Id, DateTime.UtcNow, false));
 
 				await Task.Delay(Delay, stoppingToken);
 			}

@@ -28,8 +28,13 @@ public class ChapterIndexBackgroundService(
 			try
 			{
 				var chapters = await _db.Chapter.GetZeroPageChapters();
+				var queued = (await _publish.NewChapters.Queue.All())
+					.Select(x => x.Id)
+					.Distinct()
+					.ToHashSet();
 				foreach (var chapter in chapters)
-					await _publish.NewChapters.Publish(chapter);
+					if (!queued.Contains(chapter.Id))
+						await _publish.NewChapters.Publish(chapter);
 
 				await Task.Delay(Delay, stoppingToken);
 			}
