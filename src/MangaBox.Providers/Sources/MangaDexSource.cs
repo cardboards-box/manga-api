@@ -20,8 +20,7 @@ public interface IMangaDexSource : IIndexableMangaSource
 }
 
 public class MangaDexSource(
-	IMangaDexService _mangadex,
-	ILogger<MangaDexSource> _logger) : IMangaDexSource
+	IMangaDexService _mangadex) : IMangaDexSource
 {
 	private static RateLimiter? _limiter;
 
