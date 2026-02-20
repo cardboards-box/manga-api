@@ -76,10 +76,16 @@ public interface IMbChapterDbService
     /// </summary>
     /// <returns>The chapters with 0 pages</returns>
     Task<MbChapter[]> GetZeroPageChapters();
+
+    /// <summary>
+    /// Delete all of the chapters where the pages have a 404 error on MD
+    /// </summary>
+    Task Delete404Chapters();
 }
 
 internal class MbChapterDbService(
-    IOrmService orm) : Orm<MbChapter>(orm), IMbChapterDbService
+    IOrmService orm,
+    IQueryCacheService _cache) : Orm<MbChapter>(orm), IMbChapterDbService
 {
     private string? _byManga;
 
@@ -161,5 +167,11 @@ WHERE
     i.id IS NULL AND
     c.deleted_at IS NULL;";
         return Get(QUERY);
+	}
+
+	public async Task Delete404Chapters()
+	{
+        var query = await _cache.Required("delete_chapters_with_404s");
+        await Execute(query);
 	}
 }

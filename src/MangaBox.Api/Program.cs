@@ -9,7 +9,6 @@ builder.Configuration.AddJsonFile(appFile, false, true);
 
 builder.Configuration.AddUserSecrets<Program>();
 
-
 builder.Services.AddControllers()
 	.AddJsonOptions(opts =>
 	{
@@ -25,23 +24,21 @@ builder.Services
 	.AddAuthMiddleware()
 	.AddTelemetry();
 
+builder.Services.AddScheduledTasks();
+
 await builder.Services.AddMangaBox(builder.Configuration);
 
-builder.Services.AddHostedService<StatsBackgroundService>();
 builder.Services.AddHostedService<LogLoaderBackgroundService>();
 
 #if !DEBUG
 builder.Services.AddHostedService<RISBackgroundService>();
-builder.Services.AddHostedService<IndexBackgroundService>();
-builder.Services.AddHostedService<RefreshBackgroundService>();
 builder.Services.AddHostedService<NewChapterBackgroundService>();
-builder.Services.AddHostedService<CatchupIndexingBackgroundService>();
-builder.Services.AddHostedService<ChapterIndexBackgroundService>();
 #endif
 
 var app = builder.Build();
 
 app.RegisterBoxing();
+app.AddScheduledTasks();
 
 if (app.Environment.IsDevelopment() ||
 	builder.Configuration[Constants.APPLICATION_NAME + ":EnableSwagger"]?.ToLower() == "true")

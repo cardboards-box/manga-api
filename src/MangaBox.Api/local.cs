@@ -1,7 +1,11 @@
 ﻿global using CardboardBox.Extensions.AspNetCore;
 
+global using Coravel;
+global using Coravel.Invocable;
+
 global using MangaBox.Api.Middleware;
 global using MangaBox.Api.Middleware.Background;
+global using MangaBox.Api.Middleware.ScheduledTasks;
 global using MangaBox.Core;
 global using MangaBox.Database;
 global using MangaBox.Models;
