@@ -164,13 +164,17 @@ WHERE
 
 	public Task<MbImage[]> NotIndexed(DateTime failedBuffer)
 	{
-        const string QUERY = @"SELECT *
-FROM mb_images
+        const string QUERY = @"SELECT DISTINCT i.*
+FROM mb_images i
+JOIN mb_manga m ON i.manga_id = m.id
+LEFT JOIN mb_chapters c ON i.chapter_id = c.id
 WHERE
-    indexed = FALSE AND
-    deleted_at IS NULL AND (
-        last_failed_at IS NULL OR
-        last_failed_at < :failedBuffer
+    i.indexed = FALSE AND
+    i.deleted_at IS NULL AND
+    m.deleted_at IS NULL AND
+    c.deleted_at IS NULL AND (
+        i.last_failed_at IS NULL OR
+        i.last_failed_at < :failedBuffer
     )";
         return Get(QUERY, new { failedBuffer });
 	}
