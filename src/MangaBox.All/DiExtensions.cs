@@ -1,6 +1,7 @@
 ﻿using CardboardBox.Database.Postgres.Standard;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net;
 
 namespace MangaBox.All;
 
@@ -34,7 +35,14 @@ public static class DiExtensions
 			.AddFlareSolver()
 			.AddOAuthServices(config)
 			.AddMatch()
-			.AddMangaDex();
+			.AddMangaDex()
+			.ConfigureHttpClientDefaults(c =>
+			{
+				c.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+				{
+					AutomaticDecompression = DecompressionMethods.All
+				});
+			});
 
 		await services.AddServices(config, c => c.AddDatabase());
 	}

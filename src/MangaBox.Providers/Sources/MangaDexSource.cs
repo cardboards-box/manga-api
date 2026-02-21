@@ -237,7 +237,15 @@ public class MangaDexSource(
 		return (true, parts.First());
 	}
 
-	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter() => _limiter ??= new TokenBucketRateLimiter(new()
+	{
+		TokenLimit = 30,
+		TokensPerPeriod = 30,
+		QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+		QueueLimit = int.MaxValue,
+		ReplenishmentPeriod = TimeSpan.FromSeconds(5),
+		AutoReplenishment = true
+	});
 
 	public static MManga? GetMangaRel(Chapter chapter)
 	{
