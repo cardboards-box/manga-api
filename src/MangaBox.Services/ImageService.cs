@@ -222,7 +222,8 @@ internal class ImageService(
 			if (loader is null)
 				return await HandleError("Could not find source provider for image");
 
-			using var lease = await loader.RateLimits.AcquireAsync(1, token);
+			var limiter = loader.Service.GetRateLimiter(image.Url);
+			using var lease = await limiter.AcquireAsync(1, token);
 			if (!lease.IsAcquired)
 			{
 				var after = lease.TryGetMetadata(MetadataName.RetryAfter, out var val) ? val : TimeSpan.FromSeconds(5);

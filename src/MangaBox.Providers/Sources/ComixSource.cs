@@ -99,7 +99,7 @@ internal class ComixSource(
 		return (true, parts.First());
 	}
 
-	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }
 
 internal class ComixApiService(IApiService _api)

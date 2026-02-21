@@ -1,6 +1,4 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Services;
+﻿namespace MangaBox.Services;
 
 /// <summary>
 /// A service for interacting with sources
@@ -44,8 +42,7 @@ internal class SourceService(
 	IDbService _db,
 	IEnumerable<IMangaSource> _sources) : ISourceService
 {
-	private static SemaphoreSlim _semaphore = new(1, 1);
-	private readonly ConcurrentDictionary<string, RateLimiter> _limiter = [];
+	private static readonly SemaphoreSlim _semaphore = new(1, 1);
 
 	/// <inheritdoc />
 	public async Task<LoaderSource?> FindById(Guid id, CancellationToken token)
@@ -119,8 +116,7 @@ internal class SourceService(
 				}
 			}
 
-			var limiter = _limiter.GetOrAdd(match.Slug, _ => source.GetRateLimiter());
-			yield return new(match, source, limiter);
+			yield return new(match, source);
 		}
 	}
 }
@@ -130,8 +126,7 @@ internal class SourceService(
 /// </summary>
 /// <param name="Info">The source information</param>
 /// <param name="Service">The manga service</param>
-/// <param name="RateLimits">The rate limits for image fetching</param>
-public record class LoaderSource(MbSource Info, IMangaSource Service, RateLimiter RateLimits);
+public record class LoaderSource(MbSource Info, IMangaSource Service);
 
 /// <summary>
 /// A source with a specific manga's ID
@@ -149,9 +144,4 @@ public record class IdedSource(string Id, LoaderSource Source)
 	/// The manga service
 	/// </summary>
 	public IMangaSource Service => Source.Service;
-
-	/// <summary>
-	/// The rate limits for image fetching
-	/// </summary>
-	public RateLimiter RateLimits => Source.RateLimits;
 }

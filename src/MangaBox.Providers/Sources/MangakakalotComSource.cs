@@ -122,7 +122,7 @@ public abstract class MangakakalotComBase(
 		return (true, domain);
 	}
 
-	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }
 
 public interface IMangakakalotComSource : IMangaUrlSource { }

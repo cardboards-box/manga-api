@@ -22,7 +22,7 @@ public interface IMangaDexSource : IIndexableMangaSource
 public class MangaDexSource(
 	IMangaDexService _mangadex) : IMangaDexSource
 {
-	private static RateLimiter? _limiter;
+	private static readonly ConcurrentDictionary<string, RateLimiter> _limiters = new(StringComparer.InvariantCultureIgnoreCase);
 
 	private const string DEFAULT_LANG = "en";
 	public string HomeUrl => "https://mangadex.org";
@@ -237,15 +237,23 @@ public class MangaDexSource(
 		return (true, parts.First());
 	}
 
-	public RateLimiter GetRateLimiter() => _limiter ??= new TokenBucketRateLimiter(new()
+	public RateLimiter GetRateLimiter(string url)
 	{
-		TokenLimit = 30,
-		TokensPerPeriod = 30,
-		QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-		QueueLimit = int.MaxValue,
-		ReplenishmentPeriod = TimeSpan.FromSeconds(5),
-		AutoReplenishment = true
-	});
+		var uri = new Uri(url).Host;
+		if (_limiters.TryGetValue(uri, out var limiter))
+			return limiter;
+
+		limiter = new TokenBucketRateLimiter(new()
+		{
+			TokenLimit = 30,
+			TokensPerPeriod = 30,
+			QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+			QueueLimit = int.MaxValue,
+			ReplenishmentPeriod = TimeSpan.FromSeconds(5),
+			AutoReplenishment = true
+		});
+		return _limiters[uri] = limiter;
+	}
 
 	public static MManga? GetMangaRel(Chapter chapter)
 	{

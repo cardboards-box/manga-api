@@ -67,8 +67,9 @@ public interface IMangaSource
 	/// <summary>
 	/// Gets a rate limiter for fetching images from the source
 	/// </summary>
+	/// <param name="url">The URL of the image being fetched</param>
 	/// <returns>The rate limiter to use for fetching images</returns>
-	RateLimiter GetRateLimiter();
+	RateLimiter GetRateLimiter(string url);
 }
 
 /// <summary>

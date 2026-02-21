@@ -110,5 +110,5 @@ public class NhentaiSource : INhentaiSource, IRatedSource
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

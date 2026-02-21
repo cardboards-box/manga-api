@@ -128,5 +128,5 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter() => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
+	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }
