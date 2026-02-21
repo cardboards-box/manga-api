@@ -5,6 +5,7 @@
 /// </summary>
 public class IndexMissingImages(
 	IDbService _db,
+	IImageService _image,
 	IMangaPublishService _publish,
 	ILogger<IndexMissingImages> _logger) : IInvocable
 {
@@ -13,7 +14,8 @@ public class IndexMissingImages(
 	{
 		try
 		{
-			var images = await _db.Image.NotIndexed();
+			var failedBuffer = DateTime.UtcNow.Subtract(_image.ErrorWaitPeriod);
+			var images = await _db.Image.NotIndexed(failedBuffer);
 			var queued = (await _publish.NewImages.Queue.All())
 				.Select(x => x.Id)
 				.Distinct()

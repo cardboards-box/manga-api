@@ -17,6 +17,11 @@ using CBZModels;
 public interface IImageService
 {
 	/// <summary>
+	/// How long to wait between requesting failed images
+	/// </summary>
+	TimeSpan ErrorWaitPeriod { get; }
+
+	/// <summary>
 	/// Get the image by it's ID
 	/// </summary>
 	/// <param name="id">The ID of the image</param>

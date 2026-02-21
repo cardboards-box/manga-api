@@ -68,11 +68,12 @@ public interface IMbImageDbService
     /// <param name="id">The ID of the image</param>
     Task Indexed(Guid id);
 
-    /// <summary>
-    /// Fetches all of the non-indexed images
-    /// </summary>
-    /// <returns>The non-indexed images</returns>
-    Task<MbImage[]> NotIndexed();
+	/// <summary>
+	/// Fetches all of the non-indexed images
+	/// </summary>
+    /// <param name="failedBuffer">The buffer for failed images</param>
+	/// <returns>The non-indexed images</returns>
+	Task<MbImage[]> NotIndexed(DateTime failedBuffer);
 }
 
 internal class MbImageDbService(
@@ -161,10 +162,17 @@ WHERE
         return _sql.Execute("UPDATE mb_images SET indexed = TRUE WHERE id = :id", new { id });
     }
 
-	public Task<MbImage[]> NotIndexed()
+	public Task<MbImage[]> NotIndexed(DateTime failedBuffer)
 	{
-        const string QUERY = @"SELECT * FROM mb_images WHERE indexed = FALSE AND deleted_at IS NULL;";
-        return Get(QUERY);
+        const string QUERY = @"SELECT *
+FROM mb_images
+WHERE
+    indexed = FALSE AND
+    deleted_at IS NULL AND (
+        last_failed_at IS NULL OR
+        last_failed_at < :failedBuffer
+    )";
+        return Get(QUERY, new { failedBuffer });
 	}
 
 	public override Task<int> Delete(Guid id)

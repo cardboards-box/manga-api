@@ -18,7 +18,7 @@ public class FlareSolverInstance(
 	private SolverCookie[]? _cookies = null;
 	private RateLimiterBase? _rateLimiter = null;
 	private (int limit, int timeout)? _limiter = null;
-	private readonly Dictionary<string, HtmlDocument> _pageCache = new(StringComparer.InvariantCultureIgnoreCase);
+	private readonly Dictionary<string, FlareHtmlDocument> _pageCache = new(StringComparer.InvariantCultureIgnoreCase);
 
 	/// <summary>
 	/// The minimum number of requests to make before pausing
@@ -139,7 +139,7 @@ public class FlareSolverInstance(
 		_logger.LogInformation("Resuming after pause. New Limits {limit} - {timeout}ms", limit, timeout);
 	}
 
-	private async Task<HtmlDocument> DoRequest(string url, bool get, NameValueCollection? body, CancellationToken token, int count = 0)
+	private async Task<FlareHtmlDocument> DoRequest(string url, bool get, NameValueCollection? body, CancellationToken token, int count = 0)
 	{
 		try
 		{
@@ -154,7 +154,10 @@ public class FlareSolverInstance(
 
 			_cookies = data.Solution.Cookies;
 
-			var doc = new HtmlDocument();
+			var doc = new FlareHtmlDocument
+			{
+				FlareSolution = data.Solution
+			};
 			doc.LoadHtml(data.Solution.Response);
 			_logger.LogInformation("Got data from {url}", url);
 			return doc;
@@ -181,7 +184,7 @@ public class FlareSolverInstance(
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The HTML document retrieved from the URL</returns>
 	/// <remarks>This does not use <see cref="LimitCheck(CancellationToken)"/></remarks>
-	public virtual async Task<HtmlDocument> GetHtml(string url, CancellationToken token, bool cache = false)
+	public virtual async Task<FlareHtmlDocument> GetHtml(string url, CancellationToken token, bool cache = false)
 	{
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;
@@ -200,7 +203,7 @@ public class FlareSolverInstance(
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The HTML document retrieved from the URL</returns>
 	/// <remarks>This does not use <see cref="LimitCheck(CancellationToken)"/></remarks>
-	public virtual async Task<HtmlDocument> PostHtml(string url, CancellationToken token, NameValueCollection? body = null, bool cache = false)
+	public virtual async Task<FlareHtmlDocument> PostHtml(string url, CancellationToken token, NameValueCollection? body = null, bool cache = false)
 	{
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;
