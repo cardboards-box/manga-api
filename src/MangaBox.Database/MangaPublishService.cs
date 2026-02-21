@@ -34,11 +34,11 @@ internal class MangaPublishService(
 	private const string CHANNEL_IMAGE_NEW = "image:new";
 	private const string CHANNEL_MANGA_NEW = "manga:new";
 
-	public RedisQueue<MbChapter> NewChapters => field ??= new(CHANNEL_CHAPTER_NEW, _redis, _logger);
+	public RedisQueue<MbChapter> NewChapters => field ??= new(CHANNEL_CHAPTER_NEW, _redis, _logger, false);
 
-	public RedisQueue<QueueImage> NewImages => field ??= new(CHANNEL_IMAGE_NEW, _redis, _logger);
+	public RedisQueue<QueueImage> NewImages => field ??= new(CHANNEL_IMAGE_NEW, _redis, _logger, true);
 
-	public RedisQueue<MangaBoxType<MbManga>> NewManga => field ??= new(CHANNEL_MANGA_NEW, _redis, _logger);
+	public RedisQueue<MangaBoxType<MbManga>> NewManga => field ??= new(CHANNEL_MANGA_NEW, _redis, _logger, false);
 }
 
 /// <summary>
@@ -48,10 +48,12 @@ internal class MangaPublishService(
 /// <param name="Channel">The redis channel name</param>
 /// <param name="Redis">The redis service</param>
 /// <param name="Logger">The logger</param>
+/// <param name="Background">Whether or not to background the task</param>
 public record class RedisQueue<T>(
 	string Channel,
 	IRedisService Redis,
-	ILogger Logger)
+	ILogger Logger,
+	bool Background)
 {
 	private bool _running = false;
 
@@ -96,7 +98,24 @@ public record class RedisQueue<T>(
 					break;
 
 				any = true;
-				await action(item);
+
+				if (!Background)
+				{
+					await action(item);
+					continue;
+				}
+
+				_ = Task.Run(async () =>
+				{
+					try
+					{
+						await action(item);
+					}
+					catch (Exception ex)
+					{
+						Logger.LogError(ex, "Error occurred while processing {Item} in {Channel}", item, Channel);
+					}
+				}, token);
 			}
 
 			if (!any) return;
