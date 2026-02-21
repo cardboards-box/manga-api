@@ -270,6 +270,9 @@ public class MangaSource
 		[JsonPropertyName("height")]
 		public int? Height { get; set; }
 
+		[JsonPropertyName("headers")]
+		public List<MangaAttribute> Headers { get; set; } = [];
+
 		public MangaChapterPage() { }
 
 		public MangaChapterPage(string page, int? width = null, int? height = null)

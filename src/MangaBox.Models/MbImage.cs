@@ -1,5 +1,7 @@
 ﻿namespace MangaBox.Models;
 
+using Types;
+
 /// <summary>
 /// An image for either a chapter or a manga cover
 /// </summary>
@@ -83,27 +85,34 @@ public class MbImage : MbDbObject
 	/// Whether or not the image has been indexed
 	/// </summary>
 	[Column("indexed", ExcludeUpdates = true)]
-	[JsonPropertyName("indexed")]
+	[JsonIgnore]
 	public bool Indexed { get; set; } = false;
 
 	/// <summary>
 	/// The last time the image failed to be fetched
 	/// </summary>
 	[Column("last_failed_at")]
-	[JsonPropertyName("lastFailedAt")]
+	[JsonIgnore]
 	public DateTime? LastFailedAt { get; set; }
 
 	/// <summary>
 	/// The reason the image failed to be fetched
 	/// </summary>
 	[Column("failed_reason")]
-	[JsonPropertyName("failedReason")]
+	[JsonIgnore]
 	public string? FailedReason { get; set; }
 
 	/// <summary>
 	/// The number of times the image has failed to be fetched
 	/// </summary>
 	[Column("failed_count")]
-	[JsonPropertyName("failedCount")]
+	[JsonIgnore]
 	public int FailedCount { get; set; } = 0;
+
+	/// <summary>
+	/// The headers to include in the image request
+	/// </summary>
+	[Column("headers")]
+	[JsonIgnore]
+	public MbHeader[] Headers { get; set; } = [];
 }

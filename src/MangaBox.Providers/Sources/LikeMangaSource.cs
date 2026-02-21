@@ -222,13 +222,36 @@ internal class LikeMangaSource(
 	private const string Scripts = "//script";
 
 	// Entry point
-	public static MangaChapterPage[] Parse(HtmlDocument doc, string url)
+	public static MangaChapterPage[] Parse(FlareHtmlDocument doc, string url)
 	{
+		var uri = new Uri(doc.FlareSolution.Url);
+		var cookie = CookieHeaderBuilder.BuildCookieHeader(doc.FlareSolution.Cookies, uri);
+		var headers = new Dictionary<string, string>()
+		{
+			["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+			["Accept-Encoding"] = "gzip, deflate, br, zstd",
+			["Accept-Language"] = "en-US,en;q=0.9",
+			["Cache-Control"] = "no-cache",
+			["Cookie"] = cookie,
+			["Pragma"] = "no-cache",
+			["Referer"] = uri.Host,
+			["Priority"] = "i",
+			["Sec-Ch-Ua"] = "\"Not:A-Brand\";v=\"99\", \"Google Chrome\";v=\"145\", \"Chromium\";v=\"145\"",
+			["Sec-Ch-Ua-Mobile"] = "?0",
+			["Sec-Ch-Platform"] = "\"Windows\"",
+			["Sec-Fetch-Dest"] = "image",
+			["Sec-Fetch-Mode"] = "no-cors",
+			["Sec-Fetch-Site"] = "same-site",
+			["User-Agent"] = doc.FlareSolution.UserAgent
+		}.Select(t => new MangaAttribute(t.Key, t.Value)).ToList();
 		return doc.DocumentNode
 			.SelectNodes(PageImgs)?
 			.Select(n => CleanUrl(n.GetAttributeValue("src", "")))
 			.Where(s => !string.IsNullOrWhiteSpace(s))
-			.Select(t => new MangaChapterPage(t))
+			.Select(t => new MangaChapterPage(t)
+			{
+				Headers = headers
+			})
 			.ToArray()
 			?? [];
 	}

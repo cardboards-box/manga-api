@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS mb_images (
 	last_failed_at TIMESTAMP NULL,
 	failed_count INTEGER NOT NULL DEFAULT 0,
 	failed_reason TEXT NULL,
+	headers mb_headers[] DEFAULT '{}',
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	deleted_at TIMESTAMP NULL,

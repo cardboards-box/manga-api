@@ -134,6 +134,7 @@ internal class MangaLoaderService(
 				Ordinal = i + 1,
 				ImageWidth = page.Width,
 				ImageHeight = page.Height,
+				Headers = [..page.Headers.Select(t => new MbHeader { Key = t.Name, Value = t.Value })]
 			});
 			await _publish.NewImages.Publish(new(id, DateTime.UtcNow, false));
 		}

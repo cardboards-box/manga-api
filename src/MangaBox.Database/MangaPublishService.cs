@@ -96,7 +96,17 @@ public record class RedisQueue<T>(
 					break;
 
 				any = true;
-				await action(item);
+				_ = Task.Run(async () =>
+				{
+					try
+					{
+						await action(item);
+					}
+					catch (Exception ex)
+					{
+						Logger.LogError(ex, "Error processing queue {Channel} for {Item}", Channel, item);
+					}
+				}, token);
 			}
 
 			if (!any) return;

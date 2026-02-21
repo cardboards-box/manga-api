@@ -122,16 +122,20 @@ internal class ImageService(
 	{
 		var ua = manga.UserAgent ?? source.UserAgent;
 		var referer = manga.Referer ?? source.Referer;
-		var headers = source.Headers ?? [];
+
+		var headers = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
+		if (!string.IsNullOrEmpty(ua))
+			headers["User-Agent"] = ua;
+		if (!string.IsNullOrEmpty(referer))
+			headers["Referer"] = referer;
+		foreach(var header in source.Headers ?? [])
+			headers[header.Key] = header.Value;
+		foreach(var header in image.Headers)
+			headers[header.Key] = header.Value;
 
 		var request = _api.Create(image.Url, _json, "GET");
 		request.Message(c =>
 		{
-			if (!string.IsNullOrEmpty(ua))
-				c.Headers.UserAgent.ParseAdd(ua);
-			if (!string.IsNullOrEmpty(referer))
-				c.Headers.Referrer = new Uri(referer);
-
 			foreach (var header in headers)
 				c.Headers.TryAddWithoutValidation(header.Key, header.Value);
 		}).CancelWith(token);
