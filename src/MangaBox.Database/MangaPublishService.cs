@@ -1,4 +1,5 @@
 ﻿using CardboardBox.Redis;
+using System.Threading.RateLimiting;
 
 namespace MangaBox.Database;
 
@@ -49,13 +50,16 @@ internal class MangaPublishService(
 /// <param name="Redis">The redis service</param>
 /// <param name="Logger">The logger</param>
 /// <param name="Background">Whether or not to background the task</param>
+/// <param name="Leases">The number of leases on the queue</param>
 public record class RedisQueue<T>(
 	string Channel,
 	IRedisService Redis,
 	ILogger Logger,
-	bool Background)
+	bool Background,
+	int Leases = 10)
 {
 	private bool _running = false;
+	private readonly SemaphoreSlim _semaphore = new(Leases, Leases);
 
 	/// <summary>
 	/// The queue of items
@@ -105,6 +109,7 @@ public record class RedisQueue<T>(
 					continue;
 				}
 
+				await _semaphore.WaitAsync(token);
 				_ = Task.Run(async () =>
 				{
 					try
@@ -114,6 +119,10 @@ public record class RedisQueue<T>(
 					catch (Exception ex)
 					{
 						Logger.LogError(ex, "Error occurred while processing {Item} in {Channel}", item, Channel);
+					}
+					finally
+					{
+						_semaphore.Release();
 					}
 				}, token);
 			}
