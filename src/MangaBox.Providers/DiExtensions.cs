@@ -39,6 +39,7 @@ public static class DiExtensions
 			.AddSource<IMangaKatanaSource, MangaKatanaSource>()
 			.AddSource<IDarkScansSource, DarkScansSource>()
 			.AddSource<IChapmanganatoSource, ChapmanganatoSource>()
-			.AddSource<ILikeMangaSource, LikeMangaSource>();
+			.AddSource<ILikeMangaSource, LikeMangaSource>()
+			.AddSource<IHyakuroSource, HyakuroSource>();
 	}
 }

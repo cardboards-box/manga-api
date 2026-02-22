@@ -1,9 +1,7 @@
-﻿using CardboardBox.Json;
-using SixLabors.ImageSharp;
+﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using System.IO.Compression;
-using System.Net.Http.Headers;
 using System.Threading.RateLimiting;
 using Image = SixLabors.ImageSharp.Image;
 
@@ -75,25 +73,16 @@ public interface IImageService
 /// <inheritdoc cref="IImageService" />
 internal class ImageService(
 	IDbService _db,
-	IApiService _api,
-	IJsonService _json,
+	IZipService _zip,
+	IHttpService _http,
+	ICacheService _cache,
 	IConfiguration _config,
 	ISourceService _sources,
 	IMangaLoaderService _loader,
 	ILogger<ImageService> _logger) : IImageService
 {
-	public const string DIR_COVERS = "covers";
-	public const string DIR_PAGES = "pages";
-	public const string DIR_EXTERNAL = "external";
-	public const string EXT_DAT = "dat";
-
 	private int? _failures;
 	private TimeSpan? _waitPeriod;
-
-	/// <summary>
-	/// The place where the image cache is stored
-	/// </summary>
-	public string StoragePath => field ??= _config["Imaging:CacheDir"]?.ForceNull() ?? "file-cache";
 
 	/// <summary>
 	/// The number of times to wait before the image gets deleted
@@ -109,71 +98,6 @@ internal class ImageService(
 	/// How long to wait between requesting failed images
 	/// </summary>
 	public TimeSpan ErrorWaitPeriod => _waitPeriod ??= TimeSpan.FromSeconds(ErrorWaitPeriodSeconds);
-
-	/// <summary>
-	/// Gets the response of the image download request
-	/// </summary>
-	/// <param name="image">The image to download</param>
-	/// <param name="manga">The manga the image is attached to</param>
-	/// <param name="source">The source of the manga</param>
-	/// <param name="token">The cancellation token for the reqest</param>
-	/// <returns>The response of the image download request</returns>
-	public Task<HttpResponseMessage?> GetResponse(MbImage image, MbManga manga, MbSource source, CancellationToken token)
-	{
-		var ua = manga.UserAgent ?? source.UserAgent;
-		var referer = manga.Referer ?? source.Referer;
-
-		var headers = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
-		if (!string.IsNullOrEmpty(ua))
-			headers["User-Agent"] = ua;
-		if (!string.IsNullOrEmpty(referer))
-			headers["Referer"] = referer;
-		foreach(var header in source.Headers ?? [])
-			headers[header.Key] = header.Value;
-		foreach(var header in image.Headers)
-			headers[header.Key] = header.Value;
-
-		var request = _api.Create(image.Url, _json, "GET");
-		request.Message(c =>
-		{
-			foreach (var header in headers)
-				c.Headers.TryAddWithoutValidation(header.Key, header.Value);
-		}).CancelWith(token);
-
-		return request.Result();
-	}
-
-	/// <summary>
-	/// Gets the file name from the content disposition
-	/// </summary>
-	/// <param name="headers">The headers of the response</param>
-	/// <param name="url">The URL of the image</param>
-	/// <param name="mimeType">The MIME type of the image</param>
-	/// <returns>The file name of the image</returns>
-	public static string? FileName(HttpContentHeaders? headers, string url, string? mimeType)
-	{
-		var path = headers?.ContentDisposition?.FileName
-			?? headers?.ContentDisposition?.Parameters?.FirstOrDefault()?.Value;
-		if (!string.IsNullOrEmpty(path)) return path;
-
-		path = url.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.Split('?').FirstOrDefault();
-		if (!string.IsNullOrEmpty(path)) return path;
-
-		var ext = DetermineExtension(mimeType);
-		return $"image.{ext}";
-	}
-
-	/// <summary>
-	/// Gets the mime-type from the content type
-	/// </summary>
-	/// <param name="headers">The content headers</param>
-	/// <returns>The mime-type</returns>
-	public static string MimeType(HttpContentHeaders? headers)
-	{
-		return headers?.ContentType?.MediaType
-			?? headers?.ContentType?.ToString().Split(';').First()
-			?? "application/octet-stream";
-	}
 
 	/// <summary>
 	/// Fetches the image result
@@ -206,7 +130,7 @@ internal class ImageService(
 
 		try
 		{
-			var path = GetCachePath(image, out var hash);
+			var path = _cache.GetCachePath(image, out var hash);
 			if (File.Exists(path) &&
 				!string.IsNullOrEmpty(image.FileName) &&
 				!string.IsNullOrEmpty(image.MimeType))
@@ -230,29 +154,31 @@ internal class ImageService(
 				return await HandleError("Rate Limits Reached - Retry after " + after);
 			}
 
-			using var response = await GetResponse(image, manga, source, token);
-			if (response is null) 
-				return await HandleError("Image not found (2) - Response was null");
-
-			if (!response.IsSuccessStatusCode)
+			var zipResult = await _zip.Get(source, manga, image, path, hash, overrideOrdinal, token);
+			if (zipResult is not null)
 			{
-				var content = await response.Content.ReadAsStringAsync(token);
-				return await HandleError($"Failed to fetch image >> {response.StatusCode}: {content}");
+				await _db.Image.Update(image);
+				return zipResult;
 			}
 
-			image.MimeType ??= MimeType(response.Content.Headers);
-			image.ImageSize ??= response.Content.Headers.ContentLength;
-			image.FileName ??= FileName(response.Content.Headers, image.Url, image.MimeType);
+			var headers = _http.HeadersFrom(image.Url, source, manga, image);
+			using var download = await _http.Download(image.Url, headers, token);
+			if (!string.IsNullOrEmpty(download.Error) || download.Stream is null)
+				return await HandleError(download.Error ?? "Stream came back empty!");
+
+			image.MimeType ??= download.MimeType;
+			image.ImageSize ??= download.Length ?? download.Stream.Length;
+			image.FileName ??= download.FileName;
 			image.UrlHash = hash;
 
 			using var io = File.Create(path);
-			await response.Content.CopyToAsync(io, token);
+			await download.Stream.CopyToAsync(io, token);
 			await io.FlushAsync(token);
 			await io.DisposeAsync();
 
 			if (image.ImageWidth is null || image.ImageHeight is null)
 			{
-				var (width, height) = await DetermineImageSize(path);
+				var (width, height) = await _http.DetermineImageSize(path);
 				image.ImageWidth = width ?? image.ImageWidth;
 				image.ImageHeight = height ?? image.ImageHeight;
 			}
@@ -266,81 +192,6 @@ internal class ImageService(
 			_logger.LogError(ex, "Failed to fetch image >> {URL}", image.Url);
 			return await HandleError("Image not found (4) - " + ex.Message);
 		}
-	}
-
-	/// <summary>
-	/// Gets the path to the cache for the given image
-	/// </summary>
-	/// <param name="image">The image to get the cache path for</param>
-	/// <param name="hash">The hash of the image URL</param>
-	/// <returns>The path to the cache file</returns>
-	public string GetCachePath(MbImage image, out string hash)
-	{
-		var path = Path.Combine([..
-			StoragePath.Split(['\\', '/']),
-			image.MangaId.ToString(),
-			image.ChapterId.HasValue ? DIR_PAGES : DIR_COVERS]);
-		if (!Directory.Exists(path))
-		{
-			Directory.CreateDirectory(path);
-			_logger.LogInformation("Created image cache directory >> {Path}", path);
-		}
-
-		hash = image.Url.MD5Hash();
-		return Path.Combine(path, $"{hash}.{EXT_DAT}");
-	}
-
-	/// <summary>
-	/// Gets the path to the cache for an external image
-	/// </summary>
-	/// <param name="url">The image URL</param>
-	/// <param name="hash">The hash of the image URL</param>
-	/// <returns>The path to the cache file</returns>
-	public string GetCachePath(string url, out string hash)
-	{
-		var path = Path.Combine([..
-			StoragePath.Split(['\\', '/']),
-			DIR_EXTERNAL]);
-		if (!Directory.Exists(path))
-		{
-			Directory.CreateDirectory(path);
-			_logger.LogInformation("Created image cache directory >> {Path}", path);
-		}
-
-		hash = url.MD5Hash();
-		return Path.Combine(path, $"{hash}.{EXT_DAT}");
-	}
-
-	/// <summary>
-	/// Determine the size of the images in pixels
-	/// </summary>
-	/// <param name="path">The path to the image file</param>
-	/// <returns>A tuple containing the width and height of the image, or null if it cannot be determined</returns>
-	public async Task<(int? width, int? height)> DetermineImageSize(string path)
-	{
-		try
-		{
-			using var image = await Image.LoadAsync(path);
-			return (image.Width, image.Height);
-		}
-		catch (Exception ex)
-		{
-			_logger.LogError(ex, "Failed to determine image size for >> {Path}", path);
-			return (null, null);
-		}
-	}
-	
-	/// <summary>
-	/// Determines the file extension for the given MIME type
-	/// </summary>
-	/// <param name="mimeType">The MIME type to determine the extension for</param>
-	/// <returns>The file extension associated with the MIME type, or a default if unknown</returns>
-	public static string DetermineExtension(string? mimeType)
-	{
-		if (string.IsNullOrEmpty(mimeType))
-			return EXT_DAT;
-
-		return MimeTypes.GetMimeTypeExtensions(mimeType).FirstOrDefault() ?? EXT_DAT;
 	}
 
 	/// <summary>
@@ -452,7 +303,7 @@ internal class ImageService(
 			if (image.Stream is null) continue;
 
 			var pageExt = Path.GetExtension(image.FileName ?? "").Trim('.').ForceNull() 
-				?? DetermineExtension(image.MimeType);
+				?? _http.DetermineExtension(image.MimeType);
 			var filename = $"{image.Ordinal:0000}.{pageExt}";
 			var entry = zip.CreateEntry(filename);
 			pages.Add(new ComicInfoPage
@@ -564,76 +415,30 @@ internal class ImageService(
 	/// <inheritdoc />
 	public async Task<SingleFileResult> Download(string url, CancellationToken token)
 	{
-		async Task<ExternalMeta?> FetchMeta(string cache)
-		{
-			try
-			{
-				var path = Path.ChangeExtension(cache, "json");
-				if (!File.Exists(path)) return null;
-
-				using var io = File.OpenRead(path);
-				return await _json.Deserialize<ExternalMeta>(io, token);
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Failed to load metadata for path: {Path}", cache);
-				return null;
-			}
-		}
-
-		async Task SaveMeta(ExternalMeta meta, string cache)
-		{
-			try
-			{
-				var path = Path.ChangeExtension(cache, "json");
-				using var io = File.Create(path);
-				await _json.Serialize(meta, io, token);
-				await io.FlushAsync(token);
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Failed to save metadata for path: {Path}", cache);
-			}
-		}
-
 		try
 		{
-			var cachePath = GetCachePath(url, out _);
+			var cachePath = _cache.GetCachePath(url, out _);
 			ExternalMeta? meta;
 			if (File.Exists(cachePath) && 
-				(meta = await FetchMeta(cachePath)) is not null)
+				(meta = await _cache.FetchMeta(cachePath, token)) is not null)
 			{
 				var stream = File.OpenRead(cachePath);
 				return new(null, stream, meta.Name, meta.MimeType);
 			}
 
-			var req = _api.Create(url, _json, "GET");
-			req.CancelWith(token).Message(t =>
-			{
-				var ua = url.ContainsIc("mangadex") ? "MangaBox" : Constants.USER_AGENT;
-				t.Headers.UserAgent.ParseAdd(ua);
-			});
-			using var response = await req.Result();
-			if (response is null) return new("Image came back empty");
-			if (!response.IsSuccessStatusCode)
-			{
-				var content = await response.Content.ReadAsStringAsync(token);
-				_logger.LogWarning("Failed to download external image >> {URL} >> {Status}: {Content}",
-					url, response.StatusCode, content);
-				return new("Failed to download image: " + content);
-			}
+			using var download = await _http.Download(url, null, token);
+			if (!string.IsNullOrEmpty(download.Error) || download.Stream is null)
+				return new(download.Error ?? "Stream came back empty!");
 
-			var mimeType = MimeType(response.Content.Headers);
-			var fileName = FileName(response.Content.Headers, url, mimeType);
-			meta = new(fileName ?? "image.webp", mimeType, DateTime.UtcNow);
+			meta = new(download.FileName ?? "image.webp", download.MimeType, DateTime.UtcNow);
 
 			using var io = File.Create(cachePath);
-			await response.Content.CopyToAsync(io, token);
+			await download.Stream.CopyToAsync(io, token);
 			await io.FlushAsync(token);
 			await io.DisposeAsync();
 
-			await SaveMeta(meta, cachePath);
-			return new(null, File.OpenRead(cachePath), fileName, mimeType);
+			await _cache.SaveMeta(meta, cachePath, token);
+			return new(null, File.OpenRead(cachePath), download.FileName, download.MimeType);
 		}
 		catch (Exception ex)
 		{
@@ -701,8 +506,3 @@ public record class ImageResult(
 	/// </summary>
 	public int? Height => Image?.ImageHeight;
 }
-
-internal record class ExternalMeta(
-	[property: JsonPropertyName("name")] string Name,
-	[property: JsonPropertyName("mimeType")] string? MimeType,
-	[property: JsonPropertyName("createdAt")] DateTime CreatedAt);

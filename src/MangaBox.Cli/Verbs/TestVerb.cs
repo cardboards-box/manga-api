@@ -3,6 +3,7 @@
 using Database;
 using Models;
 using Models.Composites;
+using Providers.Sources;
 using Services;
 
 [Verb("test", HelpText = "Run tests.")]
@@ -15,6 +16,7 @@ internal class TestOption
 internal class TestVerb(
 	IDbService _db,
 	IMangaLoaderService _loader,
+	IHyakuroSource _hyakuro,
 	ILogger<TestVerb> logger) : BooleanVerb<TestOption>(logger)
 {
 	private static readonly JsonSerializerOptions _options = new()
@@ -85,6 +87,43 @@ internal class TestVerb(
 	{
 		var updated = await _db.MangaExt.Update(-0);
 		_logger.LogInformation("Updated manga extensions: {Updated}", Serialize(updated));
+	}
+
+	public async Task TestHyakuro(CancellationToken token)
+	{
+		const string URL = "https://hyakuro.net/manga/boku-wa-kimitachi-wo-shihai-suru";
+
+		var (match, id) = _hyakuro.MatchesProvider(URL);
+		if (!match || string.IsNullOrEmpty(id))
+		{
+			_logger.LogError("URL does not match Hyakuro provider: {URL}", URL);
+			return;
+		}
+
+		var manga = await _hyakuro.Manga(id, token);
+		if (manga is null)
+		{
+			_logger.LogError("Failed to fetch manga from Hyakuro for ID: {ID}", id);
+			return;
+		}
+
+		_logger.LogInformation("Fetched manga from Hyakuro: {Manga}", Serialize(manga));
+
+		var chapter = manga.Chapters.FirstOrDefault();
+		if (chapter is null)
+		{
+			_logger.LogError("No chapters found for manga ID: {ID}", id);
+			return;
+		}
+
+		var pages = await _hyakuro.ChapterPages(id, chapter.Id, token);
+		if (pages.Length == 0)
+		{
+			_logger.LogError("No pages found for chapter ID: {ChapterId} of manga ID: {ID}", chapter.Id, id);
+			return;
+		}
+
+		_logger.LogInformation("Fetched {PageCount} pages for chapter ID: {ChapterId} of manga ID: {ID}", pages.Length, chapter.Id, id);
 	}
 
 	public async Task LoadManga(CancellationToken token)

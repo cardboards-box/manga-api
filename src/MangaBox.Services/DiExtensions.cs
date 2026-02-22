@@ -13,10 +13,13 @@ public static class DiExtensions
 	public static IServiceCollection AddGeneralServices(this IServiceCollection services)
 	{
 		return services
-			.AddSingleton<ISourceService, SourceService>()
+			.AddSingleton<IZipService, ZipService>()
+			.AddTransient<IHttpService, HttpService>()
+			.AddTransient<ICacheService, CacheService>()
 			.AddSingleton<IStatsService, StatsService>()
-			.AddTransient<IMangaLoaderService, MangaLoaderService>()
 			.AddTransient<IImageService, ImageService>()
-			.AddTransient<IVolumeService, VolumeService>();
+			.AddTransient<IVolumeService, VolumeService>()
+			.AddSingleton<ISourceService, SourceService>()
+			.AddTransient<IMangaLoaderService, MangaLoaderService>();
 	}
 }
