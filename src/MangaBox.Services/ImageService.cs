@@ -187,6 +187,10 @@ internal class ImageService(
 
 			return new(null, image, File.OpenRead(path), false, overrideOrdinal);
 		}
+		catch (OperationCanceledException)
+		{
+			return new("Request cancelled", image);
+		}
 		catch (Exception ex)
 		{
 			_logger.LogError(ex, "Failed to fetch image >> {URL}", image.Url);

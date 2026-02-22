@@ -238,6 +238,49 @@ public class MangaController(
 	});
 
 	/// <summary>
+	/// Refreshes all of the chapter pages of the given manga
+	/// </summary>
+	/// <param name="id">The ID of the </param>
+	/// <param name="token">The cancellation token</param>
+	/// <returns>The chapters or the error</returns>
+	[HttpGet, Route("manga/{id}/chapters/refresh")]
+	[ProducesBox<MangaVolumes>, ProducesError(400)]
+	public Task<IActionResult> RefreshAllChapters([FromRoute] string id, CancellationToken token) => Box(async () =>
+	{
+		if (!Guid.TryParse(id, out var mid))
+			return Boxed.Bad("Manga ID is not a valid GUID.");
+
+		if (!this.IsAdmin())
+			return Boxed.Unauthorized("You cannot perform this action");
+
+		var opts = new ParallelOptions
+		{
+			MaxDegreeOfParallelism = 5,
+			CancellationToken = token
+		};
+		var chapters = await _db.Chapter.ByManga(mid);
+		if (chapters.Length == 0)
+			return Boxed.NotFound("No chapters found");
+
+		int progress = 0;
+		await Parallel.ForEachAsync(chapters, opts, async (c, t) =>
+		{
+			Logger.LogInformation("Force reloading chapter: {Id}", c.Id);
+			await _loader.Pages(c.Id, true, t);
+			Interlocked.Increment(ref progress);
+			Logger.LogInformation("Reload complete for: {Id}. Progress: {Progress}/{Total} ({Percent})", 
+				c.Id, progress, chapters.Length, (double)progress / chapters.Length * 100);
+		});
+
+		return await _volume.Get(new()
+		{
+			MangaId = mid,
+			Order = ChapterOrderBy.Ordinal,
+			Asc = true,
+		}, this.GetProfileId());
+	});
+
+	/// <summary>
 	/// Recomputes the extension data for the given manga
 	/// </summary>
 	/// <param name="ids">The IDs of the manga to recompute</param>
