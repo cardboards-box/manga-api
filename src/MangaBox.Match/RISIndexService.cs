@@ -1,4 +1,6 @@
-﻿namespace MangaBox.Match;
+﻿using SixLabors.ImageSharp;
+
+namespace MangaBox.Match;
 
 using RIS;
 
@@ -81,6 +83,23 @@ internal class RISIndexService(
 		return await Index(image, force, token);
 	}
 
+	public async Task<MemoryStream> ToJpg(Stream stream, CancellationToken token)
+	{
+		try
+		{
+			using var image = await Image.LoadAsync(stream, token);
+			var output = new MemoryStream();
+			await image.SaveAsJpegAsync(output, token);
+			output.Position = 0;
+			return output;
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Failed to convert image to JPEG");
+			throw;
+		}
+	}
+
 	/// <inheritdoc />
 	public async Task<Boxed> Index(MangaBoxType<MbImage> image, bool force, CancellationToken token)
 	{
@@ -95,7 +114,8 @@ internal class RISIndexService(
 
 		var metadata = GenerateMetaData(image);
 		var fileId = GenerateId(metadata);
-		var post = await _api.Add(result.Stream, result.FileName ?? "image.png", fileId, metadata);
+		using var jpg = await ToJpg(result.Stream, token);
+		var post = await _api.Add(jpg, "image.jpg", fileId, metadata);
 		if (!post.Success)
 		{
 			_logger.LogWarning("Failed to index image {Id} in RIS: {Error}", image.Entity.Id, post.Error);

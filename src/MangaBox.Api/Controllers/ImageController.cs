@@ -1,11 +1,14 @@
 ﻿namespace MangaBox.Api.Controllers;
 
+using Match;
+
 /// <summary>
 /// A service for interacting with images
 /// </summary>
 public class ImageController(
 	IDbService _db,
 	IImageService _image,
+	IRISIndexService _indexer,
 	ILogger<ImageController> logger) : BaseController(logger)
 {
 	/// <summary>
@@ -94,5 +97,23 @@ public class ImageController(
 			return Boxed.Bad($"Invalid image ID: {id}");
 		var deleted = await _db.Image.Delete(guid);
 		return Boxed.Ok(deleted);
+	});
+
+	/// <summary>
+	/// Force re-index an image by it's ID
+	/// </summary>
+	/// <param name="id">The ID of the image</param>
+	/// <param name="token">The cancellation token</param>
+	/// <returns>The result of the request</returns>
+	[HttpGet, Route("image/{id}/reindex")]
+	[ProducesBox<int>, ProducesError(400), ProducesError(404), ProducesError(401)]
+	public Task<IActionResult> Reindex([FromRoute] string id, CancellationToken token) => Box(async () =>
+	{
+		if (!this.IsAdmin())
+			return Boxed.Unauthorized("User is not authenticated.");
+		if (!Guid.TryParse(id, out var guid))
+			return Boxed.Bad($"Invalid image ID: {id}");
+		
+		return await _indexer.Index(guid, true, token);
 	});
 }
