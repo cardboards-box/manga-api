@@ -24,3 +24,5 @@ CREATE INDEX IF NOT EXISTS idx_images_created_at ON mb_images (created_at) WHERE
 CREATE INDEX IF NOT EXISTS idx_sources_created_at ON mb_sources (created_at) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_people_created_at ON mb_people (created_at) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_logs_created_at ON mb_logs (created_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_lists_created_at ON mb_lists (created_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_list_items_created_at ON mb_list_items (created_at) WHERE deleted_at IS NULL;

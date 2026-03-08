@@ -181,6 +181,22 @@ WHERE
 
 	public override Task<int> Delete(Guid id)
 	{
-		return Execute("UPDATE mb_images SET deleted_at = CURRENT_TIMESTAMP WHERE id = :id", new { id });
+		return Execute(@"
+UPDATE mb_images i
+SET
+    ordinal = (
+        SELECT COALESCE(MIN(a.ordinal), 0) - 1
+        FROM mb_images a
+        WHERE
+            a.manga_id = i.manga_id AND (
+                (a.chapter_id IS NULL AND i.chapter_id IS NULL) OR
+                a.chapter_id = i.chapter_id
+            ) AND
+            a.id != i.id
+    ),
+    deleted_at = CURRENT_TIMESTAMP
+WHERE 
+    i.id = :id AND
+    i.deleted_at IS NULL", new { id });
 	}
 }

@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS mb_list_items (
+	id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+	list_id UUID NOT NULL REFERENCES mb_lists(id),
+	manga_id UUID NOT NULL REFERENCES mb_manga(id),
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	deleted_at TIMESTAMP NULL,
+	CONSTRAINT mb_list_items_unique UNIQUE NULLS NOT DISTINCT (list_id, manga_id)
+);

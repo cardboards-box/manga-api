@@ -9,6 +9,7 @@
         "Tables/mb_logs.sql",
         "Tables/mb_sources.sql",
         "Tables/mb_profiles.sql",
+        "Tables/mb_lists.sql",
         "Tables/mb_tags.sql",
         "Tables/mb_manga.sql",
         "Tables/mb_people.sql",
@@ -18,6 +19,7 @@
         "Tables/mb_manga_progress.sql",
         "Tables/mb_chapter_progress.sql",
         "Tables/mb_manga_relationships.sql",
+        "Tables/mb_list_items.sql",
         "Tables/mb_images.sql",
         "indices.sql",
         "Views/mb_vw_chapter_numbers.sql"

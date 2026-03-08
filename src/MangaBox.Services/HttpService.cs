@@ -1,4 +1,5 @@
 ﻿using CardboardBox.Json;
+using System.Buffers;
 using System.Net.Http.Headers;
 
 namespace MangaBox.Services;
@@ -59,6 +60,15 @@ public interface IHttpService
 	/// <param name="path">The path to the image file</param>
 	/// <returns>A tuple containing the width and height of the image, or null if it cannot be determined</returns>
 	Task<(int? width, int? height)> DetermineImageSize(string path);
+
+	/// <summary>
+	/// Copys the input stream to the output stream, tracking the number of bytes
+	/// </summary>
+	/// <param name="input">The input stream</param>
+	/// <param name="output">The output stream</param>
+	/// <param name="token">The cancellation token</param>
+	/// <returns>The total number of bytes copied</returns>
+	Task<long> CopyTo(Stream input, Stream output, CancellationToken token);
 }
 
 internal class HttpService(
@@ -192,6 +202,27 @@ internal class HttpService(
 		return headers?.ContentType?.MediaType
 			?? headers?.ContentType?.ToString().Split(';').First()
 			?? "application/octet-stream";
+	}
+
+	/// <inheritdoc />
+	public async Task<long> CopyTo(Stream input, Stream output, CancellationToken token)
+	{
+		var buffer = ArrayPool<byte>.Shared.Rent(81920);
+		try
+		{
+			long total = 0;
+			int read;
+			while ((read = await input.ReadAsync(buffer, token)) > 0)
+			{
+				await output.WriteAsync(buffer.AsMemory(0, read), token);
+				total += read;
+			}
+			return total;
+		}
+		finally
+		{
+			ArrayPool<byte>.Shared.Return(buffer);
+		}
 	}
 }
 

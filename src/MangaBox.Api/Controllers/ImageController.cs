@@ -78,4 +78,21 @@ public class ImageController(
 
 		return File(results.Stream, results.MimeType ?? "application/octet-stream", results.FileName);
 	}
+
+	/// <summary>
+	/// Deletes an image by it's ID
+	/// </summary>
+	/// <param name="id">The ID of the image</param>
+	/// <returns>The number of records deleted</returns>
+	[HttpDelete, Route("image/{id}")]
+	[ProducesBox<int>, ProducesError(400), ProducesError(404), ProducesError(401)]
+	public Task<IActionResult> Delete([FromRoute] string id) => Box(async () =>
+	{
+		if (!this.IsAdmin())
+			return Boxed.Unauthorized("User is not authenticated.");
+		if (!Guid.TryParse(id, out var guid))
+			return Boxed.Bad($"Invalid image ID: {id}");
+		var deleted = await _db.Image.Delete(guid);
+		return Boxed.Ok(deleted);
+	});
 }

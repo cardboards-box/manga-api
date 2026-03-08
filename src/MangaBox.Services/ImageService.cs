@@ -1,4 +1,5 @@
-﻿using SixLabors.ImageSharp;
+﻿using AsyncKeyedLock;
+using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using System.IO.Compression;
@@ -81,8 +82,11 @@ internal class ImageService(
 	IMangaLoaderService _loader,
 	ILogger<ImageService> _logger) : IImageService
 {
+	private const int BUFFER_SIZE = 81920;
 	private int? _failures;
 	private TimeSpan? _waitPeriod;
+
+	private static readonly AsyncKeyedLocker<string> _cacheLocks = new();
 
 	/// <summary>
 	/// The number of times to wait before the image gets deleted
@@ -100,6 +104,79 @@ internal class ImageService(
 	public TimeSpan ErrorWaitPeriod => _waitPeriod ??= TimeSpan.FromSeconds(ErrorWaitPeriodSeconds);
 
 	/// <summary>
+	/// Handles image errors
+	/// </summary>
+	/// <param name="image">The image that errored</param>
+	/// <param name="reason">The reason the image failed</param>
+	/// <param name="overrideOrdinal">The optional override ordinal for the images</param>
+	/// <returns>The result of the image error handling</returns>
+	public async Task<ImageResult> HandleImageError(MbImage image, string reason, int? overrideOrdinal)
+	{
+		image.LastFailedAt = DateTime.UtcNow;
+
+		if (!string.IsNullOrEmpty(image.FailedReason))
+			image.FailedReason += "\n" + reason;
+		else image.FailedReason = reason;
+
+		image.FailedCount += 1;
+		await _db.Image.Update(image);
+
+		if (image.FailedCount > FailuresBeforeDelete)
+			await _db.Image.Delete(image.Id);
+
+		_logger.LogWarning("Image failed to load: {Id} ({Count}) >> {Url} >> {Reason}", image.Id, image.FailedCount, image.Url, reason);
+		return new(reason, image, OverrideOrdinal: overrideOrdinal);
+	}
+
+	/// <summary>
+	/// Ensures the given download is a valid image
+	/// </summary>
+	/// <param name="path">The path to store the cached file</param>
+	/// <param name="expected">The expected length of the file</param>
+	/// <param name="result">The download result</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The error message if the download is invalid</returns>
+	public async Task<(string?, long? written)> EnsureDownload(string path, long? expected, DownloadResult result, CancellationToken token)
+	{
+		if (result.Stream is null)
+			return ("Stream came back empty", null);
+
+		var tmp = Path.ChangeExtension(path, ".tmp");
+
+		try
+		{
+			long written;
+			await using (var output = new FileStream(tmp,
+				FileMode.Create, FileAccess.Write, FileShare.None,
+				bufferSize: BUFFER_SIZE,
+				options: FileOptions.Asynchronous | FileOptions.SequentialScan))
+			{
+				written = await _http.CopyTo(result.Stream, output, token);
+				await output.FlushAsync(token);
+			}
+
+			if (written <= 0)
+			{
+				TryDelete(tmp);
+				return ("Downloaded file was empty", written);
+			}
+
+			if (expected.HasValue && written != expected.Value)
+			{
+				TryDelete(tmp);
+				return ($"Downloaded file size mismatch: expected {expected.Value}, got {written}", written);
+			}
+
+			File.Move(tmp, path, true);
+			return (null, written);
+		}
+		finally
+		{
+			TryDelete(tmp);
+		}
+	}
+
+	/// <summary>
 	/// Fetches the image result
 	/// </summary>
 	/// <param name="source">The source of the manga</param>
@@ -110,27 +187,13 @@ internal class ImageService(
 	/// <returns>The result of the image</returns>
 	public async Task<ImageResult> Get(MbSource source, MbManga manga, MbImage image, int? overrideOrdinal, CancellationToken token)
 	{
-		async Task<ImageResult> HandleError(string reason)
-		{
-			image.LastFailedAt = DateTime.UtcNow;
-
-			if (!string.IsNullOrEmpty(image.FailedReason))
-				image.FailedReason += "\n" + reason;
-			else image.FailedReason = reason;
-
-			image.FailedCount += 1;
-			await _db.Image.Update(image);
-
-			if (image.FailedCount > FailuresBeforeDelete)
-				await _db.Image.Delete(image.Id);
-
-			_logger.LogWarning("Image failed to load: {Id} ({Count}) >> {Url} >> {Reason}", image.Id, image.FailedCount, image.Url, reason);
-			return new(reason, image, OverrideOrdinal: overrideOrdinal);
-		}
+		Task<ImageResult> HandleError(string reason) => HandleImageError(image, reason, overrideOrdinal);
 
 		try
 		{
 			var path = _cache.GetCachePath(image, out var hash);
+			using var cacheLock = await _cacheLocks.LockAsync(path, token);
+
 			if (File.Exists(path) &&
 				!string.IsNullOrEmpty(image.FileName) &&
 				!string.IsNullOrEmpty(image.MimeType))
@@ -166,15 +229,18 @@ internal class ImageService(
 			if (!string.IsNullOrEmpty(download.Error) || download.Stream is null)
 				return await HandleError(download.Error ?? "Stream came back empty!");
 
-			image.MimeType ??= download.MimeType;
-			image.ImageSize ??= download.Length ?? download.Stream.Length;
-			image.FileName ??= download.FileName;
+			var expectedLength = download.Length;
+			if (!string.IsNullOrWhiteSpace(download.MimeType))
+				image.MimeType = download.MimeType;
+			if (!string.IsNullOrWhiteSpace(download.FileName))
+				image.FileName = download.FileName;
 			image.UrlHash = hash;
 
-			using var io = File.Create(path);
-			await download.Stream.CopyToAsync(io, token);
-			await io.FlushAsync(token);
-			await io.DisposeAsync();
+			var (error, written) = await EnsureDownload(path, expectedLength, download, token);
+			if (!string.IsNullOrEmpty(error))
+				return await HandleError(error);
+
+			image.ImageSize = written;
 
 			if (image.ImageWidth is null || image.ImageHeight is null)
 			{
@@ -184,7 +250,6 @@ internal class ImageService(
 			}
 
 			await _db.Image.Update(image);
-
 			return new(null, image, File.OpenRead(path), false, overrideOrdinal);
 		}
 		catch (OperationCanceledException)
@@ -449,6 +514,20 @@ internal class ImageService(
 			_logger.LogError(ex, "Error occurred while loading external image: {URL}", url);
 			return new(ex.Message);
 		}
+	}
+
+	/// <summary>
+	/// Attempt to delete a path, ignoring errors
+	/// </summary>
+	/// <param name="path">The path to delete</param>
+	public static void TryDelete(string path)
+	{
+		try
+		{
+			if (File.Exists(path))
+				File.Delete(path);
+		}
+		catch { }
 	}
 }
 

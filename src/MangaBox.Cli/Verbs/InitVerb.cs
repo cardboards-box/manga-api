@@ -23,10 +23,18 @@ internal class InitVerb(
 			return false;
 		}
 
-		_logger.LogInformation("Running command: {Verb}", Verb);
 		var service = _providers.GetRequiredService<ICommandLineService>();
-		var code = await service.Run(Verb.Split(' '));
-		_logger.LogInformation("Command `{Verb}` finished with exit code {ExitCode}", Verb, code);
-		return code == ExitCodeSuccess;
+		var verbs = Verb.Split("&&", StringSplitOptions.RemoveEmptyEntries)
+			.Select(t => t.Trim());
+		foreach (var verb in verbs)
+		{
+			_logger.LogInformation("Running command: {Verb}", verb);
+			var code = await service.Run(verb.Split(' '));
+			_logger.LogInformation("Command `{Verb}` finished with exit code {ExitCode}", verb, code);
+
+			if (code != ExitCodeSuccess) return false;
+		}
+
+		return true;
 	}
 }

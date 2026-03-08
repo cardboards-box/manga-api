@@ -15,6 +15,7 @@ public static class DiExtensions
 		return services
 			.AddSingleton<IZipService, ZipService>()
 			.AddTransient<IHttpService, HttpService>()
+			.AddTransient<IListService, ListService>()
 			.AddTransient<ICacheService, CacheService>()
 			.AddSingleton<IStatsService, StatsService>()
 			.AddTransient<IImageService, ImageService>()
