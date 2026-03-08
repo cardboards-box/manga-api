@@ -128,4 +128,28 @@ public class MetaDataController(
 		var sources = await _db.Source.Get();
 		return Boxed.Ok(sources);
 	});
+
+	/// <summary>
+	/// Gets the metadata for the <see cref="ListType"/> enum
+	/// </summary>
+	/// <returns>All of the enum descriptions</returns>
+	[HttpGet, Route("metadata/list-type")]
+	[ProducesArray<EnumDescription>]
+	public Task<IActionResult> GetListTypes() => Box(() =>
+	{
+		var values = ListType.Mine.Describe(false, false);
+		return Boxed.Ok(values);
+	});
+
+	/// <summary>
+	/// Gets the metadata for the <see cref="ListOrderBy"/> enum
+	/// </summary>
+	/// <returns>All of the enum descriptions</returns>
+	[HttpGet, Route("metadata/list-order-by")]
+	[ProducesArray<EnumDescription>]
+	public Task<IActionResult> GetListOrderBy() => Box(() =>
+	{
+		var values = ListOrderBy.CreatedAt.Describe(false, false);
+		return Boxed.Ok(values);
+	});
 }

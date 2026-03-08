@@ -27,6 +27,7 @@ ADD COLUMN IF NOT EXISTS
 	fts tsvector GENERATED ALWAYS AS (
 		to_tsvector('english',
 			title || ' ' ||
-			description
+			description || ' ' ||
+			text_array_join(alt_titles, ' ')
 		)
 	) STORED;

@@ -56,9 +56,12 @@ public static class DiExtensions
 			.Add<IMbMangaRelationshipDbService, MbMangaRelationshipDbService, MbMangaRelationship>()
 
 			.Model<MbRelatedPerson>()
+			.Model<MbListItemResponse>()
+			.Model<MbListCoverImage>()
 
 			.Mapping(c => c
 				.Enum<MbLogLevel>()
+				.Enum<MbListError>()
 				.Enum<ContentRating>()
 				.Enum<RelationshipType>()
 				.PolyfillGuidArrays());

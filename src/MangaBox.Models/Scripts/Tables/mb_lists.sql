@@ -9,3 +9,12 @@ CREATE TABLE IF NOT EXISTS mb_lists (
 	deleted_at TIMESTAMP NULL,
 	CONSTRAINT mb_lists_unique UNIQUE NULLS NOT DISTINCT (profile_id, name)
 );
+
+ALTER TABLE mb_lists
+ADD COLUMN IF NOT EXISTS
+	fts tsvector GENERATED ALWAYS AS (
+		to_tsvector('english',
+			name || ' ' ||
+			description
+		)
+	) STORED;

@@ -1,5 +1,6 @@
 ﻿namespace MangaBox.Database.Services;
 
+using MangaBox.Models.Composites;
 using Models;
 
 /// <summary>
@@ -40,10 +41,35 @@ public interface IMbListItemDbService
 	/// </summary>
 	/// <returns>All of the records</returns>
 	Task<MbListItem[]> Get();
+
+	/// <summary>
+	/// Request to create a link
+	/// </summary>
+	/// <param name="request">The request</param>
+	/// <returns>The response</returns>
+	Task<MbListItemResponse?> Create(MbListItem.LinkRequest request);
+
+	/// <summary>
+	/// Request to delete a link
+	/// </summary>
+	/// <param name="request">The request</param>
+	/// <returns>The response</returns>
+	Task<MbListItemResponse?> Delete(MbListItem.LinkRequest request);
 }
 
 internal class MbListItemDbService(
-	IOrmService orm) : Orm<MbListItem>(orm), IMbListItemDbService
+	IOrmService orm,
+	IQueryCacheService _cache) : Orm<MbListItem>(orm), IMbListItemDbService
 {
+	public async Task<MbListItemResponse?> Create(MbListItem.LinkRequest request)
+	{
+		var query = await _cache.Required("list_item_create");
+		return await _sql.Fetch<MbListItemResponse>(query, request);
+	}
 
+	public async Task<MbListItemResponse?> Delete(MbListItem.LinkRequest request)
+	{
+		var query = await _cache.Required("list_item_delete");
+		return await _sql.Fetch<MbListItemResponse>(query, request);
+	}
 }

@@ -63,6 +63,32 @@ internal class ListService(
 		return name;
 	}
 
+	/// <summary>
+	/// Validate the response and return the appropriate result
+	/// </summary>
+	/// <param name="response">The response to the request</param>
+	/// <param name="request">The request that was made</param>
+	/// <returns>The result of the validation</returns>
+	public async Task<Boxed> Validate(MbListItemResponse? response, MbListItem.LinkRequest request)
+	{
+		if (response is null)
+			return Boxed.Exception("An unexpected error occurred.");
+
+		if (response.Error is null && response.Id is not null)
+			return await Fetch(request.ListId, request.ProfileId);
+
+		return response.Error switch
+		{
+			MbListError.ProfileIdNull => Boxed.Unauthorized(),
+			MbListError.ProfileMissing => Boxed.Unauthorized(),
+			MbListError.ProfileMismatch => Boxed.NotFound(nameof(MbList)),
+			MbListError.ListMissing => Boxed.NotFound(nameof(MbList)),
+			MbListError.MangaMissing => Boxed.NotFound(nameof(MbManga)),
+			MbListError.ListItemMistmatch => Boxed.Bad("The manga is not in the list."),
+			_ => Boxed.Exception("An unexpected error occurred.")
+		};
+	}
+
 	public async Task<Boxed> Create(MbList.ListCreate request, Guid? profileId)
 	{
 		if (profileId is null)
@@ -87,7 +113,7 @@ internal class ListService(
 			IsPublic = request.IsPublic
 		};
 		list.Id = await _db.List.Insert(list);
-		return Boxed.Ok(list);
+		return await Fetch(list.Id, profileId);
 	}
 
 	public async Task<Boxed> Edit(MbList.ListUpdate request, Guid listId, Guid? profileId)
@@ -108,7 +134,7 @@ internal class ListService(
 		list.Description = request.Description;
 		list.IsPublic = request.IsPublic;
 		await _db.List.Update(list);
-		return Boxed.Ok(list);
+		return await Fetch(list.Id, profileId);
 	}
 
 	public async Task<Boxed> Fetch(Guid listId, Guid? profileId)
@@ -131,34 +157,13 @@ internal class ListService(
 
 	public async Task<Boxed> Link(MbListItem.LinkRequest request)
 	{
-		var validation = await ValidateRequest(request);
-		if (validation is not null)
-			return validation;
-
-		throw new NotImplementedException();
+		var result = await _db.ListItem.Create(request);
+		return await Validate(result, request);
 	}
 
 	public async Task<Boxed> Unlink(MbListItem.LinkRequest request)
 	{
-		var validation = await ValidateRequest(request);
-		if (validation is not null)
-			return validation;
-
-		throw new NotImplementedException();
-	}
-
-	public async Task<Boxed?> ValidateRequest(MbListItem.LinkRequest request)
-	{
-		if (request.ProfileId is null)
-			return Boxed.Unauthorized("You must be logged in to do this.");
-
-		var list = await _db.List.Fetch(request.ListId);
-		if (list is null)
-			return Boxed.NotFound(nameof(MbList));
-
-		if (list.ProfileId != request.ProfileId.Value)
-			return Boxed.NotFound(nameof(MbList), "You do not own this list");
-
-		return null;
+		var result = await _db.ListItem.Delete(request);
+		return await Validate(result, request);
 	}
 }

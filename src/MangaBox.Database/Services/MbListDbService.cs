@@ -2,6 +2,8 @@
 
 using Models;
 using Models.Composites;
+using Models.Composites.Filters;
+using static MangaBox.Database.Services.MbMangaDbService;
 
 /// <summary>
 /// The service for interacting with the mb_lists table
@@ -56,6 +58,13 @@ public interface IMbListDbService
 	/// <param name="profileId">The ID of the profile who owns the list</param>
 	/// <returns>The list if found, otherwise null</returns>
 	Task<MbList?> Fetch(string name, Guid profileId);
+
+	/// <summary>
+	/// Searches for lists by the given filter
+	/// </summary>
+	/// <param name="filter">The search filter</param>
+	/// <returns>The search results</returns>
+	Task<PaginatedResult<MangaBoxType<MbList>>> Search(ListSearchFilter filter);
 }
 
 internal class MbListDbService(
@@ -78,23 +87,42 @@ WHERE
 		const string QUERY = @"
 SELECT * FROM mb_lists WHERE id = :id AND deleted_at IS NULL;
 
-SELECT p.* 
-FROM mb_profiles p
-JOIN mb_lists c ON p.id = c.profile_id
-WHERE 
-    c.id = :id AND
-    c.deleted_at IS NULL AND
-    p.deleted_at IS NULL;
-
-SELECT DISTINCT c.*
+SELECT DISTINCT b.*
 FROM mb_lists p
 JOIN mb_list_items b ON b.list_id = p.id
-JOIN mb_manga c ON c.id = b.manga_id
 WHERE 
     p.id = :id AND
     p.deleted_at IS NULL AND
-    b.deleted_at IS NULL AND
-    c.deleted_at IS NULL;";
+    b.deleted_at IS NULL;
+
+SELECT DISTINCT a.*
+FROM mb_lists l
+JOIN mb_list_items i ON i.list_id = l.id
+JOIN mb_manga m ON m.id = i.manga_id
+JOIN mb_manga_tags t ON m.id = t.manga_id 
+JOIN mb_tags a ON a.id = t.tag_id
+WHERE
+    l.id = :id AND
+    l.deleted_at IS NULL AND
+    i.deleted_at IS NULL AND
+    t.deleted_at IS NULL AND
+    a.deleted_at IS NULL AND
+    m.deleted_at IS NULL;
+
+SELECT DISTINCT p.*, i.created_at as cover_created_at
+FROM mb_lists l
+JOIN mb_list_items i ON i.list_id = l.id
+JOIN mb_manga m ON m.id = i.manga_id
+JOIN mb_images p ON p.manga_id = m.id AND p.chapter_id IS NULL
+WHERE
+    l.id = :id AND
+    l.deleted_at IS NULL AND
+    i.deleted_at IS NULL AND
+    p.deleted_at IS NULL AND
+    m.deleted_at IS NULL AND
+	p.last_failed_at IS NULL
+ORDER BY i.created_at ASC, p.ordinal DESC
+LIMIT 1;";
 
 		using var con = await _sql.CreateConnection();
 		using var rdr = await con.QueryMultipleAsync(QUERY, new { id });
@@ -103,9 +131,44 @@ WHERE
 		if (item is null) return null;
 
 		var related = new List<MangaBoxRelationship>();
-		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbProfile>());
-		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbManga>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbListItem>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbTag>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbImage>());
 
 		return new MangaBoxType<MbList>(item, [.. related]);
+	}
+
+	public async Task<PaginatedResult<MangaBoxType<MbList>>> Search(ListSearchFilter filter)
+	{
+		var query = filter.Build(out var parameters);
+
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(query, parameters);
+
+		var total = await rdr.ReadSingleAsync<int>();
+		if (total == 0) return new();
+
+		var pages = (int)Math.Ceiling((double)total / filter.Size);
+
+		var tags = (await rdr.ReadAsync<MbTag>()).ToDictionary(t => t.Id);
+		var tagMap = (await rdr.ReadAsync<TagMap>()).ToGDictionary(t => t.MangaId); //Key is actually list_id
+		var covers = (await rdr.ReadAsync<MbListCoverImage>()).ToDictionary(t => t.ListId);
+
+		var results = new List<MangaBoxType<MbList>>();
+
+		foreach(var list in await rdr.ReadAsync<MbList>())
+		{
+			var related = new List<MangaBoxRelationship>();
+			if (covers.TryGetValue(list.Id, out var cover))
+				MangaBoxRelationship.Apply(related, (MbImage)cover);
+			if (tagMap.TryGetValue(list.Id, out var tmap))
+				MangaBoxRelationship.Apply(related, tmap
+					.Select(t => tags.TryGetValue(t.TagId, out var tag) ? tag : null)
+					.Where(t => t is not null));
+
+			results.Add(new(list, [.. related]));
+		}
+
+		return new(pages, total, [.. results]);
 	}
 }

@@ -32,6 +32,12 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 	public Guid[] Sources { get; set; } = [];
 
 	/// <summary>
+	/// All of the lists to filter by
+	/// </summary>
+	[JsonPropertyName("lists")]
+	public Guid[] Lists { get; set; } = [];
+
+	/// <summary>
 	/// Whether to match all tags (AND - <see langword="true"/>) or any tag (OR - <see langword="false"/>)
 	/// </summary>
 	[JsonPropertyName("tagsAnd")]
@@ -308,6 +314,7 @@ DROP TABLE IF EXISTS tmp_manga_results_{suffix};
 
 CREATE TEMP TABLE tmp_manga_results_{suffix} ON COMMIT DROP AS
 SELECT
+	DISTINCT
 	m.id,
 	{OrderColumn(Order)} as order_column
 FROM mb_manga m
@@ -315,12 +322,29 @@ JOIN mb_manga_ext ext ON ext.manga_id = m.id
 LEFT JOIN mb_chapters last_ch ON last_ch.id = ext.last_chapter_id
 LEFT JOIN mb_chapters first_ch ON first_ch.id = ext.first_chapter_id
 """);
+		parameters.Add("profileId", ProfileId);
+
 		if (ProfileId.HasValue)
 		{
-			parameters.Add("profileId", ProfileId.Value);
 			bob.AppendLine(@"LEFT JOIN mb_manga_progress mp ON mp.manga_id = m.id
 	AND mp.profile_id = :profileId
 	AND mp.deleted_at IS NULL");
+		}
+
+		if (Lists is { Length: > 0 })
+		{
+			parameters.Add("lists", Lists.Distinct().ToArray());
+			bob.AppendLine("""
+				JOIN mb_list_items li ON li.manga_id = m.id AND li.deleted_at IS NULL
+				JOIN mb_lists l ON 
+					l.id = li.list_id AND 
+					l.deleted_at IS NULL AND 
+					l.id = ANY( :lists ) AND
+					(l.is_public = TRUE OR (
+						:profileId IS NOT NULL AND 
+						l.profile_id = :profileId
+					))
+				""");
 		}
 
 		bob.AppendLine("""

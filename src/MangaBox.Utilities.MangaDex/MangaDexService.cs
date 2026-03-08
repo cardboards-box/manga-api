@@ -98,8 +98,8 @@ internal class MangaDexService(
 	});
 	private static readonly RateLimiter _page = new TokenBucketRateLimiter(new()
 	{
-		TokenLimit = 39,
-		TokensPerPeriod = 39,
+		TokenLimit = 35,
+		TokensPerPeriod = 35,
 		QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
 		QueueLimit = int.MaxValue,
 		ReplenishmentPeriod = TimeSpan.FromMinutes(1),

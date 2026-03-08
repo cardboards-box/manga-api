@@ -5,6 +5,7 @@
 /// </summary>
 [Table("mb_lists")]
 [InterfaceOption(nameof(MbList))]
+[Searchable(nameof(Name), nameof(Description))]
 public class MbList : MbDbObject
 {
 	/// <summary>
