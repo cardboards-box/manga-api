@@ -65,6 +65,13 @@ public interface IMbListDbService
 	/// <param name="filter">The search filter</param>
 	/// <returns>The search results</returns>
 	Task<PaginatedResult<MangaBoxType<MbList>>> Search(ListSearchFilter filter);
+
+	/// <summary>
+	/// Fetches all of the lists for a given profile
+	/// </summary>
+	/// <param name="profileId">The ID of the profile</param>
+	/// <returns>All of the lists for the given profile</returns>
+	Task<MbList[]> All(Guid? profileId);
 }
 
 internal class MbListDbService(
@@ -80,6 +87,16 @@ WHERE
 	profile_id = :profileId AND 
 	deleted_at IS NULL;";
 		return Fetch(QUERY, new { name, profileId });
+	}
+
+	public Task<MbList[]> All(Guid? profileId)
+	{
+		const string QUERY = @"SELECT * 
+FROM mb_lists 
+WHERE 
+	profile_id = :profileId AND 
+	deleted_at IS NULL";
+		return Get(QUERY, new { profileId });
 	}
 
 	public async Task<MangaBoxType<MbList>?> FetchWithRelationships(Guid id)

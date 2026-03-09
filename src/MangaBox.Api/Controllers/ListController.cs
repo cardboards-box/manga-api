@@ -24,6 +24,18 @@ public class ListController(
 	});
 
 	/// <summary>
+	/// Fetches all of the lists for the current user
+	/// </summary>
+	/// <returns>All of the lists for the current user</returns>
+	[HttpGet, Route("list/all")]
+	[ProducesArray<MbList>, ProducesError(404), ProducesError(400), ProducesError(401)]
+	public Task<IActionResult> All() => Box(async () =>
+	{
+		var items = await _db.List.All(this.GetProfileId());
+		return Boxed.Ok(items);
+	});
+
+	/// <summary>
 	/// Creates a list 
 	/// </summary>
 	/// <param name="request">The request</param>
