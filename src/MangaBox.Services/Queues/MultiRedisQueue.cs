@@ -181,17 +181,20 @@ public record class MultiRedisQueue<TIn, TOut, TKey>(
 
 			_running = true;
 			token.Register(_cts.Cancel);
-			using var sub = _queueSubject.Subscribe(async (i) => await action(i.item));
+			using var sub = _queueSubject.Subscribe(async (i) =>
+			{
+				if (!_queues.TryGetValue(i.key, out var queue)) return;
 
-			var sources = await PreloadSources();
+				await Trigger(queue, action);
+			});
+
 			var opts = new ParallelOptions
 			{
-				MaxDegreeOfParallelism = sources.Length,
+				MaxDegreeOfParallelism = Environment.ProcessorCount,
 				CancellationToken = Token
 			};
-			await Parallel.ForEachAsync(sources, opts, async (source, _) =>
+			await Parallel.ForEachAsync(_queues.Values, opts, async (queue, _) =>
 			{
-				var queue = await GetQueue(source);
 				await Trigger(queue, action);
 			});
 			
