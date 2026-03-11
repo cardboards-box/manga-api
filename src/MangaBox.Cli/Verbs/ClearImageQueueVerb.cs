@@ -14,7 +14,7 @@ internal class ClearImageQueueVerb(
 	IMangaPublishService _publish,
 	ILogger<ClearImageQueueVerb> logger) : BooleanVerb<ClearImageQueueOptions>(logger)
 {
-	public IRedisList<QueueImage> ImageQueue => _publish.NewImages.Queue;
+	public IRedisQueue<QueueImage> ImageQueue => _publish.NewImages;
 
 	public Task<Guid[]> LegacyImages()
 	{
@@ -34,7 +34,7 @@ WHERE
 		var ids = await LegacyImages();
 		_logger.LogInformation("Legacy Images: {Count}", ids.Length);
 
-		var queued = await ImageQueue.All();
+		var queued = await ImageQueue.All(token).ToArrayAsync(token);
 		int progress = 0;
 		int removed = 0;
 
@@ -68,7 +68,7 @@ WHERE
 		};
 
 		var list = ImageQueue;
-		var queued = await list.All();
+		var queued = await list.All(token).ToArrayAsync(token);
 		int progress = 0;
 		int removed = 0;
 		await Parallel.ForEachAsync(queued, opts, async (item, ct) =>
@@ -92,6 +92,7 @@ WHERE
 
 	public override async Task<bool> Execute(ClearImageQueueOptions options, CancellationToken token)
 	{
+		await _publish.Init();
 		await Duplicates(token);
 		return true;
 	}

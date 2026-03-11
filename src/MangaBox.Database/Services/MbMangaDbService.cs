@@ -297,7 +297,7 @@ WHERE
 		var extensions = (await rdr.ReadAsync<MbMangaExt>()).ToGDictionary(t => t.MangaId);
 		var sources = (await rdr.ReadAsync<MbSource>()).ToDictionary(t => t.Id);
 		var tags = (await rdr.ReadAsync<MbTag>()).ToDictionary(t => t.Id);
-		var tagMap = (await rdr.ReadAsync<TagMap>()).ToGDictionary(t => t.MangaId);
+		var tagMap = (await rdr.ReadAsync<IdMap>()).ToGDictionary(t => t.FirstId);
 
 		var results = new List<MangaBoxType<MbManga>>();
 
@@ -312,7 +312,7 @@ WHERE
 				MangaBoxRelationship.Apply(related, src);
 			if (tagMap.TryGetValue(manga.Id, out var tmap))
 				MangaBoxRelationship.Apply(related, tmap
-					.Select(t => tags.TryGetValue(t.TagId, out var tag) ? tag : null)
+					.Select(t => tags.TryGetValue(t.SecondId, out var tag) ? tag : null)
 					.Where(t => t is not null));
 
 			results.Add(new(manga, [.. related]));
@@ -399,7 +399,10 @@ JOIN mb_manga_tags mt ON mt.tag_id = t.id
 JOIN tmp_manga_results_{suffix} p ON p.id = mt.manga_id
 WHERE t.deleted_at IS NULL AND mt.deleted_at IS NULL;
 
-SELECT DISTINCT mt.manga_id, mt.tag_id
+SELECT 
+    DISTINCT 
+    mt.manga_id as first_id, 
+    mt.tag_id as second_id
 FROM mb_manga_tags mt
 JOIN tmp_manga_results_{suffix} p ON p.id = mt.manga_id
 WHERE mt.deleted_at IS NULL;
@@ -462,7 +465,10 @@ JOIN mb_manga_tags mt ON mt.tag_id = t.id
 JOIN tmp_manga_results_{suffix} p ON p.id = mt.manga_id
 WHERE t.deleted_at IS NULL AND mt.deleted_at IS NULL;
 
-SELECT DISTINCT mt.manga_id, mt.tag_id
+SELECT 
+    DISTINCT
+    mt.manga_id as first_id,
+    mt.tag_id as second_id
 FROM mb_manga_tags mt
 JOIN tmp_manga_results_{suffix} p ON p.id = mt.manga_id
 WHERE mt.deleted_at IS NULL;
@@ -484,11 +490,5 @@ COMMIT;";
 	{
         var query = await _cache.Required("fetch_refresh_manga");
         return await Get(query);
-	}
-
-	public class TagMap
-    {
-        public Guid MangaId { get; set; }
-        public Guid TagId { get; set; }
 	}
 }

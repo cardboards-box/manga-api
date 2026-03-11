@@ -6,20 +6,23 @@
 public class FetchMissingPages(
 	IDbService _db,
 	IMangaPublishService _publish,
-	ILogger<FetchMissingPages> _logger) : IInvocable
+	ILogger<FetchMissingPages> _logger) : ICancellableInvocable, IInvocable
 {
+	/// <inheritdoc />
+	public CancellationToken CancellationToken { get; set; } = CancellationToken.None;
+
 	/// <inheritdoc />
 	public async Task Invoke()
 	{
 		try
 		{
 			var chapters = await _db.Chapter.GetZeroPageChapters();
-			var queued = (await _publish.NewChapters.Queue.All())
+			var queued = await _publish.NewChapters.All(CancellationToken)
 				.Select(x => x.Id)
 				.Distinct()
-				.ToHashSet();
+				.ToHashSetAsync(null, CancellationToken);
 			foreach (var chapter in chapters)
-				if (!queued.Contains(chapter.Id))
+				if (!queued.Contains(chapter.chap.Id))
 					await _publish.NewChapters.Publish(chapter);
 		}
 		catch (Exception ex)

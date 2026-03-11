@@ -37,6 +37,13 @@ builder.Services.AddHostedService<NewChapterBackgroundService>();
 
 var app = builder.Build();
 
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+var pub = app.Services.GetRequiredService<IMangaPublishService>();
+
+logger.LogInformation("Starting publish queues...");
+await pub.Init();
+logger.LogInformation("Finished starting publish queues. Starting web server...");
+
 app.RegisterBoxing();
 app.AddScheduledTasks();
 

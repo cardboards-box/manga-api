@@ -1,5 +1,7 @@
 ﻿namespace MangaBox.Services;
 
+using Queues;
+
 /// <summary>
 /// Extensions for dependency injection
 /// </summary>
@@ -21,6 +23,7 @@ public static class DiExtensions
 			.AddTransient<IImageService, ImageService>()
 			.AddTransient<IVolumeService, VolumeService>()
 			.AddSingleton<ISourceService, SourceService>()
-			.AddTransient<IMangaLoaderService, MangaLoaderService>();
+			.AddTransient<IMangaLoaderService, MangaLoaderService>()
+			.AddSingleton<IMangaPublishService, MangaPublishService>();
 	}
 }

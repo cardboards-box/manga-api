@@ -127,7 +127,10 @@ public class ListSearchFilter : SearchFilter<ListOrderBy>
 				tg.deleted_at IS NULL AND
 				m.deleted_at IS NULL;
 
-			SELECT DISTINCT l.id as manga_id, t.tag_id
+			SELECT 
+				DISTINCT 
+				l.id as first_id, 
+				t.tag_id as second_id
 			FROM mb_lists l
 			JOIN tmp_list_results_{suffix}_ordered r ON r.id = l.id
 			JOIN mb_list_items i ON i.list_id = l.id

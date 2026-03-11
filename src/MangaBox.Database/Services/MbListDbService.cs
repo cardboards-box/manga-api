@@ -168,7 +168,7 @@ LIMIT 1;";
 		var pages = (int)Math.Ceiling((double)total / filter.Size);
 
 		var tags = (await rdr.ReadAsync<MbTag>()).ToDictionary(t => t.Id);
-		var tagMap = (await rdr.ReadAsync<TagMap>()).ToGDictionary(t => t.MangaId); //Key is actually list_id
+		var tagMap = (await rdr.ReadAsync<IdMap>()).ToGDictionary(t => t.FirstId);
 		var covers = (await rdr.ReadAsync<MbListCoverImage>()).ToDictionary(t => t.ListId);
 
 		var results = new List<MangaBoxType<MbList>>();
@@ -180,7 +180,7 @@ LIMIT 1;";
 				MangaBoxRelationship.Apply(related, (MbImage)cover);
 			if (tagMap.TryGetValue(list.Id, out var tmap))
 				MangaBoxRelationship.Apply(related, tmap
-					.Select(t => tags.TryGetValue(t.TagId, out var tag) ? tag : null)
+					.Select(t => tags.TryGetValue(t.SecondId, out var tag) ? tag : null)
 					.Where(t => t is not null));
 
 			results.Add(new(list, [.. related]));

@@ -7,8 +7,11 @@ public class IndexMissingImages(
 	IDbService _db,
 	IImageService _image,
 	IMangaPublishService _publish,
-	ILogger<IndexMissingImages> _logger) : IInvocable
+	ILogger<IndexMissingImages> _logger) : ICancellableInvocable, IInvocable
 {
+	/// <inheritdoc />
+	public CancellationToken CancellationToken { get; set; } = CancellationToken.None;
+
 	/// <inheritdoc />
 	public async Task Invoke()
 	{
@@ -16,10 +19,10 @@ public class IndexMissingImages(
 		{
 			var failedBuffer = DateTime.UtcNow.Subtract(_image.ErrorWaitPeriod);
 			var images = await _db.Image.NotIndexed(failedBuffer);
-			var queued = (await _publish.NewImages.Queue.All())
+			var queued = await _publish.NewImages.All(CancellationToken)
 				.Select(x => x.Id)
 				.Distinct()
-				.ToHashSet();
+				.ToHashSetAsync(null, CancellationToken);
 
 			foreach (var image in images)
 				if (!queued.Contains(image.Id))

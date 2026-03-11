@@ -22,8 +22,9 @@ internal class ClearChapterQueueVerb(
 			CancellationToken = token
 		};
 
-		var list = _publish.NewChapters.Queue;
-		var queued = await list.All();
+		var list = _publish.NewChapters;
+		await list.Init();
+		var queued = await list.All(token).ToArrayAsync(token);
 		int progress = 0;
 		int removed = 0;
 		await Parallel.ForEachAsync(queued, opts, async (chapter, ct) =>

@@ -75,7 +75,7 @@ public interface IMbChapterDbService
     /// Gets all of the 0 page chapters
     /// </summary>
     /// <returns>The chapters with 0 pages</returns>
-    Task<MbChapter[]> GetZeroPageChapters();
+    Task<(MbChapter chap, MbSource source)[]> GetZeroPageChapters();
 
     /// <summary>
     /// Delete all of the chapters where the pages have a 404 error on MD
@@ -156,19 +156,25 @@ UPDATE mb_images SET deleted_at = CURRENT_TIMESTAMP WHERE chapter_id = :id;";
         return Execute(QUERY, new { id });
     }
 
-	public Task<MbChapter[]> GetZeroPageChapters()
+	public Task<(MbChapter chap, MbSource source)[]> GetZeroPageChapters()
 	{
-        const string QUERY = @"SELECT DISTINCT c.*
+        const string QUERY = @"SELECT 
+    DISTINCT 
+    c.*,
+    '' as split,
+    s.*
 FROM mb_chapters c
 JOIN mb_manga m ON m.id = c.manga_id
+JOIN mb_sources s ON s.id = m.source_id
 LEFT JOIN mb_images i ON i.chapter_id = c.id AND i.manga_id = c.manga_id
 WHERE
     c.page_count = 0 AND
     NULLIF(c.external_url, '') IS NULL AND
     i.id IS NULL AND
     c.deleted_at IS NULL AND
-    m.deleted_at IS NULL;";
-        return Get(QUERY);
+    m.deleted_at IS NULL AND
+    s.deleted_at IS NULL;";
+        return _sql.QueryTupleAsync<MbChapter, MbSource>(QUERY);
 	}
 
 	public async Task Delete404Chapters()

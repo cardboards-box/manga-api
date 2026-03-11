@@ -34,7 +34,6 @@ public static class DiExtensions
 			.SetDefaultConvention(t => t.CaseConvention<NoChangeConvention>())
 			
 			.Transient<IDbService, DbService>()
-			.Singleton<IMangaPublishService, MangaPublishService>()
 
 			.AddType<MbAttribute>()
 			.AddType<MbHeader>()

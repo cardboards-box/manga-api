@@ -1,6 +1,7 @@
 namespace MangaBox.Database.Services;
 
 using Models;
+using Models.Composites;
 
 /// <summary>
 /// The service for interacting with the mb_sources table
@@ -43,7 +44,7 @@ public interface IMbSourceDbService
 }
 
 internal class MbSourceDbService(
-    IOrmService orm) : CacheOrm<MbSource>(orm), IMbSourceDbService
+	IOrmService orm) : CacheOrm<MbSource>(orm), IMbSourceDbService
 {
 
 }

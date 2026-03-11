@@ -429,7 +429,10 @@ JOIN mb_manga_tags mt ON mt.tag_id = t.id
 JOIN tmp_manga_results_{suffix}_ordered p ON p.id = mt.manga_id
 WHERE t.deleted_at IS NULL AND mt.deleted_at IS NULL;
 
-SELECT DISTINCT mt.manga_id, mt.tag_id
+SELECT 
+	DISTINCT 
+	mt.manga_id as first_id, 
+	mt.tag_id as second_id
 FROM mb_manga_tags mt
 JOIN tmp_manga_results_{suffix}_ordered p ON p.id = mt.manga_id
 WHERE mt.deleted_at IS NULL;

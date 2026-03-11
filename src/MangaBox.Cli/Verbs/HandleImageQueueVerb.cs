@@ -20,14 +20,12 @@ internal class HandleImageQueueVerb(
 	IMangaLoaderService _loader,
 	ILogger<HandleImageQueueVerb> logger) : BooleanVerb<HandleImageQueueOptions>(logger)
 {
-	public IRedisList<QueueImage> ImageQueue => _publish.NewImages.Queue;
-	public IRedisList<MbChapter> ChapterQueue => _publish.NewChapters.Queue;
 
 	public async Task ProcessChapters(CancellationToken token)
 	{
-		while (true)
+		while (!token.IsCancellationRequested)
 		{
-			var chapter = await ChapterQueue.Pop();
+			var chapter = await _publish.NewChapters.Pop();
 			if (chapter is null) return;
 
 			try
@@ -43,9 +41,9 @@ internal class HandleImageQueueVerb(
 
 	public async Task ProcessImages(CancellationToken token)
 	{
-		while(true)
+		while(!token.IsCancellationRequested)
 		{
-			var item = await ImageQueue.Pop();
+			var item = await _publish.NewImages.Pop();
 			if (item is null) return;
 
 			try
@@ -61,6 +59,7 @@ internal class HandleImageQueueVerb(
 
 	public override async Task<bool> Execute(HandleImageQueueOptions options, CancellationToken token)
 	{
+		await _publish.Init();
 		var opts = new ParallelOptions
 		{
 			MaxDegreeOfParallelism = options.ProcessorCount > 0 ? options.ProcessorCount : Environment.ProcessorCount - 1,

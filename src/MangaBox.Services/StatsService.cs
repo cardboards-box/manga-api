@@ -71,9 +71,9 @@ ORDER BY s.period, s.span_s";
 
 	public async Task<QueueStats> QueueStats()
 	{
-		var manga = await _publish.NewManga.Queue.Length();
-		var chapters = await _publish.NewChapters.Queue.Length();
-		var images = await _publish.NewImages.Queue.Length();
+		var manga = await _publish.NewManga.Count();
+		var chapters = await _publish.NewChapters.Count();
+		var images = await _publish.NewImages.Count();
 		return new QueueStats
 		{
 			Timestamp = DateTime.UtcNow,
