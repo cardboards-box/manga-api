@@ -11,7 +11,7 @@ public interface IMangaPublishService : IDisposable
 	/// <summary>
 	/// The queue for new chapters
 	/// </summary>
-	IRedisQueue<(MbChapter chap, MbSource? source), MbChapter> NewChapters { get; }
+	IRedisQueue<MbChapter> NewChapters { get; }
 
 	/// <summary>
 	/// The queue for new images

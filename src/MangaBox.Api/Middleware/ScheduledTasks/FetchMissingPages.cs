@@ -21,8 +21,8 @@ public class FetchMissingPages(
 				.Select(x => x.Id)
 				.Distinct()
 				.ToHashSetAsync(null, CancellationToken);
-			foreach (var chapter in chapters)
-				if (!queued.Contains(chapter.chap.Id))
+			foreach (var (chapter, _) in chapters)
+				if (!queued.Contains(chapter.Id))
 					await _publish.NewChapters.Publish(chapter);
 		}
 		catch (Exception ex)

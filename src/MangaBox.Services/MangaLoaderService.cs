@@ -230,9 +230,9 @@ internal class MangaLoaderService(
 		if (result.MangaIsNew)
 			await _publish.NewManga.Publish(manga);
 
-		var source = manga.GetItem<MbSource>();
+		//var source = manga.GetItem<MbSource>();
 		foreach (var chapter in result.ChaptersNew)
-			await _publish.NewChapters.Publish((chapter, source));
+			await _publish.NewChapters.Publish(chapter);
 		return Boxed.Ok(manga);
 	}
 

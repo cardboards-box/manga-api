@@ -2,6 +2,7 @@
     "paths": [
         "extensions.sql",
         "Functions/text_array_join.sql",
+        "Functions/try_cast.sql",
         "Types/mb_attribute.sql",
         "Functions/attributes_array_join.sql",
         "Types/mb_headers.sql",
