@@ -156,13 +156,32 @@ UPDATE mb_images SET deleted_at = CURRENT_TIMESTAMP WHERE chapter_id = :id;";
         return Execute(QUERY, new { id });
     }
 
-	public Task<(MbChapter chap, MbSource source)[]> GetZeroPageChapters()
+	public async Task<(MbChapter chap, MbSource source)[]> GetZeroPageChapters()
 	{
-        const string QUERY = @"SELECT 
+        const string QUERY = @"
+SELECT DISTINCT *
+FROM mb_sources 
+WHERE deleted_at IS NULL;
+
+SELECT 
     DISTINCT 
-    c.*,
-    '' as split,
-    s.*
+    c.id as first_id,
+    s.id as second_id
+FROM mb_chapters c
+JOIN mb_manga m ON m.id = c.manga_id
+JOIN mb_sources s ON s.id = m.source_id
+LEFT JOIN mb_images i ON i.chapter_id = c.id AND i.manga_id = c.manga_id
+WHERE
+    c.page_count = 0 AND
+    NULLIF(c.external_url, '') IS NULL AND
+    i.id IS NULL AND
+    c.deleted_at IS NULL AND
+    m.deleted_at IS NULL AND
+    s.deleted_at IS NULL;
+
+SELECT 
+    DISTINCT 
+    c.*
 FROM mb_chapters c
 JOIN mb_manga m ON m.id = c.manga_id
 JOIN mb_sources s ON s.id = m.source_id
@@ -174,7 +193,14 @@ WHERE
     c.deleted_at IS NULL AND
     m.deleted_at IS NULL AND
     s.deleted_at IS NULL;";
-        return _sql.QueryTupleAsync<MbChapter, MbSource>(QUERY);
+
+        using var con = await _sql.CreateConnection();
+        using var rdr = await con.QueryMultipleAsync(QUERY);
+
+        var sources = (await rdr.ReadAsync<MbSource>()).ToDictionary(s => s.Id);
+		var map = (await rdr.ReadAsync<IdMap>()).ToDictionary(m => m.FirstId, m => m.SecondId);
+		var chapers = await rdr.ReadAsync<MbChapter>();
+        return [..chapers.Select(c => (c, sources[map[c.Id]]))];
 	}
 
 	public async Task Delete404Chapters()

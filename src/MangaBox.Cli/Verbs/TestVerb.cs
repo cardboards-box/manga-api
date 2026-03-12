@@ -184,6 +184,12 @@ internal class TestVerb(
 		});
 	}
 
+	public async Task TestZeroPages()
+	{
+		var items = await _db.Chapter.GetZeroPageChapters();
+		_logger.LogInformation("Chapters with zero pages: {Count}", items.Length);
+	}
+
 	public override async Task<bool> Execute(TestOption options, CancellationToken token)
 	{
 		var methods = GetType().GetMethods();
