@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS mb_lists (
 	id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
 	profile_id UUID NOT NULL REFERENCES mb_profiles(id),
 	name TEXT NOT NULL,
+	cloned_from UUID NULL REFERENCES mb_lists(id),
 	description TEXT NULL,
 	is_public BOOLEAN NOT NULL,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

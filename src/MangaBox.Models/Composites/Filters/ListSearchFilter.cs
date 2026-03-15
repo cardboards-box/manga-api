@@ -113,6 +113,14 @@ public class ListSearchFilter : SearchFilter<ListOrderBy>
 			
 			DROP TABLE tmp_list_results_{suffix};
 
+			SELECT DISTINCT e.*
+			FROM mb_lists l
+			JOIN tmp_list_results_{suffix}_ordered r ON r.id = l.id
+			JOIN mb_list_ext e ON l.id = e.list_id
+			WHERE 
+				l.deleted_at IS NULL AND
+				e.deleted_at IS NULL;
+
 			SELECT DISTINCT tg.*
 			FROM mb_lists l
 			JOIN tmp_list_results_{suffix}_ordered r ON r.id = l.id
@@ -142,29 +150,15 @@ public class ListSearchFilter : SearchFilter<ListOrderBy>
 				t.deleted_at IS NULL AND
 				m.deleted_at IS NULL;
 				
-			; WITH manga_covers AS (
-				SELECT
-					l.id as list_id,
-					p.*,
-					ROW_NUMBER() OVER (
-						PARTITION BY l.id
-						ORDER BY i.created_at ASC, p.ordinal DESC
-					) as rn
-				FROM mb_lists l
-				JOIN tmp_list_results_{suffix}_ordered r ON r.id = l.id
-				JOIN mb_list_items i ON i.list_id = l.id
-				JOIN mb_manga m ON m.id = i.manga_id
-				JOIN mb_images p ON p.manga_id = m.id AND p.chapter_id IS NULL
-				WHERE
-					l.deleted_at IS NULL AND
-					i.deleted_at IS NULL AND
-					p.deleted_at IS NULL AND
-					m.deleted_at IS NULL AND
-					p.last_failed_at IS NULL
-			)
-			SELECT * 
-			FROM manga_covers
-			WHERE rn = 1;
+			SELECT i.*
+			FROM mb_lists l
+			JOIN tmp_list_results_{suffix}_ordered r ON r.id = l.id
+			JOIN mb_list_ext e ON e.list_id = l.id
+			JOIN mb_images i ON i.id = e.cover_id
+			WHERE 
+				l.deleted_at IS NULL AND
+				e.deleted_at IS NULL AND
+				i.deleted_at IS NULL;
 
 			SELECT l.*, r.order_column
 			FROM mb_lists l

@@ -3,7 +3,6 @@
 using Models;
 using Models.Composites;
 using Models.Composites.Filters;
-using static MangaBox.Database.Services.MbMangaDbService;
 
 /// <summary>
 /// The service for interacting with the mb_lists table
@@ -104,6 +103,14 @@ WHERE
 		const string QUERY = @"
 SELECT * FROM mb_lists WHERE id = :id AND deleted_at IS NULL;
 
+SELECT DISTINCT p.*
+FROM mb_lists l
+JOIN mb_list_ext p ON p.list_id = l.id
+WHERE 
+	l.id = :id AND
+	l.deleted_at IS NULL AND
+	p.deleted_at IS NULL;
+
 SELECT DISTINCT b.*
 FROM mb_lists p
 JOIN mb_list_items b ON b.list_id = p.id
@@ -126,20 +133,16 @@ WHERE
     a.deleted_at IS NULL AND
     m.deleted_at IS NULL;
 
-SELECT DISTINCT p.*, i.created_at as cover_created_at
+SELECT DISTINCT p.*
 FROM mb_lists l
-JOIN mb_list_items i ON i.list_id = l.id
-JOIN mb_manga m ON m.id = i.manga_id
-JOIN mb_images p ON p.manga_id = m.id AND p.chapter_id IS NULL
+JOIN mb_list_ext e ON e.list_id = l.id
+JOIN mb_images p ON e.cover_id = p.id
 WHERE
     l.id = :id AND
     l.deleted_at IS NULL AND
-    i.deleted_at IS NULL AND
+    e.deleted_at IS NULL AND
     p.deleted_at IS NULL AND
-    m.deleted_at IS NULL AND
-	p.last_failed_at IS NULL
-ORDER BY i.created_at ASC, p.ordinal DESC
-LIMIT 1;";
+	p.last_failed_at IS NULL;";
 
 		using var con = await _sql.CreateConnection();
 		using var rdr = await con.QueryMultipleAsync(QUERY, new { id });
@@ -148,6 +151,7 @@ LIMIT 1;";
 		if (item is null) return null;
 
 		var related = new List<MangaBoxRelationship>();
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbListExt>());
 		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbListItem>());
 		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbTag>());
 		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbImage>());
@@ -167,17 +171,22 @@ LIMIT 1;";
 
 		var pages = (int)Math.Ceiling((double)total / filter.Size);
 
+		var ext = (await rdr.ReadAsync<MbListExt>()).ToDictionary(t => t.ListId);
 		var tags = (await rdr.ReadAsync<MbTag>()).ToDictionary(t => t.Id);
 		var tagMap = (await rdr.ReadAsync<IdMap>()).ToGDictionary(t => t.FirstId);
-		var covers = (await rdr.ReadAsync<MbListCoverImage>()).ToDictionary(t => t.ListId);
+		var covers = (await rdr.ReadAsync<MbImage>()).ToDictionary(t => t.Id);
 
 		var results = new List<MangaBoxType<MbList>>();
 
 		foreach(var list in await rdr.ReadAsync<MbList>())
 		{
 			var related = new List<MangaBoxRelationship>();
-			if (covers.TryGetValue(list.Id, out var cover))
-				MangaBoxRelationship.Apply(related, (MbImage)cover);
+			if (ext.TryGetValue(list.Id, out var e))
+			{
+				MangaBoxRelationship.Apply(related, e);
+				if (e.CoverId is not null && covers.TryGetValue(e.CoverId.Value, out var cover))
+					MangaBoxRelationship.Apply(related, cover);
+			}
 			if (tagMap.TryGetValue(list.Id, out var tmap))
 				MangaBoxRelationship.Apply(related, tmap
 					.Select(t => tags.TryGetValue(t.SecondId, out var tag) ? tag : null)

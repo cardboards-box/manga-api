@@ -23,6 +23,13 @@ public class MbList : MbDbObject
 	public string Name { get; set; } = string.Empty;
 
 	/// <summary>
+	/// The list this list was cloned from, if any
+	/// </summary>
+	[Column("cloned_from"), Fk<MbList>]
+	[JsonPropertyName("clonedFrom")]
+	public Guid? ClonedFrom { get; set; }
+
+	/// <summary>
 	/// The optional description of the list
 	/// </summary>
 	[Column("description")]

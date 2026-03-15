@@ -11,7 +11,7 @@ public class AuthController(
 	ILogger<AuthController> logger) : BaseController(logger)
 {
 #if DEBUG
-	private const string DEFAULT_REDIRECT = "https://localhost:7115/auth/resolve";
+	private const string DEFAULT_REDIRECT = "http://localhost:7115/auth/resolve";
 #else
 	private const string DEFAULT_REDIRECT = "https://mangabox.app/auth";
 #endif

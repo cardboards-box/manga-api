@@ -113,6 +113,7 @@ internal class ListService(
 			IsPublic = request.IsPublic
 		};
 		list.Id = await _db.List.Insert(list);
+		await _db.ListExt.Update(list.Id);
 		return await Fetch(list.Id, profileId);
 	}
 
@@ -134,6 +135,7 @@ internal class ListService(
 		list.Description = request.Description;
 		list.IsPublic = request.IsPublic;
 		await _db.List.Update(list);
+		await _db.ListExt.Update(list.Id);
 		return await Fetch(list.Id, profileId);
 	}
 
@@ -158,12 +160,14 @@ internal class ListService(
 	public async Task<Boxed> Link(MbListItem.LinkRequest request)
 	{
 		var result = await _db.ListItem.Create(request);
+		await _db.ListExt.Update(request.ListId);
 		return await Validate(result, request);
 	}
 
 	public async Task<Boxed> Unlink(MbListItem.LinkRequest request)
 	{
 		var result = await _db.ListItem.Delete(request);
+		await _db.ListExt.Update(request.ListId);
 		return await Validate(result, request);
 	}
 }

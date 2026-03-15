@@ -22,6 +22,7 @@
         "Tables/mb_manga_relationships.sql",
         "Tables/mb_list_items.sql",
         "Tables/mb_images.sql",
+        "Tables/mb_list_ext.sql",
         "indices.sql",
         "Views/mb_vw_chapter_numbers.sql"
     ]

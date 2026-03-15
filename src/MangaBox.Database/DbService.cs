@@ -28,6 +28,11 @@ public interface IDbService
 	IMbListDbService List { get; }
 
 	/// <summary>
+	/// The service for interacting with the mb_list_ext table
+	/// </summary>
+	IMbListExtDbService ListExt { get; }
+
+	/// <summary>
 	/// The service for interacting with the mb_list_items table
 	/// </summary>
 	IMbListItemDbService ListItem { get; }
@@ -90,6 +95,7 @@ internal class DbService(IServiceProvider _provider) : IDbService
 	private IMbChapterProgressDbService? _chapterProgress;
 	private IMbImageDbService? _image;
 	private IMbListDbService? _list;
+	private IMbListExtDbService? _listExt;
 	private IMbListItemDbService? _listItem;
 	private IMbLogDbService? _log;
 	private IMbMangaDbService? _manga;
@@ -108,6 +114,7 @@ internal class DbService(IServiceProvider _provider) : IDbService
 	public IMbChapterProgressDbService ChapterProgress => _chapterProgress ??= _provider.GetRequiredService<IMbChapterProgressDbService>();
 	public IMbImageDbService Image => _image ??= _provider.GetRequiredService<IMbImageDbService>();
 	public IMbListDbService List => _list ??= _provider.GetRequiredService<IMbListDbService>();
+	public IMbListExtDbService ListExt => _listExt ??= _provider.GetRequiredService<IMbListExtDbService>();
 	public IMbListItemDbService ListItem => _listItem ??= _provider.GetRequiredService<IMbListItemDbService>();
 	public IMbLogDbService Log => _log ??= _provider.GetRequiredService<IMbLogDbService>();
 	public IMbMangaDbService Manga => _manga ??= _provider.GetRequiredService<IMbMangaDbService>();

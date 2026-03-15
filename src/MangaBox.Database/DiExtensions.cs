@@ -46,6 +46,7 @@ public static class DiExtensions
 			.Add<IMbPersonDbService, MbPersonDbService, MbPerson>()
 			.Add<IMbSourceDbService, MbSourceDbService, MbSource>()
 			.Add<IMbChapterDbService, MbChapterDbService, MbChapter>()
+			.Add<IMbListExtDbService, MbListExtDbService, MbListExt>()
 			.Add<IMbProfileDbService, MbProfileDbService, MbProfile>()
 			.Add<IMbListItemDbService, MbListItemDbService, MbListItem>()
 			.Add<IMbMangaExtDbService, MbMangaExtDbService, MbMangaExt>()
