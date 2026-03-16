@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace MangaBox.Models.Composites;
+﻿namespace MangaBox.Models.Composites;
 
 /// <summary>
 /// The ID map 

@@ -51,13 +51,13 @@ public interface IMbMangaProgressDbService
 	/// <returns>The updated manga progress</returns>
 	Task<MangaBoxType<MbMangaProgress>?> Fetch(Guid profileId, Guid mangaId);
 
-	/// <summary>
-	/// Fetches the record and all related records
-	/// </summary>
-	/// <param name="profileId">The ID of the profile</param>
-	/// <param name="ids">The IDs of the manga to fetch</param>
-	/// <returns>The record and all related records</returns>
-	Task<MbMangaProgress[]> FetchByManga(Guid profileId, params Guid[] ids);
+    /// <summary>
+    /// Fetches the record and all related records
+    /// </summary>
+    /// <param name="profileId">The ID of the profile</param>
+    /// <param name="ids">The IDs of the manga to fetch</param>
+    /// <returns>The record and all related records</returns>
+    Task<MangaBoxType<MbMangaProgress>[]> FetchByManga(Guid profileId, params Guid[] ids);
 
 	/// <summary>
 	/// Updates the favourite status of a manga progress record
@@ -118,13 +118,27 @@ internal class MbMangaProgressDbService(
     public async Task<MangaBoxType<MbMangaProgress>?> FetchWithQuery(string? query, object? pars)
     {
         const string BASE_QUERY = @"
-SELECT DISTINCT p.* 
-FROM mb_manga_progress p
-JOIN mb_manga m ON p.manga_id = m.id
-WHERE 
-    p.manga_id = :mangaId AND 
+SELECT 
+    DISTINCT 
+    COALESCE(p.id, m.id) as id,
+    COALESCE(p.profile_id, :profileId) as profile_id,
+    COALESCE(p.manga_id, m.id) as manga_id,
+    p.last_read_ordinal,
+    p.last_read_chapter_id,
+    p.last_read_at,
+    COALESCE(p.is_completed, false) as is_completed,
+    COALESCE(p.favorited, false) as favorited,
+    COALESCE(p.progress_percentage, 0) as progress_percentage,
+    COALESCE(p.created_at, CURRENT_TIMESTAMP) as created_at,
+    COALESCE(p.updated_at, CURRENT_TIMESTAMP) as updated_at,
+    p.deleted_at
+FROM mb_manga m
+LEFT JOIN mb_manga_progress p ON 
+    p.manga_id = m.id AND
     p.profile_id = :profileId AND
-    p.deleted_at IS NULL AND
+    p.deleted_at IS NULL
+WHERE 
+    m.id = :mangaId AND 
     m.deleted_at IS NULL;
 
 SELECT DISTINCT c.*
@@ -136,6 +150,17 @@ WHERE
     p.profile_id = :profileId AND
     p.deleted_at IS NULL AND
     c.deleted_at IS NULL AND
+    m.deleted_at IS NULL;
+
+SELECT DISTINCT l.*
+FROM mb_lists l
+JOIN mb_list_items i ON i.list_id = l.id
+JOIN mb_manga m ON i.manga_id = m.id
+WHERE
+    i.manga_id = :mangaId AND
+    l.profile_id = :profileId AND
+    i.deleted_at IS NULL AND
+    l.deleted_at IS NULL AND
     m.deleted_at IS NULL;";
 
         query = (query ?? "") + BASE_QUERY;
@@ -148,19 +173,79 @@ WHERE
 
 		var results = new List<MangaBoxRelationship>();
         MangaBoxRelationship.Apply(results, await rdr.ReadAsync<MbChapterProgress>());
+        MangaBoxRelationship.Apply(results, await rdr.ReadAsync<MbList>());
 
 		return new(progress, [..results]);
 	}
 
-	public Task<MbMangaProgress[]> FetchByManga(Guid profileId, params Guid[] ids)
+	public async Task<MangaBoxType<MbMangaProgress>[]> FetchByManga(Guid profileId, params Guid[] ids)
     {
-        const string QUERY = @"SELECT DISTINCT * 
-FROM mb_manga_progress
+        const string QUERY = @"
+SELECT DISTINCT l.*
+FROM mb_lists l
+JOIN mb_list_items i ON i.list_id = l.id
+JOIN mb_manga m ON i.manga_id = m.id
 WHERE
-    profile_id = :profileId AND
-    manga_id = ANY( :ids ) AND
-    deleted_at IS NULL";
-        return Get(QUERY, new { profileId, ids });
+    i.manga_id = ANY( :ids ) AND
+    l.profile_id = :profileId AND
+    i.deleted_at IS NULL AND
+    l.deleted_at IS NULL AND
+    m.deleted_at IS NULL;
+
+SELECT 
+    DISTINCT 
+    i.manga_id as first_id,
+    l.id as second_id
+FROM mb_lists l
+JOIN mb_list_items i ON i.list_id = l.id
+JOIN mb_manga m ON i.manga_id = m.id
+WHERE
+    i.manga_id = ANY( :ids ) AND
+    l.profile_id = :profileId AND
+    i.deleted_at IS NULL AND
+    l.deleted_at IS NULL AND
+    m.deleted_at IS NULL;
+
+SELECT 
+    DISTINCT 
+    COALESCE(p.id, m.id) as id,
+    COALESCE(p.profile_id, :profileId) as profile_id,
+    COALESCE(p.manga_id, m.id) as manga_id,
+    p.last_read_ordinal,
+    p.last_read_chapter_id,
+    p.last_read_at,
+    COALESCE(p.is_completed, false) as is_completed,
+    COALESCE(p.favorited, false) as favorited,
+    COALESCE(p.progress_percentage, 0) as progress_percentage,
+    COALESCE(p.created_at, CURRENT_TIMESTAMP) as created_at,
+    COALESCE(p.updated_at, CURRENT_TIMESTAMP) as updated_at,
+    p.deleted_at
+FROM mb_manga m
+LEFT JOIN mb_manga_progress p ON 
+    p.manga_id = m.id AND
+    p.profile_id = :profileId AND
+    p.deleted_at IS NULL
+WHERE 
+    m.id = ANY( :ids ) AND 
+    m.deleted_at IS NULL;";
+        using var con = await _sql.CreateConnection();
+        using var rdr = await con.QueryMultipleAsync(QUERY, new { profileId, ids });
+
+        var lists = (await rdr.ReadAsync<MbList>()).ToDictionary(t => t.Id);
+        var listMap = (await rdr.ReadAsync<IdMap>()).ToGDictionary(t => t.FirstId);
+
+        var results = new List<MangaBoxType<MbMangaProgress>>();
+        foreach(var prog in await rdr.ReadAsync<MbMangaProgress>())
+        {
+            var related = new List<MangaBoxRelationship>();
+            var listIds = listMap.TryGetValue(prog.MangaId, out var lids) ? lids : [];
+            foreach (var id in listIds)
+                if (lists.TryGetValue(id.SecondId, out var list))
+                    MangaBoxRelationship.Apply(related, list);
+            results.Add(new(prog, [.. related]));
+        }
+
+        return [..results];
 	}
 
     public async Task<MbMangaProgress[]> UpdateInProgress()
