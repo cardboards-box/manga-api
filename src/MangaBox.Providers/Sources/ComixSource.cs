@@ -2,6 +2,7 @@
 
 namespace MangaBox.Providers.Sources;
 
+using Utilities.Flare;
 using static Services.MangaSource;
 
 public interface IComixSource : IMangaSource
@@ -36,9 +37,8 @@ internal class ComixSource(
 			return [];
 		}
 
-		return chapter.Result.Images
-			.Select(i => new MangaChapterPage(i.Url, (int)i.Width, (int)i.Height))
-			.ToArray();
+		return [..chapter.Result.Images
+			.Select(i => new MangaChapterPage(i.Url, (int)i.Width, (int)i.Height))];
 	}
 
 	public async Task<Manga?> Manga(string id, CancellationToken token)
@@ -59,7 +59,6 @@ internal class ComixSource(
 				};
 			}
 		}
-		;
 
 		var manga = await _api.Manga(id, token);
 		if (manga is null)
@@ -102,9 +101,13 @@ internal class ComixSource(
 	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }
 
-internal class ComixApiService(IApiService _api)
+internal class ComixApiService(
+	IFlareSolverService _flare,
+	ILogger<ComixApiService> _logger)
 {
 	public const string BASE_URL = "https://comix.to/api/v2";
+
+	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public static string WrapUrl(string url)
 	{
@@ -113,19 +116,44 @@ internal class ComixApiService(IApiService _api)
 		return $"{BASE_URL}/{url.TrimStart('/')}";
 	}
 
+	public async Task<T?> Get<T>(string url, CancellationToken token)
+	{
+		var data = string.Empty;
+		try
+		{
+			url = WrapUrl(url);
+			var response = await _api.GetHtml(url, token);
+			if (response == null)
+			{
+				_logger.LogWarning("Received null response from COMIX API for URL: {Url}", url);
+				return default;
+			}
+
+			data = response?.DocumentNode?.InnerText("//pre") 
+				?? response?.FlareSolution.Response 
+				?? string.Empty;
+			return JsonSerializer.Deserialize<T>(data);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Error fetching COMIX URL: {Url} >> {Data}", url, data);
+			return default;
+		}
+	}
+
 	public Task<Comix<Comix.Manga>?> Manga(string id, CancellationToken token)
 	{
-		return _api.Get<Comix<Comix.Manga>>(WrapUrl($"manga/{id}"), token: token);
+		return Get<Comix<Comix.Manga>>($"manga/{id}", token: token);
 	}
 
 	public Task<Comix<Comix.Chapter>?> Chapter(string id, CancellationToken token)
 	{
-		return _api.Get<Comix<Comix.Chapter>>(WrapUrl($"chapters/{id}"), token: token);
+		return Get<Comix<Comix.Chapter>>($"chapters/{id}", token: token);
 	}
 
 	public Task<Comix<Comix.ChapterList>?> Chapters(string id, int page, CancellationToken token)
 	{
-		return _api.Get<Comix<Comix.ChapterList>>(WrapUrl($"manga/{id}/chapters?page={page}&limit=100"), token: token);
+		return Get<Comix<Comix.ChapterList>>($"manga/{id}/chapters?page={page}&limit=100", token: token);
 	}
 
 	public async IAsyncEnumerable<Comix.Chapter> AllChapters(string mangaId, [EnumeratorCancellation] CancellationToken token)

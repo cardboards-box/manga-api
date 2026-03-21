@@ -1,6 +1,7 @@
 ﻿namespace MangaBox.Cli.Verbs;
 
 using Database;
+using Flurl;
 using Models;
 using Models.Composites;
 using Providers.Sources;
@@ -17,6 +18,7 @@ internal class TestVerb(
 	IDbService _db,
 	IMangaLoaderService _loader,
 	IHyakuroSource _hyakuro,
+	IComixSource _comix,
 	ILogger<TestVerb> logger) : BooleanVerb<TestOption>(logger)
 {
 	private static readonly JsonSerializerOptions _options = new()
@@ -89,41 +91,17 @@ internal class TestVerb(
 		_logger.LogInformation("Updated manga extensions: {Updated}", Serialize(updated));
 	}
 
-	public async Task TestHyakuro(CancellationToken token)
+	public Task TestHyakuro(CancellationToken token)
 	{
 		const string URL = "https://hyakuro.net/manga/boku-wa-kimitachi-wo-shihai-suru";
 
-		var (match, id) = _hyakuro.MatchesProvider(URL);
-		if (!match || string.IsNullOrEmpty(id))
-		{
-			_logger.LogError("URL does not match Hyakuro provider: {URL}", URL);
-			return;
-		}
+		return TestSource(_hyakuro, URL, token);
+	}
 
-		var manga = await _hyakuro.Manga(id, token);
-		if (manga is null)
-		{
-			_logger.LogError("Failed to fetch manga from Hyakuro for ID: {ID}", id);
-			return;
-		}
-
-		_logger.LogInformation("Fetched manga from Hyakuro: {Manga}", Serialize(manga));
-
-		var chapter = manga.Chapters.FirstOrDefault();
-		if (chapter is null)
-		{
-			_logger.LogError("No chapters found for manga ID: {ID}", id);
-			return;
-		}
-
-		var pages = await _hyakuro.ChapterPages(id, chapter.Id, token);
-		if (pages.Length == 0)
-		{
-			_logger.LogError("No pages found for chapter ID: {ChapterId} of manga ID: {ID}", chapter.Id, id);
-			return;
-		}
-
-		_logger.LogInformation("Fetched {PageCount} pages for chapter ID: {ChapterId} of manga ID: {ID}", pages.Length, chapter.Id, id);
+	public Task TestComix(CancellationToken token)
+	{
+		const string URL = "https://comix.to/title/305e0-i-was-trapped-in-a-dungeon-for-25-years-and-became-a-legendary-suspicious-person-when-rescued";
+		return TestSource(_comix, URL, token);
 	}
 
 	public async Task LoadManga(CancellationToken token)
@@ -182,6 +160,42 @@ internal class TestVerb(
 
 			_logger.LogInformation("Pages: {Pages}", fullChapter.Data?.GetItems<MbImage>()?.Count() ?? -1);
 		});
+	}
+
+	public async Task TestSource(IMangaSource source, string url, CancellationToken token)
+	{
+		var name = source.Name;
+		var (match, id) = source.MatchesProvider(url);
+		if (!match || string.IsNullOrEmpty(id))
+		{
+			_logger.LogError("URL does not match {Name} provider: {URL}", name, url);
+			return;
+		}
+
+		var manga = await source.Manga(id, token);
+		if (manga is null)
+		{
+			_logger.LogError("Failed to fetch manga from {Name} for ID: {ID}", name, id);
+			return;
+		}
+
+		_logger.LogInformation("Fetched manga from {Name}: {Manga}", name, Serialize(manga));
+
+		var chapter = manga.Chapters.FirstOrDefault();
+		if (chapter is null)
+		{
+			_logger.LogError("No chapters found for manga ID: {ID} from {Name}", id, name);
+			return;
+		}
+
+		var pages = await source.ChapterPages(id, chapter.Id, token);
+		if (pages.Length == 0)
+		{
+			_logger.LogError("No pages found for chapter ID: {ChapterId} of manga ID: {ID}", chapter.Id, id);
+			return;
+		}
+
+		_logger.LogInformation("Fetched {PageCount} pages for chapter ID: {ChapterId} of manga ID: {ID}", pages.Length, chapter.Id, id);
 	}
 
 	public async Task TestZeroPages()

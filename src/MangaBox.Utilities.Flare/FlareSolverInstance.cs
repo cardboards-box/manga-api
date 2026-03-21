@@ -1,10 +1,9 @@
-﻿using HtmlAgilityPack;
+﻿using System.Collections.Specialized;
 
 namespace MangaBox.Utilities.Flare;
 
 using Models;
 using RateLimits;
-using System.Collections.Specialized;
 
 /// <summary>
 /// A rate-limited instance of the Flare solver
@@ -139,7 +138,16 @@ public class FlareSolverInstance(
 		_logger.LogInformation("Resuming after pause. New Limits {limit} - {timeout}ms", limit, timeout);
 	}
 
-	private async Task<FlareHtmlDocument> DoRequest(string url, bool get, NameValueCollection? body, CancellationToken token, int count = 0)
+	/// <summary>
+	/// Makes the request a certain number of times until it succeeds
+	/// </summary>
+	/// <param name="url">The URL to fetch</param>
+	/// <param name="get">Whether or not it's a get or post request</param>
+	/// <param name="body">The optional body for the request</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <param name="count">The number of retry attempts</param>
+	/// <returns>The raw response from the URL</returns>
+	private async Task<SolverResponse> DoRequest(string url, bool get, NameValueCollection? body, CancellationToken token, int count = 0)
 	{
 		try
 		{
@@ -153,14 +161,8 @@ public class FlareSolverInstance(
 				throw new Exception($"Failed to get data: {data.Solution.Status}");
 
 			_cookies = data.Solution.Cookies;
-
-			var doc = new FlareHtmlDocument
-			{
-				FlareSolution = data.Solution
-			};
-			doc.LoadHtml(data.Solution.Response);
 			_logger.LogInformation("Got data from {url}", url);
-			return doc;
+			return data;
 		}
 		catch (Exception ex)
 		{
@@ -177,6 +179,46 @@ public class FlareSolverInstance(
 	}
 
 	/// <summary>
+	/// Converts a response from flaresolverr to an HTML doc
+	/// </summary>
+	/// <param name="response">The response from flaresolverr</param>
+	/// <returns>The HTML document generated from the response</returns>
+	private static FlareHtmlDocument FromResponse(SolverResponse response)
+	{
+		var doc = new FlareHtmlDocument
+		{
+			FlareSolution = response.Solution
+		};
+		doc.LoadHtml(response.Solution.Response);
+		return doc;
+	}
+
+	/// <summary>
+	/// Requests data from the given URL and returns the raw response
+	/// </summary>
+	/// <param name="url">The URL to fetch</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <param name="count">The number of retry attempts</param>
+	/// <returns>The raw response from the URL</returns>
+	public virtual Task<SolverResponse> Get(string url, CancellationToken token, int count = 0)
+	{
+		return DoRequest(url, true, null, token, count);
+	}
+
+	/// <summary>
+	/// Requests data from the given URL and returns the raw response
+	/// </summary>
+	/// <param name="url">The URL to fetch</param>
+	/// <param name="body">The body of the request</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <param name="count">The number of retry attempts</param>
+	/// <returns>The raw response from the URL</returns>
+	public virtual Task<SolverResponse> Post(string url, NameValueCollection body, CancellationToken token, int count = 0)
+	{
+		return DoRequest(url, false, body, token, count);
+	}
+
+	/// <summary>
 	/// Requests HTML from the given URL
 	/// </summary>
 	/// <param name="url">The URL to fetch</param>
@@ -189,7 +231,8 @@ public class FlareSolverInstance(
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;
 
-		var page = await DoRequest(url, true, null, token);
+		var resp = await DoRequest(url, true, null, token);
+		var page = FromResponse(resp);
 		if (cache) _pageCache[url] = page;
 		return page;
 	}
@@ -208,7 +251,8 @@ public class FlareSolverInstance(
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;
 
-		var page = await DoRequest(url, false, body, token);
+		var resp = await DoRequest(url, false, body, token);
+		var page = FromResponse(resp);
 		if (cache) _pageCache[url] = page;
 		return page;
 	}
