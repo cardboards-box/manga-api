@@ -1,11 +1,22 @@
 WITH chapter_logs AS (
     SELECT
-        substring(message FROM 'Fetch: (.*?)"') as chapterId
+        DISTINCT
+        TRIM(substring(message FROM 'Fetch: (.*?)"'))::uuid as chapterId
     FROM mb_logs
     WHERE
         source = 'MangaBox.Utilities.MangaDex.MangaDexService' AND
-        message LIKE 'Manga Dex Error: "Pages Fetch: %" - "not_found_http_exception%'
-    ORDER BY created_at DESC
+        message LIKE 'Manga Dex Error: "Pages Fetch: %" - "not_found_http_exception%' AND
+        created_at > (CURRENT_TIMESTAMP - INTERVAL '1 days')
+    UNION
+    SELECT
+        DISTINCT
+        TRIM(SUBSTRING(message, 24, 36))::uuid as chapterId
+    FROM mb_logs
+    WHERE
+        category = 'New Chapter Indexing' AND
+        log_level = 4 AND
+        message LIKE '%No pages were found for chapter.%' AND
+        created_at > (CURRENT_TIMESTAMP - INTERVAL '1 days')
 ), chapters_to_delete AS (
     SELECT
         c.id as chapter_id
