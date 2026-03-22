@@ -15,6 +15,7 @@ public class FlareSolverInstance(
 	ILogger _logger)
 {
 	private SolverCookie[]? _cookies = null;
+	private string? _userAgent = null;
 	private RateLimiterBase? _rateLimiter = null;
 	private (int limit, int timeout)? _limiter = null;
 	private readonly Dictionary<string, FlareHtmlDocument> _pageCache = new(StringComparer.InvariantCultureIgnoreCase);
@@ -73,6 +74,16 @@ public class FlareSolverInstance(
 	public string Cookie => _cookies is null
 		? string.Empty
 		: string.Join("; ", _cookies.Select(c => $"{c.Name}={c.Value}"));
+
+	/// <summary>
+	/// All of the cookies to use for requests
+	/// </summary>
+	public IEnumerable<SolverCookie> Cookies => _cookies ?? [];
+
+	/// <summary>
+	/// The user-agent for the request
+	/// </summary>
+	public string? UserAgent => _userAgent;
 
 	/// <summary>
 	/// Clears the current cookie
@@ -161,6 +172,7 @@ public class FlareSolverInstance(
 				throw new Exception($"Failed to get data: {data.Solution.Status}");
 
 			_cookies = data.Solution.Cookies;
+			_userAgent = data.Solution.UserAgent;
 			_logger.LogInformation("Got data from {url}", url);
 			return data;
 		}

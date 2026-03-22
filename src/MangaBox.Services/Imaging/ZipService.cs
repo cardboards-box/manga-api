@@ -1,6 +1,6 @@
 ﻿using System.IO.Compression;
 
-namespace MangaBox.Services;
+namespace MangaBox.Services.Imaging;
 
 using Headers = Dictionary<string, string>;
 using ZipResult = (string? Error, string? Path, string[] Files);

@@ -36,6 +36,7 @@
 
 	<ItemGroup>
 	  <PackageReference Include="AsyncKeyedLock" Version="8.0.2" />
+	  <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.5" />
 	  <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
 	  <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
 	</ItemGroup>
@@ -43,6 +44,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\MangaBox.Database\MangaBox.Database.csproj" />
 		<ProjectReference Include="..\MangaBox.Jwt\MangaBox.Jwt.csproj" />
+		<ProjectReference Include="..\MangaBox.Utilities.Flare\MangaBox.Utilities.Flare.csproj" />
 	</ItemGroup>
 
 </Project>

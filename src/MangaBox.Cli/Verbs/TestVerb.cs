@@ -1,11 +1,11 @@
 ﻿namespace MangaBox.Cli.Verbs;
 
 using Database;
-using Flurl;
 using Models;
 using Models.Composites;
 using Providers.Sources;
 using Services;
+using Services.Imaging;
 
 [Verb("test", HelpText = "Run tests.")]
 internal class TestOption
@@ -16,9 +16,10 @@ internal class TestOption
 
 internal class TestVerb(
 	IDbService _db,
-	IMangaLoaderService _loader,
-	IHyakuroSource _hyakuro,
 	IComixSource _comix,
+	IHyakuroSource _hyakuro,
+	IFlareImageService _flare,
+	IMangaLoaderService _loader,
 	ILogger<TestVerb> logger) : BooleanVerb<TestOption>(logger)
 {
 	private static readonly JsonSerializerOptions _options = new()
@@ -94,14 +95,13 @@ internal class TestVerb(
 	public Task TestHyakuro(CancellationToken token)
 	{
 		const string URL = "https://hyakuro.net/manga/boku-wa-kimitachi-wo-shihai-suru";
-
-		return TestSource(_hyakuro, URL, token);
+		return TestSource(_hyakuro, URL, false, token);
 	}
 
 	public Task TestComix(CancellationToken token)
 	{
 		const string URL = "https://comix.to/title/305e0-i-was-trapped-in-a-dungeon-for-25-years-and-became-a-legendary-suspicious-person-when-rescued";
-		return TestSource(_comix, URL, token);
+		return TestSource(_comix, URL, true, token);
 	}
 
 	public async Task LoadManga(CancellationToken token)
@@ -162,7 +162,7 @@ internal class TestVerb(
 		});
 	}
 
-	public async Task TestSource(IMangaSource source, string url, CancellationToken token)
+	public async Task TestSource(IMangaSource source, string url, bool images, CancellationToken token)
 	{
 		var name = source.Name;
 		var (match, id) = source.MatchesProvider(url);
@@ -196,6 +196,39 @@ internal class TestVerb(
 		}
 
 		_logger.LogInformation("Fetched {PageCount} pages for chapter ID: {ChapterId} of manga ID: {ID}", pages.Length, chapter.Id, id);
+
+		if (!images) return;
+
+		var opts = new ParallelOptions
+		{
+			MaxDegreeOfParallelism = 4,
+			CancellationToken = token
+		};
+		await Parallel.ForEachAsync(pages, async (page, token) =>
+		{
+			try
+			{
+				using var image = await _flare.Download(page.Page, null, token);
+				if (!string.IsNullOrEmpty(image.Error) || image.Stream is null)
+				{
+					_logger.LogError("Error occurred while fetching image: {Error} >> {Page}", image.Error, page.Page);
+					return;
+				}
+
+				var name = image.FileName ?? (page.Page.MD5Hash() + ".jpg");
+				using var io = File.Create(name);
+				await image.Stream.CopyToAsync(io, token);
+				await io.FlushAsync(token);
+
+				_logger.LogInformation("Successfully downloaded page {PageUrl} of chapter ID: {ChapterId} of manga ID: {ID} >> {Name}", 
+					page.Page, chapter.Id, id, name);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error processing page {PageUrl} of chapter ID: {ChapterId} of manga ID: {ID}", page.Page, chapter.Id, id);
+				return;
+			}
+		});
 	}
 
 	public async Task TestZeroPages()

@@ -1,6 +1,7 @@
 ﻿namespace MangaBox.Api.Controllers;
 
 using Match;
+using Services.Imaging;
 
 /// <summary>
 /// A service for interacting with images

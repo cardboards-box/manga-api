@@ -1,6 +1,7 @@
 ﻿namespace MangaBox.Match;
 
 using RIS;
+using Services.Imaging;
 using TaskType = Func<IImageSearchService, CancellationToken, IAsyncEnumerable<ImageSearchResult>>;
 
 /// <summary>

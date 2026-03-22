@@ -99,6 +99,7 @@ internal class SourceService(
 						BaseUrl = source.HomeUrl,
 						Enabled = true,
 						IsHidden = false,
+						UseFlareImages = source is IFlareImageSource flare && flare.UseFlareImages,
 						Referer = source.Referer,
 						UserAgent = source.UserAgent,
 						Headers = source.Headers?.Select(h => new MbHeader

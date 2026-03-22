@@ -6,7 +6,7 @@ using System.IO.Compression;
 using System.Threading.RateLimiting;
 using Image = SixLabors.ImageSharp.Image;
 
-namespace MangaBox.Services;
+namespace MangaBox.Services.Imaging;
 
 using CBZModels;
 
@@ -79,6 +79,7 @@ internal class ImageService(
 	ICacheService _cache,
 	IConfiguration _config,
 	ISourceService _sources,
+	IFlareImageService _flare,
 	IMangaLoaderService _loader,
 	ILogger<ImageService> _logger) : IImageService
 {
@@ -224,8 +225,12 @@ internal class ImageService(
 				return zipResult;
 			}
 
+			var useFlare = (source.UseFlareImages && image.ChapterId is not null) ||
+				(source.UseFlareImagesCover && image.ChapterId is null);
 			var headers = _http.HeadersFrom(image.Url, source, manga, image);
-			using var download = await _http.Download(image.Url, headers, token);
+			using var download = await (useFlare
+				? _flare.Download(image.Url, headers, token)
+				: _http.Download(image.Url, headers, token));
 			if (!string.IsNullOrEmpty(download.Error) || download.Stream is null)
 				return await HandleError(download.Error ?? "Stream came back empty!");
 
@@ -529,63 +534,4 @@ internal class ImageService(
 		}
 		catch { }
 	}
-}
-
-/// <summary>
-/// Represents a file result
-/// </summary>
-/// <param name="Error">The error that occurred (if any)</param>
-/// <param name="Stream">The stream of the zip file</param>
-/// <param name="FileName">The name of the zip file</param>
-/// <param name="MimeType">The mime-type / content-type</param>
-public record class SingleFileResult(
-	string? Error,
-	Stream? Stream = null,
-	string? FileName = null,
-	string? MimeType = null);
-
-/// <summary>
-/// Represents a resulting image from the image service
-/// </summary>
-/// <param name="Error">The error message if applicable</param>
-/// <param name="Stream">The image stream</param>
-/// <param name="FromCache">Indicates if the image was retrieved from cache or the source</param>
-/// <param name="Image">The image data</param>
-/// <param name="OverrideOrdinal">The optional ordinal to override the one on the base image</param>
-public record class ImageResult(
-	string? Error,
-	MbImage Image,
-	Stream? Stream = null,
-	bool FromCache = true,
-	int? OverrideOrdinal = null)
-{
-	/// <summary>
-	/// The ordinal of the image in the set
-	/// </summary>
-	public int Ordinal => OverrideOrdinal ?? Image.Ordinal;
-
-	/// <summary>
-	/// The ID of the file
-	/// </summary>
-	public Guid FileId => Image.Id;
-
-	/// <summary>
-	/// The name of the file
-	/// </summary>
-	public string? FileName => Image?.FileName;
-
-	/// <summary>
-	/// The mime-type / content-type
-	/// </summary>
-	public string? MimeType => Image?.MimeType;
-
-	/// <summary>
-	/// The width of the image in pixels
-	/// </summary>
-	public int? Width => Image?.ImageWidth;
-
-	/// <summary>
-	/// The height of the image in pixels
-	/// </summary>
-	public int? Height => Image?.ImageHeight;
 }

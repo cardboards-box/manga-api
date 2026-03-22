@@ -1,6 +1,6 @@
 ﻿using CardboardBox.Json;
 
-namespace MangaBox.Services;
+namespace MangaBox.Services.Imaging;
 
 /// <summary>
 /// A service for caching files

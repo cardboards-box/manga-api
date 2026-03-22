@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS mb_sources (
 	user_agent TEXT NULL,
 	headers mb_headers[] DEFAULT '{}',
 	default_rating INT NOT NULL DEFAULT 0,
+	use_flare_images BOOLEAN NOT NULL DEFAULT FALSE,
+	use_flare_images_cover BOOLEAN NOT NULL DEFAULT FALSE,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	deleted_at TIMESTAMP NULL

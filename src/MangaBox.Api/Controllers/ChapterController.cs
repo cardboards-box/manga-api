@@ -1,6 +1,7 @@
 ﻿namespace MangaBox.Api.Controllers;
 
 using Services.CBZModels;
+using Services.Imaging;
 
 /// <summary>
 /// The controller for chapter endpoints

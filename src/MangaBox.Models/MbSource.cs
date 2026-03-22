@@ -76,4 +76,18 @@ public class MbSource : MbDbObject, IDbCacheTable
 	[Column("headers"), InnerValid]
 	[JsonIgnore]
 	public MbHeader[] Headers { get; set; } = [];
+
+	/// <summary>
+	/// Whether or not to use FlareSolverr for fetching images
+	/// </summary>
+	[Column("use_flare_images")]
+	[JsonIgnore]
+	public bool UseFlareImages { get; set; } = false;
+
+	/// <summary>
+	/// Whether or not to use FlareSolverr for fetching cover images
+	/// </summary>
+	[Column("use_flare_images_cover")]
+	[JsonIgnore]
+	public bool UseFlareImagesCover { get; set; } = false;
 }

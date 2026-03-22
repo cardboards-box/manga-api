@@ -3,9 +3,10 @@
 namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
+using Utilities.Flare.Models;
 using static Services.MangaSource;
 
-public interface IComixSource : IMangaSource
+public interface IComixSource : IMangaSource, IFlareImageSource
 {
 
 }
@@ -27,6 +28,8 @@ internal class ComixSource(
 	public string? UserAgent => PolyfillExtensions.USER_AGENT;
 
 	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+
+	public bool UseFlareImages => true;
 
 	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
@@ -116,7 +119,7 @@ internal class ComixApiService(
 		return $"{BASE_URL}/{url.TrimStart('/')}";
 	}
 
-	public async Task<T?> Get<T>(string url, CancellationToken token)
+	public async Task<Comix<T>?> Get<T>(string url, CancellationToken token)
 	{
 		var data = string.Empty;
 		try
@@ -129,10 +132,14 @@ internal class ComixApiService(
 				return default;
 			}
 
-			data = response?.DocumentNode?.InnerText("//pre") 
-				?? response?.FlareSolution.Response 
+			data = response.DocumentNode?.InnerText("//pre") 
+				?? response.FlareSolution.Response 
 				?? string.Empty;
-			return JsonSerializer.Deserialize<T>(data);
+			var output = JsonSerializer.Deserialize<Comix<T>>(data);
+			if (output is null) return default;
+
+			output.Solver = response.FlareSolution;
+			return output;
 		}
 		catch (Exception ex)
 		{
@@ -143,17 +150,17 @@ internal class ComixApiService(
 
 	public Task<Comix<Comix.Manga>?> Manga(string id, CancellationToken token)
 	{
-		return Get<Comix<Comix.Manga>>($"manga/{id}", token: token);
+		return Get<Comix.Manga>($"manga/{id}", token: token);
 	}
 
 	public Task<Comix<Comix.Chapter>?> Chapter(string id, CancellationToken token)
 	{
-		return Get<Comix<Comix.Chapter>>($"chapters/{id}", token: token);
+		return Get<Comix.Chapter>($"chapters/{id}", token: token);
 	}
 
 	public Task<Comix<Comix.ChapterList>?> Chapters(string id, int page, CancellationToken token)
 	{
-		return Get<Comix<Comix.ChapterList>>($"manga/{id}/chapters?page={page}&limit=100", token: token);
+		return Get<Comix.ChapterList>($"manga/{id}/chapters?page={page}&limit=100", token: token);
 	}
 
 	public async IAsyncEnumerable<Comix.Chapter> AllChapters(string mangaId, [EnumeratorCancellation] CancellationToken token)
@@ -167,7 +174,10 @@ internal class ComixApiService(
 				yield break;
 
 			foreach (var chap in result.Result.Items)
+			{
+				chap.Solver = result.Solver;
 				yield return chap;
+			}
 
 			if (page >= result.Result.Pagination.LastPage)
 				yield break;
@@ -315,6 +325,9 @@ public class Comix
 
 		[JsonPropertyName("images")]
 		public Image[] Images { get; set; } = [];
+
+		[JsonIgnore]
+		public SolverSolution? Solver { get; set; }
 	}
 
 	public partial class Image
@@ -383,4 +396,7 @@ public class Comix<T>
 
 	[JsonPropertyName("result")]
 	public T Result { get; set; } = default!;
+
+	[JsonIgnore]
+	public SolverSolution? Solver { get; set; }
 }

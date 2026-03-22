@@ -3,6 +3,7 @@
 namespace MangaBox.Providers.Sources;
 
 using Models.Types;
+using Services.Imaging;
 using Utilities.Flare;
 
 public interface IHyakuroSource : IMangaSource

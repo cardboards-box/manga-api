@@ -3,6 +3,7 @@
 namespace MangaBox.Match;
 
 using RIS;
+using Services.Imaging;
 
 /// <summary>
 /// A service for indexing images in the RIS database

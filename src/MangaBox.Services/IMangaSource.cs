@@ -112,6 +112,17 @@ public interface IRatedSource
 }
 
 /// <summary>
+/// Represents a manga source that requires the use of FlareSolverr to fetch images
+/// </summary>
+public interface IFlareImageSource
+{
+	/// <summary>
+	/// Whether or not to use flare images for this source.
+	/// </summary>
+	bool UseFlareImages { get; }
+}
+
+/// <summary>
 /// A class scoping for manga source classes
 /// </summary>
 /// <remarks>TODO: Rename these later and find a proper home for them</remarks>

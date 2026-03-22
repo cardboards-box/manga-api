@@ -1,5 +1,7 @@
 ﻿namespace MangaBox.Api.Middleware.ScheduledTasks;
 
+using Services.Imaging;
+
 /// <summary>
 /// A scheduled task for indexing missing images
 /// </summary>
