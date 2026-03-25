@@ -44,6 +44,8 @@ public static class DiExtensions
 				});
 			});
 
-		await services.AddServices(config, c => c.AddDatabase());
+		await services.AddServices(config, c => c
+			.AddDatabase()
+			.Logger(c => c.Enrich.FromLogContext()));
 	}
 }

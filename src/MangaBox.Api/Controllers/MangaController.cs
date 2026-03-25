@@ -65,57 +65,35 @@ public class MangaController(
 	/// Finds the recommended manga
 	/// </summary>
 	/// <param name="id">The ID of the manga to compare to</param>
-	/// <param name="size">The number of related items to return</param>
-	/// <param name="excludeTags">Any tags to exclude</param>
+	/// <param name="filter">The filter to apply</param>
 	/// <returns>The recommended manga</returns>
 	[HttpGet, Route("manga/{id}/recommended")]
 	[ProducesArray<MangaBoxType<MbManga>>, ProducesError(400), ProducesError(404)]
-	public Task<IActionResult> Recommended([
-		FromRoute] string id, 
-		[FromQuery] int size = 20,
-		[FromQuery] string[]? excludeTags = null) => Box(async () =>
+	public Task<IActionResult> Recommended(
+		[FromRoute] string id, 
+		[FromQuery] RecommendedFilter filter) => Box(async () =>
 	{
-		if (size <= 0 || size > 100)
-			return Boxed.Bad("Size must be between 1 and 100.");
-
 		if (!Guid.TryParse(id, out var mid))
 			return Boxed.Bad("Manga ID is not a valid GUID.");
 
-		var tags = excludeTags?
-			.Select(t => Guid.TryParse(t, out var tid) ? tid : (Guid?)null)
-			.Where(tid => tid.HasValue)
-			.Select(t => t!.Value)
-			.ToArray() ?? [];
-
-		var manga = await _db.Manga.Recommended(mid, size, tags);
+		var manga = await _db.Manga.Recommended(mid, filter);
 		return Boxed.Ok(manga);
 	});
 
 	/// <summary>
 	/// Finds the recommended manga
 	/// </summary>
-	/// <param name="size">The number of related items to return</param>
-	/// <param name="excludeTags">Any tags to exclude</param>
+	/// <param name="filter">The filter to apply</param>
 	/// <returns>The recommended manga</returns>
 	[HttpGet, Route("manga/recommended")]
 	[ProducesArray<MangaBoxType<MbManga>>, ProducesError(400), ProducesError(404)]
-	public Task<IActionResult> RecommendedProfile([FromQuery] int size = 20,
-		[FromQuery] string[]? excludeTags = null) => Box(async () =>
+	public Task<IActionResult> RecommendedProfile([FromQuery] RecommendedFilter filter) => Box(async () =>
 	{
-		if (size <= 0 || size > 100)
-			return Boxed.Bad("Size must be between 1 and 100.");
-
 		var pid = this.GetProfileId();
 		if (!pid.HasValue)
 			return Boxed.Unauthorized("You must be logged in to use this!");
 
-		var tags = excludeTags?
-			.Select(t => Guid.TryParse(t, out var tid) ? tid : (Guid?)null)
-			.Where(tid => tid.HasValue)
-			.Select(t => t!.Value)
-			.ToArray() ?? [];
-
-		var manga = await _db.Manga.RecommendedByProfile(pid.Value, size, tags);
+		var manga = await _db.Manga.RecommendedByProfile(pid.Value, filter);
 		return Boxed.Ok(manga);
 	});
 

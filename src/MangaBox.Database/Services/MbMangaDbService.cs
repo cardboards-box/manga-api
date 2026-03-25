@@ -106,19 +106,17 @@ public interface IMbMangaDbService
 	/// Fetches the recommended manga
 	/// </summary>
 	/// <param name="mangaId">The manga to find recommendations for</param>
-	/// <param name="limit">The total number of manga to return</param>
-    /// <param name="tagExcludes">The tags to exclude from the recommendations</param>
+    /// <param name="filter">The filter to apply</param>
 	/// <returns>The recommended manga</returns>
-	Task<MangaBoxType<MbManga>[]> Recommended(Guid mangaId, int limit, Guid[] tagExcludes);
+	Task<MangaBoxType<MbManga>[]> Recommended(Guid mangaId, RecommendedFilter filter);
 
 	/// <summary>
 	/// Fetches the recommended manga for a profile
 	/// </summary>
 	/// <param name="profileId">The ID of the profile</param>
-	/// <param name="limit">The total number of manga to return</param>
-	/// <param name="tagExcludes">The tags to exclude from the recommendations</param>
+	/// <param name="filter">The filter to apply</param>
 	/// <returns>The recommended manga</returns>
-	Task<MangaBoxType<MbManga>[]> RecommendedByProfile(Guid profileId, int limit, Guid[] tagExcludes);
+	Task<MangaBoxType<MbManga>[]> RecommendedByProfile(Guid profileId, RecommendedFilter filter);
 }
 
 internal class MbMangaDbService(
@@ -320,24 +318,38 @@ WHERE
         return [.. results];
 	}
 
-    public async Task<MangaBoxType<MbManga>[]> Recommended(Guid mangaId, int limit, Guid[] tagExcludes)
+    public async Task<MangaBoxType<MbManga>[]> Recommended(Guid mangaId, RecommendedFilter filter)
     {
         var query = await _cache.Required("recommended_manga");
         query = string.Format(query, SearchFilter<MangaOrderBy>.TableSuffix());
 
 		using var con = await _sql.CreateConnection();
-		using var rdr = await con.QueryMultipleAsync(query, new { mangaId, limit, tagExcludes });
+		using var rdr = await con.QueryMultipleAsync(query, new 
+        { 
+            mangaId,
+            limit = Math.Clamp(filter.Size, 1, 100),
+            tagExcludes = filter.TagsEx.Distinct().ToArray(),
+            tagIncludes = filter.Tags.Distinct().ToArray(),
+            ratings = filter.Ratings.Select(t => (int)t).ToArray(),
+        });
 
 		return await FromMulti(rdr);
 	}
 
-    public async Task<MangaBoxType<MbManga>[]> RecommendedByProfile(Guid profileId, int limit, Guid[] tagExcludes)
+    public async Task<MangaBoxType<MbManga>[]> RecommendedByProfile(Guid profileId, RecommendedFilter filter)
 	{
 		var query = await _cache.Required("recommended_manga_profile");
 		query = string.Format(query, SearchFilter<MangaOrderBy>.TableSuffix());
 
 		using var con = await _sql.CreateConnection();
-		using var rdr = await con.QueryMultipleAsync(query, new { profileId, limit, tagExcludes });
+		using var rdr = await con.QueryMultipleAsync(query, new 
+        { 
+            profileId,
+			limit = Math.Clamp(filter.Size, 1, 100),
+			tagExcludes = filter.TagsEx.Distinct().ToArray(),
+			tagIncludes = filter.Tags.Distinct().ToArray(),
+			ratings = filter.Ratings.Select(t => (int)t).ToArray(),
+		});
 
 		return await FromMulti(rdr);
 	}

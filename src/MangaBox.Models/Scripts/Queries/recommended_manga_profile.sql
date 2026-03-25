@@ -38,11 +38,11 @@ WITH progress_rows AS (
             COALESCE(ca.has_bookmarks, false)
         ) AS has_interaction,
         (
-            LEAST(1.00, GREATEST(0.0, pr.progress_pct / 100.0))
-            + CASE WHEN pr.is_completed THEN 0.35 ELSE 0 END
-            + CASE WHEN pr.favorited THEN 0.25 ELSE 0 END
-            + CASE WHEN pr.last_read_at IS NOT NULL THEN 0.10 ELSE 0 END
-            + CASE WHEN COALESCE(ca.has_bookmarks, false) THEN 0.10 ELSE 0 END
+            LEAST(1.00, GREATEST(0.0, pr.progress_pct / 100.0)) +
+            CASE WHEN pr.is_completed THEN 0.35 ELSE 0 END +
+            CASE WHEN pr.favorited THEN 0.25 ELSE 0 END +
+            CASE WHEN pr.last_read_at IS NOT NULL THEN 0.10 ELSE 0 END +
+            CASE WHEN COALESCE(ca.has_bookmarks, false) THEN 0.10 ELSE 0 END
         )::numeric AS raw_w
     FROM progress_rows pr
     LEFT JOIN chapter_activity ca ON ca.progress_id = pr.progress_id
@@ -67,27 +67,37 @@ WITH progress_rows AS (
         m.deleted_at IS NULL AND
         NOT m.is_hidden
 ), seed_tag_weights AS MATERIALIZED (
-    SELECT mt.tag_id, SUM(sm.w)::numeric AS w
+    SELECT
+        mt.tag_id,
+        SUM(sm.w)::numeric AS w
     FROM seed_manga sm
     JOIN mb_manga_tags mt ON mt.manga_id = sm.id
     GROUP BY mt.tag_id
 ), seed_tag_total AS MATERIALIZED (
-    SELECT COALESCE(SUM(w), 0)::numeric AS sum_w FROM seed_tag_weights
+    SELECT COALESCE(SUM(w), 0)::numeric AS sum_w
+    FROM seed_tag_weights
 ), seed_people_weights AS MATERIALIZED (
     SELECT
         mr.person_id,
         mr.type,
-        SUM(sm.w * (CASE mr.type
-            WHEN 0 THEN 1.00  -- Author
-            WHEN 1 THEN 0.70  -- Artist
-            WHEN 2 THEN 0.35  -- Uploader
-            ELSE 0.35
-        END))::numeric AS w
+        SUM(
+            sm.w * (
+                CASE mr.type
+                    WHEN 0 THEN 1.00
+                    WHEN 1 THEN 0.70
+                    WHEN 2 THEN 0.35
+                    ELSE 0.35
+                END
+            )
+        )::numeric AS w
     FROM seed_manga sm
     JOIN mb_manga_relationships mr ON mr.manga_id = sm.id
-    GROUP BY mr.person_id, mr.type
+    GROUP BY
+        mr.person_id,
+        mr.type
 ), seed_people_total AS MATERIALIZED (
-    SELECT COALESCE(SUM(w), 0)::numeric AS sum_w FROM seed_people_weights
+    SELECT COALESCE(SUM(w), 0)::numeric AS sum_w
+    FROM seed_people_weights
 ), seed_stats AS MATERIALIZED (
     SELECT AVG(sm.content_rating)::numeric AS avg_rating
     FROM seed_manga sm
@@ -98,11 +108,15 @@ WITH progress_rows AS (
 ), cand_by_people AS MATERIALIZED (
     SELECT DISTINCT mr.manga_id
     FROM mb_manga_relationships mr
-    JOIN seed_people_weights spw ON spw.person_id = mr.person_id AND spw.type = mr.type
+    JOIN seed_people_weights spw ON
+        spw.person_id = mr.person_id AND
+        spw.type = mr.type
 ), cand_by_title AS MATERIALIZED (
     SELECT DISTINCT m.id AS manga_id
     FROM mb_manga m
-    JOIN seed_manga sm ON sm.title IS NOT NULL AND sm.title <> ''
+    JOIN seed_manga sm ON
+        sm.title IS NOT NULL AND
+        sm.title <> ''
     WHERE
         m.deleted_at IS NULL AND
         NOT m.is_hidden AND
@@ -116,26 +130,48 @@ WITH progress_rows AS (
     UNION
     SELECT manga_id FROM cand_by_title
 ), candidates AS MATERIALIZED (
-    SELECT m.id, m.title, m.content_rating, m.nsfw
+    SELECT
+        m.id,
+        m.title,
+        m.content_rating,
+        m.nsfw
     FROM mb_manga m
     JOIN candidate_ids ci ON ci.manga_id = m.id
     WHERE
-        m.deleted_at IS NULL AND 
-        NOT m.is_hidden AND 
+        m.deleted_at IS NULL AND
+        NOT m.is_hidden AND
         NOT EXISTS (
             SELECT 1
             FROM mb_manga_progress p
-            WHERE p.profile_id = :profileId
-            AND p.manga_id = m.id
-            AND p.deleted_at IS NULL
-        ) AND (
-            :tagExcludes IS NULL OR 
-            cardinality(:tagExcludes) = 0 OR 
+            WHERE
+                p.profile_id = :profileId AND
+                p.manga_id = m.id AND
+                p.deleted_at IS NULL
+        ) AND
+        (
+            :ratings IS NULL OR
+            cardinality(:ratings::int[]) = 0 OR
+            m.content_rating = ANY(:ratings::int[])
+        ) AND
+        (
+            :tagIncludes IS NULL OR
+            cardinality(:tagIncludes::uuid[]) = 0 OR
+            (
+                SELECT COUNT(DISTINCT x.tag_id)
+                FROM mb_manga_tags x
+                WHERE
+                    x.manga_id = m.id AND
+                    x.tag_id = ANY(:tagIncludes::uuid[])
+            ) = cardinality(:tagIncludes::uuid[])
+        ) AND
+        (
+            :tagExcludes IS NULL OR
+            cardinality(:tagExcludes::uuid[]) = 0 OR
             NOT EXISTS (
                 SELECT 1
                 FROM mb_manga_tags x
-                WHERE 
-                    x.manga_id = m.id AND 
+                WHERE
+                    x.manga_id = m.id AND
                     x.tag_id = ANY(:tagExcludes::uuid[])
             )
         )
@@ -153,7 +189,9 @@ WITH progress_rows AS (
         COALESCE(SUM(spw.w), 0)::numeric AS people_score
     FROM candidates c
     JOIN mb_manga_relationships mr ON mr.manga_id = c.id
-    JOIN seed_people_weights spw ON spw.person_id = mr.person_id AND spw.type = mr.type
+    JOIN seed_people_weights spw ON
+        spw.person_id = mr.person_id AND
+        spw.type = mr.type
     GROUP BY c.id
 ), candidate_title_score AS (
     SELECT
@@ -164,24 +202,37 @@ WITH progress_rows AS (
     JOIN seed_manga sm ON
         sm.title IS NOT NULL AND
         sm.title <> '' AND
-        c.title  IS NOT NULL AND
-        c.title  <> '' AND c.title % sm.title
+        c.title IS NOT NULL AND
+        c.title <> '' AND
+        c.title % sm.title
     GROUP BY c.id
 )
 SELECT
     c.id AS id,
     c.title,
-    COALESCE(cts.tag_score, 0)    AS tag_score,
+    COALESCE(cts.tag_score, 0) AS tag_score,
     COALESCE(cps.people_score, 0) AS people_score,
-    COALESCE(ctt.title_sim, 0)    AS title_sim,
+    COALESCE(ctt.title_sim, 0) AS title_sim,
     (1 - (ABS(c.content_rating - ss.avg_rating)::numeric / 3)) AS rating_norm,
-    CASE WHEN stt.sum_w <= 0 THEN 0 ELSE LEAST(1, COALESCE(cts.tag_score, 0) / stt.sum_w) END AS tag_norm,
-    CASE WHEN spt.sum_w <= 0 THEN 0 ELSE LEAST(1, COALESCE(cps.people_score, 0) / spt.sum_w) END AS people_norm,
+    CASE
+        WHEN stt.sum_w <= 0 THEN 0
+        ELSE LEAST(1, COALESCE(cts.tag_score, 0) / stt.sum_w)
+    END AS tag_norm,
+    CASE
+        WHEN spt.sum_w <= 0 THEN 0
+        ELSE LEAST(1, COALESCE(cps.people_score, 0) / spt.sum_w)
+    END AS people_norm,
     (
-        0.74 * CASE WHEN stt.sum_w <= 0 THEN 0 ELSE LEAST(1, COALESCE(cts.tag_score, 0) / stt.sum_w) END
-      + 0.14 * COALESCE(ctt.title_sim, 0)
-      + 0.08 * CASE WHEN spt.sum_w <= 0 THEN 0 ELSE LEAST(1, COALESCE(cps.people_score, 0) / spt.sum_w) END
-      + 0.04 * (1 - (ABS(c.content_rating - ss.avg_rating)::numeric / 3))
+        0.74 * CASE
+            WHEN stt.sum_w <= 0 THEN 0
+            ELSE LEAST(1, COALESCE(cts.tag_score, 0) / stt.sum_w)
+        END +
+        0.14 * COALESCE(ctt.title_sim, 0) +
+        0.08 * CASE
+            WHEN spt.sum_w <= 0 THEN 0
+            ELSE LEAST(1, COALESCE(cps.people_score, 0) / spt.sum_w)
+        END +
+        0.04 * (1 - (ABS(c.content_rating - ss.avg_rating)::numeric / 3))
     ) AS similarity_score
 FROM candidates c
 CROSS JOIN seed_tag_total stt
@@ -190,7 +241,10 @@ CROSS JOIN seed_stats ss
 LEFT JOIN candidate_tag_score cts ON cts.manga_id = c.id
 LEFT JOIN candidate_people_score cps ON cps.manga_id = c.id
 LEFT JOIN candidate_title_score ctt ON ctt.manga_id = c.id
-ORDER BY similarity_score DESC, tag_score DESC, title_sim DESC
+ORDER BY
+    similarity_score DESC,
+    tag_score DESC,
+    title_sim DESC
 LIMIT :limit;
 
 SELECT i.*

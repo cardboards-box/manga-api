@@ -10,8 +10,9 @@ WITH seed AS (
         m.nsfw,
         m.title
     FROM mb_manga m
-    WHERE m.id = :mangaId
-      AND m.deleted_at IS NULL
+    WHERE 
+        m.id = :mangaId AND 
+        m.deleted_at IS NULL
 ), seed_tags AS (
     SELECT mt.tag_id
     FROM mb_manga_tags mt
@@ -20,7 +21,9 @@ WITH seed AS (
     SELECT COUNT(*)::numeric AS cnt
     FROM seed_tags
 ), seed_people AS (
-    SELECT mr.person_id, mr.type
+    SELECT 
+        mr.person_id, 
+        mr.type
     FROM mb_manga_relationships mr
     JOIN seed s ON s.id = mr.manga_id
 ), seed_people_count AS (
@@ -38,9 +41,26 @@ WITH seed AS (
     WHERE 
         m.id <> s.id AND 
         m.deleted_at IS NULL AND 
-        NOT m.is_hidden AND (
+        NOT m.is_hidden AND 
+        (
+            :ratings IS NULL OR 
+            cardinality(:ratings::int[]) = 0 OR 
+            m.content_rating = ANY(:ratings::int[])
+        ) AND 
+        (
+            :tagIncludes IS NULL OR 
+            cardinality(:tagIncludes::uuid[]) = 0 OR 
+            (
+                SELECT COUNT(DISTINCT x.tag_id)
+                FROM mb_manga_tags x
+                WHERE 
+                    x.manga_id = m.id AND 
+                    x.tag_id = ANY(:tagIncludes::uuid[])
+            ) = cardinality(:tagIncludes::uuid[])
+        ) AND 
+        (
             :tagExcludes IS NULL OR 
-            cardinality(:tagExcludes) = 0 OR 
+            cardinality(:tagExcludes::uuid[]) = 0 OR 
             NOT EXISTS (
                 SELECT 1
                 FROM mb_manga_tags x
@@ -50,7 +70,9 @@ WITH seed AS (
             )
         )
 ), cand_tag_counts AS (
-    SELECT mt.manga_id, COUNT(*)::numeric AS tag_cnt
+    SELECT 
+        mt.manga_id, 
+        COUNT(*)::numeric AS tag_cnt
     FROM mb_manga_tags mt
     JOIN candidate_base c ON c.id = mt.manga_id
     GROUP BY mt.manga_id
@@ -67,16 +89,18 @@ WITH seed AS (
         c.id AS manga_id,
         SUM(
             CASE sp.type
-                WHEN 0 THEN 3  -- Author
-                WHEN 1 THEN 2  -- Artist
-                WHEN 2 THEN 1  -- Uploader
+                WHEN 0 THEN 3
+                WHEN 1 THEN 2
+                WHEN 2 THEN 1
                 ELSE 1
             END
         )::numeric AS people_score_raw,
         COUNT(*)::numeric AS people_match_cnt
     FROM candidate_base c
     JOIN mb_manga_relationships mr ON mr.manga_id = c.id
-    JOIN seed_people sp ON sp.person_id = mr.person_id AND sp.type = mr.type
+    JOIN seed_people sp ON 
+        sp.person_id = mr.person_id AND 
+        sp.type = mr.type
     GROUP BY c.id
 )
 SELECT
@@ -88,8 +112,7 @@ SELECT
     COALESCE(po.people_score_raw, 0) AS people_score_raw,
     CASE
         WHEN (stc.cnt + COALESCE(ct.tag_cnt, 0) - COALESCE(ti.inter_cnt, 0)) <= 0 THEN 0
-        ELSE COALESCE(ti.inter_cnt, 0)
-             / (stc.cnt + COALESCE(ct.tag_cnt, 0) - COALESCE(ti.inter_cnt, 0))
+        ELSE COALESCE(ti.inter_cnt, 0) / (stc.cnt + COALESCE(ct.tag_cnt, 0) - COALESCE(ti.inter_cnt, 0))
     END AS tag_jaccard,
     CASE
         WHEN spc.cnt <= 0 THEN 0
@@ -99,15 +122,21 @@ SELECT
     (CASE WHEN c.source_id = s.source_id THEN 1 ELSE 0 END)::numeric AS same_source_norm,
     similarity(c.title, s.title)::numeric AS title_sim,
     (
-        0.62 * (CASE
-            WHEN (stc.cnt + COALESCE(ct.tag_cnt, 0) - COALESCE(ti.inter_cnt, 0)) <= 0 THEN 0
-            ELSE COALESCE(ti.inter_cnt, 0) / (stc.cnt + COALESCE(ct.tag_cnt, 0) - COALESCE(ti.inter_cnt, 0))
-        END) + 0.15 * similarity(c.title, s.title)::numeric
-        + 0.13 * (CASE
-            WHEN spc.cnt <= 0 THEN 0
-            ELSE COALESCE(po.people_score_raw, 0) / (spc.cnt * 3)
-        END) + 0.07 * (1 - (ABS(c.content_rating - s.content_rating)::numeric / 3))
-        + 0.03 * (CASE WHEN c.source_id = s.source_id THEN 1 ELSE 0 END)::numeric
+        0.62 * (
+            CASE
+                WHEN (stc.cnt + COALESCE(ct.tag_cnt, 0) - COALESCE(ti.inter_cnt, 0)) <= 0 THEN 0
+                ELSE COALESCE(ti.inter_cnt, 0) / (stc.cnt + COALESCE(ct.tag_cnt, 0) - COALESCE(ti.inter_cnt, 0))
+            END
+        ) + 
+        0.15 * similarity(c.title, s.title)::numeric + 
+        0.13 * (
+            CASE
+                WHEN spc.cnt <= 0 THEN 0
+                ELSE COALESCE(po.people_score_raw, 0) / (spc.cnt * 3)
+            END
+        ) + 
+        0.07 * (1 - (ABS(c.content_rating - s.content_rating)::numeric / 3)) + 
+        0.03 * (CASE WHEN c.source_id = s.source_id THEN 1 ELSE 0 END)::numeric
     ) AS similarity_score
 FROM candidate_base c
 JOIN seed s ON TRUE
@@ -116,9 +145,9 @@ CROSS JOIN seed_people_count spc
 LEFT JOIN cand_tag_counts ct ON ct.manga_id = c.id
 LEFT JOIN tag_intersections ti ON ti.manga_id = c.id
 LEFT JOIN people_overlap po ON po.manga_id = c.id
-WHERE
-    COALESCE(ti.inter_cnt, 0) > 0 OR
-    COALESCE(po.people_match_cnt, 0) > 0 OR
+WHERE 
+    COALESCE(ti.inter_cnt, 0) > 0 OR 
+    COALESCE(po.people_match_cnt, 0) > 0 OR 
     similarity(c.title, s.title) >= 0.20
 ORDER BY
     similarity_score DESC,
