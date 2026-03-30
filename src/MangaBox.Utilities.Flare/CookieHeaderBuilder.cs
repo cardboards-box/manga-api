@@ -111,7 +111,7 @@ public static class CookieHeaderBuilder
 		if (requestPath.Length == cookiePath.Length)
 			return true;
 
-		if (cookiePath.EndsWith("/", StringComparison.Ordinal))
+		if (cookiePath.EndsWith('/'))
 			return true;
 
 		return requestPath[cookiePath.Length] == '/';

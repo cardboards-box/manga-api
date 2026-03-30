@@ -14,6 +14,11 @@ using Models.Types;
 public class DbLoggerSink(
 	IFormatProvider? _provider = null) : ILogEventSink
 {
+	private static readonly JsonSerializerOptions JsonOptions = new()
+	{
+		WriteIndented = false
+	};
+
 	private static readonly Channel<MbLog> _queue = Channel.CreateUnbounded<MbLog>(new()
 	{
 		SingleReader = true,
@@ -24,18 +29,6 @@ public class DbLoggerSink(
 	/// The reader for the queue
 	/// </summary>
 	public static ChannelReader<MbLog> LogReader => _queue.Reader;
-
-	internal static string ParseCategory(string message, out string? category)
-	{
-		category = null;
-		if (!message.StartsWith('[')) return message;
-
-		var end = message.IndexOf(']');
-		if (end == -1) return message;
-
-		category = message[..end].TrimStart('[').TrimEnd(']').Trim();
-		return message[(end + 1)..].Trim();
-	}
 
 	/// <summary>
 	/// Stops reading the queue
@@ -62,9 +55,11 @@ public class DbLoggerSink(
 			_ => MbLogLevel.None
 		};
 
+		var source = logEvent.Properties.TryGetValue("SourceContext", out var sourceContext)
+			? GetScalarString(sourceContext)
+			: null;
 
-		var source = logEvent.Properties.TryGetValue("SourceContext", out var context)
-			? context.ToString().Trim('\"') : null;
+		var context = SerializeContext(logEvent);
 
 		var log = new MbLog
 		{
@@ -73,7 +68,78 @@ public class DbLoggerSink(
 			Exception = logEvent.Exception?.ToString(),
 			LogLevel = level,
 			Source = source,
+			Context = context
 		};
-		_queue.Writer.WriteAsync(log).AsTask().Wait();
+		_queue.Writer.TryWrite(log);
+	}
+
+	internal static string ParseCategory(string message, out string? category)
+	{
+		category = null;
+		if (!message.StartsWith('[')) return message;
+
+		var end = message.IndexOf(']');
+		if (end == -1) return message;
+
+		category = message[..end].TrimStart('[').TrimEnd(']').Trim();
+		return message[(end + 1)..].Trim();
+	}
+
+	internal static string? SerializeContext(LogEvent logEvent)
+	{
+		try
+		{
+			if (logEvent.Properties.Count == 0)
+				return null;
+
+			var context = new Dictionary<string, object?>();
+
+			foreach (var property in logEvent.Properties)
+			{
+				if (property.Key == "SourceContext")
+					continue;
+
+				context[property.Key] = ConvertPropertyValue(property.Value);
+			}
+
+			return context.Count == 0
+				? null
+				: JsonSerializer.Serialize(context, JsonOptions);
+		}
+		catch
+		{
+#if DEBUG
+			throw;
+#endif
+			return null;
+		}
+	}
+
+	internal static object? ConvertPropertyValue(LogEventPropertyValue value)
+	{
+		return value switch
+		{
+			ScalarValue scalar => scalar.Value,
+			SequenceValue sequence => sequence.Elements.Select(ConvertPropertyValue).ToList(),
+			StructureValue structure => structure.Properties.ToDictionary(
+				x => x.Name,
+				x => ConvertPropertyValue(x.Value)),
+			DictionaryValue dictionary => dictionary.Elements.ToDictionary(
+				x => GetDictionaryKey(x.Key),
+				x => ConvertPropertyValue(x.Value)),
+			_ => value.ToString()
+		};
+	}
+
+	internal static string GetDictionaryKey(ScalarValue key)
+	{
+		return key.Value?.ToString() ?? string.Empty;
+	}
+
+	internal static string? GetScalarString(LogEventPropertyValue value)
+	{
+		return value is ScalarValue scalar
+			? scalar.Value?.ToString()
+			: value.ToString().Trim('"');
 	}
 }

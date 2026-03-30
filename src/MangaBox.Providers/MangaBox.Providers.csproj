@@ -35,7 +35,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="WeebDexSharp" Version="0.0.3" />
+	  <PackageReference Include="WeebDexSharp" Version="0.0.4" />
 	</ItemGroup>
 
 	<ItemGroup>

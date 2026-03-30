@@ -1,6 +1,7 @@
 ﻿namespace MangaBox.Database.Services;
 
 using Models;
+using Models.Composites.Filters;
 
 /// <summary>
 /// The service for interacting with the mb_logs table
@@ -33,10 +34,41 @@ public interface IMbLogDbService
 	/// </summary>
 	/// <returns>All of the records</returns>
 	Task<MbLog[]> Get();
+
+	/// <summary>
+	/// Clean up old log files
+	/// </summary>
+	Task CleanLogs();
+
+	/// <summary>
+	/// Searches logs by the given filter
+	/// </summary>
+	/// <param name="filter">The search filter</param>
+	/// <returns>The logs</returns>
+	Task<PaginatedResult<MbLog>> Search(LogSearchFilter filter);
 }
 
 internal class MbLogDbService(
-	IOrmService orm) : Orm<MbLog>(orm), IMbLogDbService
+	IOrmService orm,
+	IQueryCacheService _cache) : Orm<MbLog>(orm), IMbLogDbService
 {
+	public async Task CleanLogs()
+	{
+		var query = await _cache.Required("clear_log_history");
+		await Execute(query);
+	}
 
+	public async Task<PaginatedResult<MbLog>> Search(LogSearchFilter filter)
+	{
+		var query = filter.Build(out var pars);
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(query, pars);
+
+		var total = await rdr.ReadSingleAsync<int>();
+		if (total == 0) return new();
+		var pages = (int)Math.Ceiling((double)total / filter.Size);
+
+		var results = await rdr.ReadAsync<MbLog>();
+		return new(pages, total, [.. results]);
+	}
 }

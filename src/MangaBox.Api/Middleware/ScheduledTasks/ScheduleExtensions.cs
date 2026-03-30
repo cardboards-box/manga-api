@@ -14,6 +14,7 @@ public static class ScheduleExtensions
 	{
 		return services
 			.AddScheduler()
+			.AddTransient<LogCleanup>()
 			.AddTransient<IndexManga>()
 			.AddTransient<MangaRefresh>()
 			.AddTransient<BadChapterDelete>()
@@ -39,6 +40,11 @@ public static class ScheduleExtensions
 				.Schedule<StatsSnapshotRefresh>()
 				.EveryThirtySeconds()
 				.PreventOverlapping(nameof(StatsSnapshotRefresh));
+
+			schedule
+				.Schedule<LogCleanup>()
+				.Daily() 
+				.PreventOverlapping(nameof(LogCleanup));
 
 			if (app.Environment.IsDevelopment()) return;
 

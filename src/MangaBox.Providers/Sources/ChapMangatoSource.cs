@@ -44,11 +44,10 @@ public class ChapmanganatoSource(
 		var doc = await _api.GetHtml(url, token: token);
 		if (doc == null) return [];
 
-		return doc
+		return [.. doc
 				.DocumentNode
 				.SelectNodes("//div[@class=\"container-chapter-reader\"]/img")
-				.Select(t => new MangaChapterPage(t.GetAttributeValue("src", "")))
-				.ToArray();
+				.Select(t => new MangaChapterPage(t.GetAttributeValue("src", "")))];
 	}
 
 	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
@@ -57,7 +56,7 @@ public class ChapmanganatoSource(
 		return ChapterPages(url, token);
 	}
 
-	public void FillDetails(Manga manga, HtmlDocument doc)
+	public static void FillDetails(Manga manga, HtmlDocument doc)
 	{
 		var nodes = doc.DocumentNode
 			.SelectNodes("//ul[@class='manga-info-text']/li")?
@@ -72,7 +71,7 @@ public class ChapmanganatoSource(
 			var value = string.Join(':', parts.Skip(1)).Trim();
 
 			if (key.Contains("genres"))
-				manga.Tags = value.Split(',').Select(t => t.Trim()).ToArray();
+				manga.Tags = [.. value.Split(',').Select(t => t.Trim())];
 		}
 
 		var description = doc.DocumentNode
@@ -83,7 +82,7 @@ public class ChapmanganatoSource(
 
 	public async Task<Manga?> Manga(string id, CancellationToken token)
 	{
-		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}/{id}";
+		var url = id.StartsWithIc("http") ? id : $"{MangaBaseUri}/{id}";
 		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
@@ -121,7 +120,7 @@ public class ChapmanganatoSource(
 			manga.Chapters.Add(c);
 		}
 
-		manga.Chapters = manga.Chapters.OrderBy(t => t.Number).ToList();
+		manga.Chapters = [.. manga.Chapters.OrderBy(t => t.Number)];
 
 		return manga;
 	}

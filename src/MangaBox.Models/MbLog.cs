@@ -7,6 +7,7 @@ using Types;
 /// </summary>
 [Table("mb_logs")]
 [InterfaceOption(nameof(MbLog))]
+[Searchable(nameof(Category), nameof(Source), nameof(Message), nameof(Exception), nameof(Context))]
 public class MbLog : MbDbObject
 {
 	/// <summary>
@@ -43,4 +44,11 @@ public class MbLog : MbDbObject
 	[Column("exception")]
 	[JsonPropertyName("exception")]
 	public string? Exception { get; set; }
+
+	/// <summary>
+	/// The context of the log
+	/// </summary>
+	[Column("context")]
+	[JsonPropertyName("context")]
+	public string? Context { get; set; }
 }

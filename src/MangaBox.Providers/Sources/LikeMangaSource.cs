@@ -53,7 +53,7 @@ internal class LikeMangaSource(
 		const string SummaryParasXPath = "//div[contains(@class,'description-summary')]//div[contains(@class,'summary__content')]//p";
 		const string CoverImgXPath = "//div[contains(@class,'summary_image')]//img";
 
-		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
+		var url = id.StartsWithIc("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _flareInstance.GetHtml(url, token);
 		if (doc == null) return null;
 
@@ -128,7 +128,7 @@ internal class LikeMangaSource(
 		if (!url.StartsWith(HomeUrl, StringComparison.InvariantCultureIgnoreCase))
 			return (false, null);
 
-		var parts = url.Remove(0, HomeUrl.Length)
+		var parts = url[HomeUrl.Length..]
 			.Split('/', StringSplitOptions.RemoveEmptyEntries)
 			.Where(t => !t.Equals("manga", StringComparison.InvariantCultureIgnoreCase))
 			.ToArray();
@@ -186,11 +186,12 @@ internal class LikeMangaSource(
 				var descriptor = part[(spaceIdx + 1)..].Trim().ToLowerInvariant();
 
 				int width = 0;
-				if (descriptor.EndsWith("w"))
+				if (descriptor.EndsWith('w'))
 				{
-					int.TryParse(descriptor.TrimEnd('w'), out width);
+					if (!int.TryParse(descriptor.TrimEnd('w'), out width))
+						width = 0;
 				}
-				else if (descriptor.EndsWith("x"))
+				else if (descriptor.EndsWith('x'))
 				{
 					// fallback: treat DPR as width-ish (not exact, but allows choosing the largest DPR if widths absent)
 					if (double.TryParse(descriptor.TrimEnd('x'), out var dpr))
@@ -216,13 +217,10 @@ internal class LikeMangaSource(
 	}
 
 	// XPaths we can rely on in this theme/page
-	private const string H1_ChapterHeading = "//h1[@id='chapter-heading']";
-	private const string CrumbActive = "//ol[contains(@class,'breadcrumb')]//li[contains(@class,'active')]";
 	private const string PageImgs = "//div[contains(@class,'reading-content')]//img[contains(@class,'wp-manga-chapter-img')]";
-	private const string Scripts = "//script";
 
 	// Entry point
-	public static MangaChapterPage[] Parse(FlareHtmlDocument doc, string url)
+	public static MangaChapterPage[] Parse(FlareHtmlDocument doc, string _)
 	{
 		var uri = new Uri(doc.FlareSolution.Url);
 		var cookie = CookieHeaderBuilder.BuildCookieHeader(doc.FlareSolution.Cookies, uri);
@@ -256,25 +254,14 @@ internal class LikeMangaSource(
 			?? [];
 	}
 
-	private static string? ExtractJsonString(string text, string pattern)
-	{
-		var m = Regex.Match(text ?? "", pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-		if (m.Success)
-		{
-			// Unescape common JSON escapes
-			return Regex.Replace(m.Groups[1].Value, @"\\/", "/");
-		}
-		return null;
-	}
-
 	private static double ExtractChapterNumber(string? source)
 	{
 		if (string.IsNullOrWhiteSpace(source)) return double.NaN;
 		// Matches "Chapter 72" or "chapter-72" or "ch-72.5"
 		var m = Regex.Match(source, @"(?:chapter[\s\-]*)([0-9]+(?:\.[0-9]+)?)", RegexOptions.IgnoreCase);
 		if (!m.Success) m = Regex.Match(source, @"\b([0-9]+(?:\.[0-9]+)?)\b"); // last resort
-		return m.Success && double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Any,
-					System.Globalization.CultureInfo.InvariantCulture, out var d)
+		return m.Success && double.TryParse(m.Groups[1].Value, NumberStyles.Any,
+					CultureInfo.InvariantCulture, out var d)
 				? d : double.NaN;
 	}
 

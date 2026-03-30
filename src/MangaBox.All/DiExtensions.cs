@@ -5,6 +5,7 @@ using System.Net;
 
 namespace MangaBox.All;
 
+using CardboardBox.Json;
 using Core;
 using Database;
 using Jwt;
@@ -36,6 +37,7 @@ public static class DiExtensions
 			.AddOAuthServices(config)
 			.AddMatch()
 			.AddMangaDex()
+			.AddJson()
 			.ConfigureHttpClientDefaults(c =>
 			{
 				c.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler

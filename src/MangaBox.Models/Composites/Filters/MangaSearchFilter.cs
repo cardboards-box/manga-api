@@ -297,7 +297,7 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 			}
 		}
 
-		parameters = new DynamicParameters();
+		parameters = new();
 		var bob = new StringBuilder();
 		
 		var page = Page <= 0 ? 1 : Page;
