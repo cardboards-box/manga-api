@@ -1,5 +1,6 @@
 ﻿namespace MangaBox.Database.Services;
 
+using MangaBox.Models.Composites;
 using Models;
 using Models.Composites.Filters;
 
@@ -46,6 +47,12 @@ public interface IMbLogDbService
 	/// <param name="filter">The search filter</param>
 	/// <returns>The logs</returns>
 	Task<PaginatedResult<MbLog>> Search(LogSearchFilter filter);
+
+	/// <summary>
+	/// The meta-data for logs
+	/// </summary>
+	/// <returns>The meta-data for logs</returns>
+	Task<LogMetaData> MetaData();
 }
 
 internal class MbLogDbService(
@@ -70,5 +77,28 @@ internal class MbLogDbService(
 
 		var results = await rdr.ReadAsync<MbLog>();
 		return new(pages, total, [.. results]);
+	}
+
+	public async Task<LogMetaData> MetaData()
+	{
+		const string QUERY = @"
+SELECT DISTINCT category 
+FROM mb_logs 
+WHERE 
+	category IS NOT NULL AND 
+	deleted_at IS NULL;
+
+SELECT DISTINCT source 
+FROM mb_logs 
+WHERE 
+	source IS NOT NULL AND 
+	deleted_at IS NULL;";
+
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(QUERY);
+
+		var categories = await rdr.ReadAsync<string>();
+		var sources = await rdr.ReadAsync<string>();
+		return new([.. categories], [.. sources]);
 	}
 }

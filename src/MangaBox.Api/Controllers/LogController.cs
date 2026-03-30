@@ -78,4 +78,19 @@ public class LogController(
 	[HttpGet, Route("log")]
 	[ProducesPaged<MbLog>, ProducesError(404), ProducesError(400)]
 	public Task<IActionResult> SearchQuery([FromQuery] LogSearchFilter filter) => Search(filter);
+
+	/// <summary>
+	/// Fetches the log metadata for searching
+	/// </summary>
+	/// <returns>The log metadata</returns>
+	[HttpGet, Route("log/metadata")]
+	[ProducesBox<LogMetaData>]
+	public Task<IActionResult> Metadata() => Box(async () =>
+	{
+		if (!Validate(out var resp))
+			return resp;
+
+		var meta = await _db.Log.MetaData();
+		return Boxed.Ok(meta);
+	});
 }

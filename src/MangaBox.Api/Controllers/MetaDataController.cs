@@ -152,4 +152,16 @@ public class MetaDataController(
 		var values = ListOrderBy.CreatedAt.Describe(false, false);
 		return Boxed.Ok(values);
 	});
+
+	/// <summary>
+	/// Gets the metadata for the <see cref="LogOrderBy"/> enum
+	/// </summary>
+	/// <returns>All of the enum descriptions</returns>
+	[HttpGet, Route("metadata/log-order-by")]
+	[ProducesArray<EnumDescription>]
+	public Task<IActionResult> GetLogOrderBy() => Box(() =>
+	{
+		var values = LogOrderBy.CreatedAt.Describe(false, false);
+		return Boxed.Ok(values);
+	});
 }
