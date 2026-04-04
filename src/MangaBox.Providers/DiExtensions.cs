@@ -3,6 +3,7 @@
 namespace MangaBox.Providers;
 
 using Sources;
+using Sources.Comix;
 
 public static class DiExtensions
 {

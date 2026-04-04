@@ -4,6 +4,7 @@ using Database;
 using Models;
 using Models.Composites;
 using Providers.Sources;
+using Providers.Sources.Comix;
 using Services;
 using Services.Imaging;
 
@@ -100,7 +101,8 @@ internal class TestVerb(
 
 	public Task TestComix(CancellationToken token)
 	{
-		const string URL = "https://comix.to/title/305e0-i-was-trapped-in-a-dungeon-for-25-years-and-became-a-legendary-suspicious-person-when-rescued";
+		//const string URL = "https://comix.to/title/60jxz-tsuihou-saikyou-kuzu-kenja-no-henkyou-kosodate-slow-life-kuzu-da-to-kanchigaisaregachi-na-saikyou-no-zennin-wa-maou-no-musume-wo-chouzetsu-iko-ni-sodateageru";
+		const string URL = "https://comix.to/title/8w6dm-i-saved-you-but-im-not-responsible";
 		return TestSource(_comix, URL, true, token);
 	}
 
