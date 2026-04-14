@@ -5,6 +5,5 @@ CREATE TABLE IF NOT EXISTS mb_api_keys (
 	key TEXT NOT NULL,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	deleted_at TIMESTAMP NULL,
-	CONSTRAINT mb_api_keys_unique UNIQUE (profile_id, name)
+	deleted_at TIMESTAMP NULL
 );

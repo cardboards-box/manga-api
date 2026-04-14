@@ -8,6 +8,7 @@ using Jwt;
 public class ApiKeyController(
     IDbService _db,
     IJwtKeyService _jwt,
+    IApiKeyService _keys,
     ILogger<ApiKeyController> logger) : BaseController(logger)
 {
     /// <summary>
@@ -47,6 +48,7 @@ public class ApiKeyController(
         var canDelete = (profile is not null && profile.Id == pid.Value) || this.IsAdmin();
         if (!canDelete) return Boxed.NotFound(nameof(MbApiKey));
 
+        await _keys.ClearCache(pid.Value);
         await _db.ApiKey.Delete(guid);
         return Boxed.Ok();
     });
@@ -88,7 +90,7 @@ public class ApiKeyController(
     /// <param name="id">The ID of the API key</param>
     /// <returns>The API key</returns>
     [HttpGet, Route("api-key/{id}/key")]
-    [ProducesError(401), ProducesError(400)]
+    [ProducesError(401), ProducesError(400), ProducesBox<string>]
     public Task<IActionResult> Key([FromRoute] string id) => Box(async () =>
     {
         if (!Guid.TryParse(id, out var guid))

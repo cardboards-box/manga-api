@@ -121,4 +121,10 @@ WHERE
         const string QUERY = @"SELECT * FROM mb_api_keys WHERE profile_id = :pid AND deleted_at IS NULL;";
         return Get(QUERY, new { pid });
     }
+
+    public override Task<int> Delete(Guid id)
+    {
+        const string QUERY = @"UPDATE mb_api_keys SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL;";
+        return Execute(QUERY, new { id });
+    }
 }

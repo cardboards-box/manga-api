@@ -5,6 +5,21 @@ set -eu
 app_name="mangabox"
 root_dir="temp-env"
 local_build=true
+clean=false
+
+for arg in "$@"; do
+  case "$arg" in
+    local|--local)
+      local_build=true
+      ;;
+    remote|--remote)
+      local_build=false
+      ;;
+    clean|--clean)
+      clean=true
+      ;;
+  esac
+done
 
 clean_env() {
   if [ ! -d "./$root_dir" ]; then
@@ -68,11 +83,10 @@ PORT_DB=$db_port
 PORT_REDIS=$redis_port
 PORT_FLARE=$flare_port
 
-OAUTH_APPID=
-OAUTH_SECRET=
 MATCH_URL=
-FLARE_URL=
 SAUCE_TOKEN=
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
 EOF
   echo "$filename created"
 }
@@ -185,8 +199,8 @@ EOF
       - Redis:Connection=app-redis,password=${REDIS_PASSWORD}
       - FlareSolver:Url=http://app-solver:8191
       - OAuth:Jwt:KeyPath=./jwt-key/key.pem
-      - OAuth:AppId=${OAUTH_APPID}
-      - OAuth:Secret=${OAUTH_SECRET}
+      - OAuth:DiscordClientId=${DISCORD_CLIENT_ID}
+      - OAuth:DiscordClientSecret=${DISCORD_CLIENT_SECRET}
       - Match:Url=${MATCH_URL}
       - Match:SauceToken=${SAUCE_TOKEN}
       - GOOGLE_APPLICATION_CREDENTIALS=creds.json
@@ -207,7 +221,7 @@ EOF
 }
 
 
-if [ "${1:-}" = "clean" ]; then
+if [ "$clean" = "true" ]; then
   clean_env
 fi
 

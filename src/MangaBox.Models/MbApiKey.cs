@@ -10,7 +10,7 @@ public class MbApiKey : MbDbObject
     /// <summary>
     /// The ID of the profile this API key belongs to
     /// </summary>
-    [Column("profile_id", Unique = true), Fk<MbProfile>]
+    [Column("profile_id"), Fk<MbProfile>]
     [JsonPropertyName("profileId")]
     [Required]
     public Guid ProfileId { get; set; }
@@ -18,7 +18,7 @@ public class MbApiKey : MbDbObject
     /// <summary>
     /// The name of the API key
     /// </summary>
-    [Column("name", Unique = true)]
+    [Column("name")]
     [JsonPropertyName("name")]
     [Required, MinLength(3), MaxLength(100)]
     public string Name { get; set; } = string.Empty;
