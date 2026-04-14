@@ -45,19 +45,28 @@ internal static class Extensions
 	{
 		services.AddSwaggerGen(c =>
 		{
-			const string SCHEMA = "bearer";
-			c.AddSecurityDefinition(SCHEMA, new OpenApiSecurityScheme()
+			const string SCHEMA_BEARER = "bearer";
+			const string SCHEMA_API_KEY = "api-key";
+			c.AddSecurityDefinition(SCHEMA_BEARER, new OpenApiSecurityScheme()
 			{
 				Name = "Authorization",
 				Type = SecuritySchemeType.Http,
-				Scheme = SCHEMA,
+				Scheme = SCHEMA_BEARER,
 				BearerFormat = "JWT",
 				In = ParameterLocation.Header,
 				Description = "JWT Authorization header using the Bearer scheme."
 			});
+			c.AddSecurityDefinition(SCHEMA_API_KEY, new OpenApiSecurityScheme()
+			{
+				Name = "X-API-Key",
+				Type = SecuritySchemeType.ApiKey,
+				In = ParameterLocation.Header,
+				Description = "API key authentication using the X-API-Key header."
+			});
 			c.AddSecurityRequirement(c => new()
 			{
-				[new OpenApiSecuritySchemeReference(SCHEMA, c)] = []
+				[new OpenApiSecuritySchemeReference(SCHEMA_BEARER, c)] = [],
+				[new OpenApiSecuritySchemeReference(SCHEMA_API_KEY, c)] = []
 			});
 
 			var commentFiles = Directory.GetFiles(AppContext.BaseDirectory, "*.xml", SearchOption.TopDirectoryOnly);

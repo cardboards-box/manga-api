@@ -2,8 +2,6 @@
 
 namespace MangaBox.Providers.Sources;
 
-using static MangaSource;
-
 public interface IBattwoSource : IMangaUrlSource { }
 
 public class BattwoSource : IBattwoSource
@@ -33,7 +31,7 @@ public class BattwoSource : IBattwoSource
 		_api = api;
 	}
 
-	public async Task<MangaChapterPage[]> ChapterPages(string url, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string url, CancellationToken token)
 	{
 		var doc = await _api.GetHtml(url, token: token);
 		if (doc == null) return [];
@@ -43,18 +41,18 @@ public class BattwoSource : IBattwoSource
 		throw new NotImplementedException();
 	}
 
-	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		return ChapterPages(ChapterUri + chapterId, token);
 	}
 
-	public async Task<Manga?> Manga(string id, CancellationToken token)
+	public async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token: token);
 		if (doc == null) return null;
 
-		var manga = new Manga
+		var manga = new ImportManga
 		{
 			Title = doc.InnerText("//h3[@class='item-title']/a") ?? "",
 			Id = id,
@@ -75,7 +73,7 @@ public class BattwoSource : IBattwoSource
 			var rest = string.Join(":", parts.Skip(1));
 			var split = rest.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToArray();
 
-			var asTags = (string name) => manga.Attributes.AddRange(split.Select(t => new MangaAttribute(name, t)));
+			var asTags = (string name) => manga.Attributes.AddRange(split.Select(t => new ImportAttribute(name, t)));
 
 			switch (title)
 			{

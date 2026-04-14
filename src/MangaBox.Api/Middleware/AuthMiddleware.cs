@@ -10,11 +10,13 @@ using Jwt;
 internal class AuthMiddlewareOptions : AuthenticationSchemeOptions { }
 
 internal class AuthMiddleware(
-	IOptionsMonitor<AuthMiddlewareOptions> options,
-	ILoggerFactory factory,
 	UrlEncoder encoder,
+	IJwtTokenService _jwt,
+	ILoggerFactory factory,
+	IApiKeyService _apiKeys,
 	ILogger<AuthMiddleware> _logger,
-	IJwtTokenService _jwt) : AuthenticationHandler<AuthMiddlewareOptions>(options, factory, encoder)
+	IOptionsMonitor<AuthMiddlewareOptions> options) 
+	: AuthenticationHandler<AuthMiddlewareOptions>(options, factory, encoder)
 {
 	/// <summary>
 	/// The name of the custom scheme
@@ -59,6 +61,18 @@ internal class AuthMiddleware(
 	}
 
 	/// <summary>
+	/// Generates an authentication ticket from the given claims
+	/// </summary>
+	/// <param name="claims">The claims to include in the ticket</param>
+	/// <returns>The generated authentication ticket</returns>
+	public static AuthenticationTicket TicketFromClaims(IEnumerable<Claim> claims)
+	{
+		var identity = new ClaimsIdentity(claims, SCHEMA);
+		var principal = new ClaimsPrincipal(identity);
+		return new AuthenticationTicket(principal, SCHEMA);
+	}
+
+	/// <summary>
 	/// Handle client requests
 	/// </summary>
 	/// <param name="key">The client authentication token</param>
@@ -70,9 +84,7 @@ internal class AuthMiddleware(
 		if (token is null)
 			return AuthenticateResult.Fail("Invalid JWT token");
 
-		var identity = new ClaimsIdentity(token, SCHEMA);
-		var principal = new ClaimsPrincipal(identity);
-		var ticket = new AuthenticationTicket(principal, SCHEMA);
+		var ticket = TicketFromClaims(token);
 		return AuthenticateResult.Success(ticket);
 	}
 
@@ -82,13 +94,15 @@ internal class AuthMiddleware(
 	/// <param name="key">The API key</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The result of the authentication request</returns>
-	public Task<AuthenticateResult> HandleApi(string key, CancellationToken token)
+	public async Task<AuthenticateResult> HandleApi(string key, CancellationToken token)
 	{
 		token.ThrowIfCancellationRequested();
-		_logger.LogInformation("User attempting to login with un-implemented API key: {Key}", key);
-		return Task.FromResult(
-			AuthenticateResult.Fail(
-				"API key authentication is not implemented yet. Please use JWT tokens instead."));
+		var (success, claims) = await _apiKeys.Validate(key);
+		if (!success)
+			return AuthenticateResult.Fail("Invalid API key");
+
+		var ticket = TicketFromClaims(claims);
+		return AuthenticateResult.Success(ticket);
 	}
 
 	/// <summary>

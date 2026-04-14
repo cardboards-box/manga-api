@@ -210,7 +210,7 @@ internal class GenerateDatabaseScriptsVerb(
 
     public override async Task<bool> Execute(GenerateDatabaseScriptsOptions options, CancellationToken token)
     {
-        var directory = Path.GetFullPath(options.Directory);
+        var directory = Path.GetFullPath(options.Directory.GetOSPath());
         if (string.IsNullOrEmpty(directory))
         {
             _logger.LogError("Invalid directory specified");

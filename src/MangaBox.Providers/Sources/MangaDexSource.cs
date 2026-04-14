@@ -4,7 +4,6 @@ namespace MangaBox.Providers.Sources;
 
 using Models.Types;
 using Utilities.MangaDex;
-using static Services.MangaSource;
 
 //I need to fix the naming convention in MD#... It's way too generic :'(
 using ChapterList = MangaDexSharp.ChapterList;
@@ -32,15 +31,15 @@ public class MangaDexSource(
 	public Dictionary<string, string>? Headers => null;
 	public string? UserAgent => "manga-box";
 
-	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var pages = await _mangadex.Pages(chapterId);
 		if (pages == null) return [];
 
-		return [..pages.Images.Select(t => new MangaChapterPage(t))];
+		return [..pages.Images.Select(t => new ImportPage(t))];
 	}
 
-	public async Task<Manga> Convert(MManga manga, CancellationToken token, List<MangaChapter>? chapters = null)
+	public async Task<ImportManga> Convert(MManga manga, CancellationToken token, List<ImportChapter>? chapters = null)
 	{
 		var id = manga.Id;
 		var coverFile = (manga.Relationships.FirstOrDefault(t => t is CoverArtRelationship) as CoverArtRelationship)?.Attributes?.FileName;
@@ -67,7 +66,7 @@ public class MangaDexSource(
 				artists.Add(person.Attributes.Name);
 		}
 
-		return new Manga
+		return new ImportManga
 		{
 			Title = title,
 			Id = id,
@@ -97,7 +96,7 @@ public class MangaDexSource(
 		};
 	}
 
-	public async Task<Manga?> Manga(string id, CancellationToken token)
+	public async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var manga = await _mangadex.Manga(id);
 		if (manga == null || manga.Data == null || manga.Data.Attributes is null) return null;
@@ -118,14 +117,14 @@ public class MangaDexSource(
 		return title.Value;
 	}
 
-	public IEnumerable<MangaChapter> ConvertChapters(IEnumerable<Chapter> chapters)
+	public IEnumerable<ImportChapter> ConvertChapters(IEnumerable<Chapter> chapters)
 	{
 		var sortedChapters = chapters
 				.Where(t => t.Attributes is not null)!
 				.GroupBy(t => t.Attributes!.Chapter + t.Attributes.Volume)
 				.Select(t => t.PreferredOrFirst(t => t.Attributes!.TranslatedLanguage == DEFAULT_LANG))
 				.Where(t => t != null)
-				.Select(t => new MangaChapter
+				.Select(t => new ImportChapter
 				{
 					Title = t?.Attributes!.Title ?? string.Empty,
 					Url = $"{HomeUrl}/chapter/{t?.Id}",
@@ -142,7 +141,7 @@ public class MangaDexSource(
 			yield return chap;
 	}
 
-	public async IAsyncEnumerable<MangaChapter> GetChapters(string id, [EnumeratorCancellation] CancellationToken token, params string[] languages)
+	public async IAsyncEnumerable<ImportChapter> GetChapters(string id, [EnumeratorCancellation] CancellationToken token, params string[] languages)
 	{
 		var filter = new MangaFeedFilter { TranslatedLanguage = languages };
 		while (true)
@@ -164,15 +163,15 @@ public class MangaDexSource(
 		}
 	}
 
-	public static IEnumerable<MangaAttribute> GetChapterAttributes(Chapter? chapter)
+	public static IEnumerable<ImportAttribute> GetChapterAttributes(Chapter? chapter)
 	{
 		if (chapter is null) yield break;
 
 		if (!string.IsNullOrEmpty(chapter.Attributes?.TranslatedLanguage))
-			yield return new MangaAttribute("Translated Language", chapter.Attributes.TranslatedLanguage);
+			yield return new ImportAttribute("Translated Language", chapter.Attributes.TranslatedLanguage);
 
 		if (!string.IsNullOrEmpty(chapter.Attributes?.Uploader))
-			yield return new MangaAttribute("Uploader", chapter.Attributes.Uploader);
+			yield return new ImportAttribute("Uploader", chapter.Attributes.Uploader);
 
 		foreach (var relationship in chapter.Relationships)
 		{
@@ -180,23 +179,23 @@ public class MangaDexSource(
 			{
 				case MangaDexSharp.PersonRelationship per:
 					if (!string.IsNullOrEmpty(per.Attributes?.Name))
-						yield return new MangaAttribute(per.Type == "author" ? "Author" : "Artist", per.Attributes.Name);
+						yield return new ImportAttribute(per.Type == "author" ? "Author" : "Artist", per.Attributes.Name);
 					break;
 				case MangaDexSharp.ScanlationGroup grp:
 					if (!string.IsNullOrEmpty(grp.Attributes?.Name))
-						yield return new MangaAttribute("Scanlation Group", grp.Attributes.Name);
+						yield return new ImportAttribute("Scanlation Group", grp.Attributes.Name);
 					if (!string.IsNullOrEmpty(grp.Attributes?.Website))
-						yield return new MangaAttribute("Scanlation Link", grp.Attributes.Website);
+						yield return new ImportAttribute("Scanlation Link", grp.Attributes.Website);
 					if (!string.IsNullOrEmpty(grp.Attributes?.Twitter))
-						yield return new MangaAttribute("Scanlation Twitter", grp.Attributes.Twitter);
+						yield return new ImportAttribute("Scanlation Twitter", grp.Attributes.Twitter);
 					if (!string.IsNullOrEmpty(grp.Attributes?.Discord))
-						yield return new MangaAttribute("Scanlation Discord", grp.Attributes.Discord);
+						yield return new ImportAttribute("Scanlation Discord", grp.Attributes.Discord);
 					break;
 			}
 		}
 	}
 
-	public static IEnumerable<MangaAttribute> GetMangaAttributes(MManga? manga)
+	public static IEnumerable<ImportAttribute> GetMangaAttributes(MManga? manga)
 	{
 		if (manga == null) yield break;
 
@@ -293,7 +292,7 @@ public class MangaDexSource(
 		}
 	}
 
-	public async IAsyncEnumerable<Manga> Index(LoaderSource source, [EnumeratorCancellation] CancellationToken token)
+	public async IAsyncEnumerable<ImportManga> Index(LoaderSource source, [EnumeratorCancellation] CancellationToken token)
 	{
 		var latest = await _mangadex.ChaptersLatest();
 		if (latest is null || latest.Data.Count == 0)

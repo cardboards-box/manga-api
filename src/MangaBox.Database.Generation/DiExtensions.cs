@@ -34,4 +34,15 @@ public static class DiExtensions
             .Add<GenerateOrmClassesVerb>()
             .Add<GenerateDatabaseScriptsVerb>();
     }
+
+    /// <summary>
+    /// Ensures the path uses the correct directory separators
+    /// </summary>
+    /// <param name="path">The path to convert</param>
+    /// <returns>The path with the correct directory separators for the current OS</returns>
+    public static string GetOSPath(this string path)
+    {
+        var osSafe = path.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+        return Path.GetFullPath(Path.Combine(osSafe));
+    }
 }

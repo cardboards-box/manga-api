@@ -3,7 +3,6 @@
 namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
-using static Services.MangaSource;
 
 public interface ILikeMangaSource : IMangaUrlSource { }
 
@@ -32,7 +31,7 @@ internal class LikeMangaSource(
 
 	private readonly FlareSolverInstance _flareInstance = _flare.Limiter();
 
-	public async Task<MangaChapterPage[]> ChapterPages(string url, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string url, CancellationToken token)
 	{
 		var doc = await _flareInstance.GetHtml(url, token);
 		if (doc is null) return [];
@@ -40,13 +39,13 @@ internal class LikeMangaSource(
 		return Parse(doc, url);
 	}
 
-	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}";
 		return ChapterPages(url, token);
 	}
 
-	public async Task<Manga?> Manga(string id, CancellationToken token)
+	public async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		const string TitleXPath = "//div[contains(@class,'post-title')]/h1";
 		const string GenresXPath = "//div[contains(@class,'post-content_item')][.//h5[normalize-space()='Genre(s)']]//div[contains(@class,'genres-content')]//a";
@@ -73,7 +72,7 @@ internal class LikeMangaSource(
 			? PickLargestFromSrcset(img.GetAttributeValue("srcset", ""))
 			?? img.GetAttributeValue("src", "")
 			: null;
-		var manga = new Manga
+		var manga = new ImportManga
 		{
 			Title = title,
 			Id = id,
@@ -97,10 +96,10 @@ internal class LikeMangaSource(
 		return manga;
 	}
 
-	public static MangaChapter[] ParseChapters(HtmlDocument doc)
+	public static ImportChapter[] ParseChapters(HtmlDocument doc)
 	{
 		const string ChapterLiXPath = "//div[contains(@class,'listing-chapters_wrap')]//li[contains(@class,'wp-manga-chapter')]/a";
-		var chapters = new List<MangaChapter>();
+		var chapters = new List<ImportChapter>();
 
 		var anchors = (doc.DocumentNode.SelectNodes(ChapterLiXPath) ?? Enumerable.Empty<HtmlNode>()).ToArray();
 
@@ -111,7 +110,7 @@ internal class LikeMangaSource(
 			var id = url.Split("/", StringSplitOptions.RemoveEmptyEntries).Last();
 			var number = ExtractChapterNumber(title);
 
-			chapters.Add(new MangaChapter
+			chapters.Add(new ImportChapter
 			{
 				Title = title,
 				Url = url,
@@ -220,7 +219,7 @@ internal class LikeMangaSource(
 	private const string PageImgs = "//div[contains(@class,'reading-content')]//img[contains(@class,'wp-manga-chapter-img')]";
 
 	// Entry point
-	public static MangaChapterPage[] Parse(FlareHtmlDocument doc, string _)
+	public static ImportPage[] Parse(FlareHtmlDocument doc, string _)
 	{
 		var uri = new Uri(doc.FlareSolution.Url);
 		var cookie = CookieHeaderBuilder.BuildCookieHeader(doc.FlareSolution.Cookies, uri);
@@ -241,12 +240,12 @@ internal class LikeMangaSource(
 			["Sec-Fetch-Mode"] = "no-cors",
 			["Sec-Fetch-Site"] = "same-site",
 			["User-Agent"] = doc.FlareSolution.UserAgent
-		}.Select(t => new MangaAttribute(t.Key, t.Value)).ToList();
+		}.Select(t => new ImportAttribute(t.Key, t.Value)).ToList();
 		return doc.DocumentNode
 			.SelectNodes(PageImgs)?
 			.Select(n => CleanUrl(n.GetAttributeValue("src", "")))
 			.Where(s => !string.IsNullOrWhiteSpace(s))
-			.Select(t => new MangaChapterPage(t)
+			.Select(t => new ImportPage(t)
 			{
 				Headers = headers
 			})

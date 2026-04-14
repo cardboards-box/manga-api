@@ -12,6 +12,14 @@ namespace MangaBox.Jwt;
 public interface IJwtKeyService
 {
 	/// <summary>
+	/// Generates a secure random key
+	/// </summary>
+	/// <param name="size">The size of the key to generate</param>
+	/// <param name="alphabet">The alphabet to use for the key</param>
+	/// <returns>The generated key</returns>
+	string GenerateKey(int size, string? alphabet = null);
+
+	/// <summary>
 	/// Encrypts the given token signature using an RSA key
 	/// </summary>
 	/// <param name="token">The un-encrypted token</param>
@@ -32,6 +40,8 @@ public interface IJwtKeyService
 internal class JwtKeyService(
 	IConfiguration _configuration) : IJwtKeyService
 {
+	private const string DEFAULT_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.-_=+";
+
 	/// <summary>
 	/// Create a lock to ensure we aren't check the RSA key file concurrently
 	/// </summary>
@@ -176,6 +186,17 @@ internal class JwtKeyService(
 		using var rsa = new RSACryptoServiceProvider(KeySize);
 		rsa.ImportParameters(parameters);
 		return Jose.JWT.Encode(token, rsa, Algorithm);
+	}
+
+	public string GenerateKey(int size, string? alphabet = null)
+	{
+		alphabet ??= DEFAULT_ALPHABET;
+		var bytes = RandomNumberGenerator.GetBytes(size);
+		var chars = new char[size];
+		for (int i = 0; i < size; i++)
+			chars[i] = alphabet[bytes[i] % alphabet.Length];
+
+		return new string(chars);
 	}
 }
 

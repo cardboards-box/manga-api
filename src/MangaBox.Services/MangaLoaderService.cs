@@ -5,6 +5,7 @@ namespace MangaBox.Services;
 using Database;
 using Models;
 using Models.Composites;
+using Models.Composites.Import;
 using Models.Types;
 
 /// <summary>
@@ -30,7 +31,7 @@ public interface IMangaLoaderService
 	/// <param name="profileId">The ID of the user making the request</param>
 	/// <param name="ids">Legacy IDs associated with the manga</param>
 	/// <returns>A boxed result of <see cref="MangaBoxType{MbManga}"/></returns>
-	Task<Boxed> Load(MangaSource.Manga input, Guid sourceId, Guid? profileId, LegacyIds? ids);
+	Task<Boxed> Load(ImportManga input, Guid sourceId, Guid? profileId, LegacyIds? ids);
 
 	/// <summary>
 	/// Attempts to refresh a manga from it's source
@@ -108,7 +109,7 @@ internal class MangaLoaderService(
 		if (source is null)	
 			return Boxed.NotFound(nameof(MbSource), "Manga source was not found.");
 
-		MangaSource.MangaChapterPage[] pages;
+		ImportPage[] pages;
 		if (source.Service is IMangaUrlSource url)
 		{
 			if (string.IsNullOrEmpty(chapter.Url))
@@ -151,7 +152,7 @@ internal class MangaLoaderService(
 		return Boxed.Ok(result);
 	}
 
-	public static void Clean(MangaSource.Manga manga, LegacyIds? ids)
+	public static void Clean(ImportManga manga, LegacyIds? ids)
 	{
 		static string? Decode(string? text)
 		{
@@ -202,7 +203,7 @@ internal class MangaLoaderService(
 		{
 			chapter.LegacyId ??= (ids?.ChildIds ?? []).TryGetValue(chapter.Id, out var childId) ? childId : defaultId;
 			chapter.Title = Decode(chapter.Title?.Trim().ForceNull());
-			chapter.Langauge = chapter.Langauge?.Trim().ForceNull() ?? "en";
+			chapter.Language = chapter.Language?.Trim().ForceNull() ?? "en";
 		}
 
 		var cr = manga.Attributes.FirstOrDefault(t => t.Name.EqualsIc("Content Rating"))?.Value;
@@ -212,7 +213,7 @@ internal class MangaLoaderService(
 		manga.Rating ??= ContentRating.Safe;
 	}
 
-	public async Task<Boxed> Load(MangaSource.Manga input, Guid sourceId, Guid? profileId, LegacyIds? ids)
+	public async Task<Boxed> Load(ImportManga input, Guid sourceId, Guid? profileId, LegacyIds? ids)
 	{
 		Clean(input, ids);
 		var json = JsonSerializer.Serialize(input);
@@ -236,9 +237,9 @@ internal class MangaLoaderService(
 		return Boxed.Ok(manga);
 	}
 
-	public static void ApplySourceChanges(IMangaSource found, MangaSource.Manga manga)
+	public static void ApplySourceChanges(IMangaSource found, ImportManga manga)
 	{
-		static void ApplyRated(IRatedSource source, MangaSource.Manga manga)
+		static void ApplyRated(IRatedSource source, ImportManga manga)
 		{
 			if (manga.Rating is not null) return;
 

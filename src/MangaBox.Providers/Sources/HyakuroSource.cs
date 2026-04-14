@@ -32,7 +32,7 @@ internal class HyakuroSource(
 
 	public Dictionary<string, string>? Headers => null;
 
-	public async Task<MangaSource.MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		string zipUrl = $"{HomeUrl}/api/download/{mangaId}/{chapterId}";
 		var (error, _, files) = await _zip.DownloadZip(zipUrl, null, token);
@@ -47,7 +47,7 @@ internal class HyakuroSource(
 			var numberPart = Path.GetFileNameWithoutExtension(t);
 			var number = double.TryParse(numberPart, out var n) ? n : 0;
 			var url = _zip.GenerateImageUrl(zipUrl, t);
-			var page = new MangaSource.MangaChapterPage
+			var page = new ImportPage
 			{
 				Page = url,
 				Headers = [new("Raw File name", t)]
@@ -61,7 +61,7 @@ internal class HyakuroSource(
 		return _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 	}
 
-	public async Task<MangaSource.Manga?> Manga(string id, CancellationToken token)
+	public async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.StartsWith("http", StringComparison.InvariantCultureIgnoreCase) ? id : $"{HomeUrl}/manga/{id}";
 		var doc = await _flareInstance.GetHtml(url, token);
@@ -95,7 +95,7 @@ internal class HyakuroSource(
 			Rating = nsfw ? ContentRating.Erotica : ContentRating.Safe,
 			Nsfw = nsfw,
 			Referer = Referer,
-			Attributes = [..new MangaSource.MangaAttribute[] 
+			Attributes = [..new ImportAttribute[] 
 			{
 				new("Added On", data.Props.PageProps.AddedOn),
 				new("Updated On", data.Props.PageProps.UpdatedOn),
@@ -105,13 +105,13 @@ internal class HyakuroSource(
 				new("Discord Link", data.Props.PageProps.Footer.Discord),
 				new("Mail Link", data.Props.PageProps.Footer.Mail),
 			}.Where(a => !string.IsNullOrEmpty(a.Value))],
-			Chapters = [..data.Props.PageProps.Chapters.Select(c => new MangaSource.MangaChapter
+			Chapters = [..data.Props.PageProps.Chapters.Select(c => new ImportChapter
 			{
 				Title = c.Name,
 				Id = c.Number.ToString(),
 				Number = c.Number,
 				Url = $"{url}/read/{c.Number}/1",
-				Attributes = [new MangaSource.MangaAttribute("Date", c.Date)]
+				Attributes = [new ImportAttribute("Date", c.Date)]
 			})]
 		};
 	}

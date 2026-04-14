@@ -6,6 +6,7 @@ using static Constants;
 /// Represents a person who has logged into MangaBox
 /// </summary>
 [Table("mb_profiles")]
+[InterfaceOption(nameof(MbProfile))]
 public class MbProfile : MbDbObjectLegacy
 {
 	/// <summary>

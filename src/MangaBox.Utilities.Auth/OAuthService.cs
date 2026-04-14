@@ -49,6 +49,13 @@ public interface IOAuthService
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The token and the profile</returns>
 	Task<AuthResponse> GetToken(MbProfile profile, CancellationToken token);
+
+	/// <summary>
+	/// Gets a JWT token from the given profile
+	/// </summary>
+	/// <param name="profile">The profile to get the token for</param>
+	/// <returns>The JWT token</returns>
+	JwtToken TokenFromProfile(MbProfile profile);
 }
 
 internal class OAuthService(
@@ -173,7 +180,7 @@ internal class OAuthService(
 		return (null, await GetToken(profile, token));
 	}
 
-	public async Task<AuthResponse> GetToken(MbProfile profile, CancellationToken cancel)
+	public JwtToken TokenFromProfile(MbProfile profile)
 	{
 		var token = _token.Empty()
 			.Add(ClaimTypes.NameIdentifier, profile.Id.ToString())
@@ -182,6 +189,12 @@ internal class OAuthService(
 		if (profile.Admin) token.Add(ClaimTypes.Role, Constants.ROLE_ADMIN);
 		if (profile.CanRead) token.Add(ClaimTypes.Role, Constants.ROLE_USER);
 
+		return token;
+	}
+
+	public async Task<AuthResponse> GetToken(MbProfile profile, CancellationToken cancel)
+	{
+		var token = TokenFromProfile(profile);
 		var jwt = await _token.GenerateToken(token, cancel);
 		return new(jwt, profile);
 	}

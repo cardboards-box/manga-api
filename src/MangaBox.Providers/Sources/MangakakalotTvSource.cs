@@ -3,7 +3,6 @@
 namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
-using static Services.MangaSource;
 
 public interface IMangakakalotTvSource : IMangaUrlSource { }
 
@@ -28,7 +27,7 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public async Task<MangaChapterPage[]> ChapterPages(string url, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string url, CancellationToken token)
 	{
 		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return [];
@@ -36,23 +35,23 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 		return doc
 				.DocumentNode
 				.SelectNodes("//div[@class=\"vung-doc\"]/img[@class=\"img-loading\"]")
-				.Select(t => new MangaChapterPage(t.GetAttributeValue("data-src", "")))
+				.Select(t => new ImportPage(t.GetAttributeValue("data-src", "")))
 				.ToArray();
 	}
 
-	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{ChapterBaseUri}{mangaId}/{chapterId}";
 		return ChapterPages(url, token);
 	}
 
-	public async Task<Manga?> Manga(string id, CancellationToken token)
+	public async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
-		var manga = new Manga
+		var manga = new ImportManga
 		{
 			Title = doc.DocumentNode.SelectSingleNode("//ul[@class=\"manga-info-text\"]/li/h1").InnerText,
 			Id = id,
@@ -87,7 +86,7 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 		{
 			var a = chapter.SelectSingleNode("./span/a");
 			var href = HomeUrl + a.GetAttributeValue("href", "").TrimStart('/');
-			var c = new MangaChapter
+			var c = new ImportChapter
 			{
 				Title = a.InnerText.Trim(),
 				Url = href,

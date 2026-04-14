@@ -3,7 +3,6 @@
 namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
-using static Services.MangaSource;
 
 public interface IDarkScansSource : IMangaSource { }
 
@@ -26,7 +25,7 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}/?style=list";
 		var doc = await _api.GetHtml(url, token);
@@ -34,17 +33,17 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 
 		return doc.DocumentNode
 			.SelectNodes("//img[@class='wp-manga-chapter-img']")
-			.Select(t => new MangaChapterPage(t.GetAttributeValue("src", "").Trim('\n', '\t', '\r')))
+			.Select(t => new ImportPage(t.GetAttributeValue("src", "").Trim('\n', '\t', '\r')))
 			.ToArray();
 	}
 
-	public async Task<Manga?> Manga(string id, CancellationToken token)
+	public async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
-		var manga = new Manga
+		var manga = new ImportManga
 		{
 			Title = doc.Attribute("//meta[@property='og:title']", "content") ?? "",
 			Id = id,
@@ -81,14 +80,14 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 		return manga;
 	}
 
-	public async Task<List<MangaChapter>> GetChapters(string url, CancellationToken token)
+	public async Task<List<ImportChapter>> GetChapters(string url, CancellationToken token)
 	{
 		//https://dark-scan.com/manga/yuusha-party-o-oida-sareta-kiyou-binbou/ajax/chapters/
 		url += "/ajax/chapters";
 		var doc = await _api.PostHtml(url, token);
 		if (doc == null) return [];
 
-		var output = new List<MangaChapter>();
+		var output = new List<ImportChapter>();
 		var chapters = doc.DocumentNode.SelectNodes("//li[contains(@class, 'wp-manga-chapter')]/a");
 		int i = chapters.Count;
 		foreach (var chap in chapters)
@@ -97,7 +96,7 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 			var href = chap.GetAttributeValue("href", "");
 			var name = chap.InnerText;
 
-			output.Add(new MangaChapter
+			output.Add(new ImportChapter
 			{
 				Title = name.Trim(),
 				Url = href.Trim(),

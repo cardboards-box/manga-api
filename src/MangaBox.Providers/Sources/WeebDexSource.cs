@@ -4,8 +4,6 @@ using WeebDexSharp.Models;
 
 namespace MangaBox.Providers.Sources;
 
-using static Services.MangaSource;
-
 using Rating = Models.Types.ContentRating;
 
 public interface IWeebDexSource : IMangaSource
@@ -28,7 +26,7 @@ internal class WeebDexSource(
 
 	public Dictionary<string, string>? Headers => null;
 
-	public async Task<MangaChapterPage[]> ChapterPages(string _, string chapterId, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string _, string chapterId, CancellationToken token)
 	{
 		var result = await _api.Chapters.Get(chapterId, token);
 		if (!result.Succeeded || result.Data is null)
@@ -38,10 +36,10 @@ internal class WeebDexSource(
 		}
 
 		return [..result.Data.ImageUrls
-			.Select(t => new MangaChapterPage(t.Name, t.Width, t.Height))];
+			.Select(t => new ImportPage(t.Name, t.Width, t.Height))];
 	}
 
-	public async Task<Manga?> Manga(string id, CancellationToken token)
+	public async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var manga = await _api.Manga.Get(id, token);
 		if (manga.Succeeded)
@@ -51,9 +49,9 @@ internal class WeebDexSource(
 		return null;
 	}
 
-	public async Task<Manga> Convert(WdManga manga, CancellationToken token, bool getChaps = true)
+	public async Task<ImportManga> Convert(WdManga manga, CancellationToken token, bool getChaps = true)
 	{
-		IEnumerable<MangaAttribute> Attributes()
+		IEnumerable<ImportAttribute> Attributes()
 		{
 			yield return new("Content Rating", manga.Rating.ToString());
 			yield return new("Original Language", manga.Language);
@@ -82,7 +80,7 @@ internal class WeebDexSource(
 		var artists = manga.Relationships.Artists.Select(a => a.Name).ToArray();
 		var authors = manga.Relationships.Authors.Select(a => a.Name).ToArray();
 
-		return new Manga
+		return new ImportManga
 		{
 			Title = title,
 			Id = id,
@@ -104,9 +102,9 @@ internal class WeebDexSource(
 		};
 	}
 
-	public MangaChapter Convert(WdChapterPartial chapter)
+	public ImportChapter Convert(WdChapterPartial chapter)
 	{
-		IEnumerable<MangaAttribute> Attributes()
+		IEnumerable<ImportAttribute> Attributes()
 		{
 			yield return new("Translated Language", chapter.Language);
 
@@ -114,7 +112,7 @@ internal class WeebDexSource(
 				yield return new("Uploader", chapter.Relationships.Uploader.Name);
 
 			foreach (var grp in chapter.Relationships.Groups)
-				yield return new MangaAttribute("Group", grp.Name);
+				yield return new ImportAttribute("Group", grp.Name);
 		}
 
 		return new()
@@ -139,7 +137,7 @@ internal class WeebDexSource(
 		return manga.Title;
 	}
 
-	public async IAsyncEnumerable<MangaChapter> GetChapters(string id, 
+	public async IAsyncEnumerable<ImportChapter> GetChapters(string id, 
 		[EnumeratorCancellation] CancellationToken token, params string[] languages)
 	{
 		var filter = new WdMangaChapterFilter

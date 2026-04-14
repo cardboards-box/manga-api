@@ -3,7 +3,6 @@
 namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
-using static Services.MangaSource;
 
 public interface IMangaKatanaSource : IMangaSource { }
 
@@ -26,7 +25,7 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}";
 		var doc = await _api.GetHtml(url, token);
@@ -49,17 +48,17 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 					.Select(t => t.Trim())
 					.ToArray();
 			})
-			.Select(t => new MangaChapterPage(t))
+			.Select(t => new ImportPage(t))
 			.ToArray();
 	}
 
-	public async Task<Manga?> Manga(string id, CancellationToken token)
+	public async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
-		var manga = new Manga
+		var manga = new ImportManga
 		{
 			Title = doc.Attribute("//meta[@property='og:title']", "content") ?? string.Empty,
 			Id = id,
@@ -98,7 +97,7 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 			var href = chap.GetAttributeValue("href", "");
 			var name = chap.InnerText;
 
-			manga.Chapters.Add(new MangaChapter
+			manga.Chapters.Add(new ImportChapter
 			{
 				Title = name.Trim(),
 				Url = href.Trim(),

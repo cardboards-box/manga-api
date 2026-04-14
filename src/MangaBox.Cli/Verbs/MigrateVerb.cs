@@ -5,6 +5,7 @@ namespace MangaBox.Cli.Verbs;
 using Database;
 using Models;
 using Models.Composites;
+using Models.Composites.Import;
 using Services;
 
 using IdMap = Dictionary<int, Guid>;
@@ -49,7 +50,7 @@ SELECT id, legacy_id FROM mb_profiles WHERE legacy_id IS NOT NULL AND legacy_id 
 	{
 		try
 		{
-			var def = JsonSerializer.Deserialize<MangaSource.Manga>(manga.MangaJson);
+			var def = JsonSerializer.Deserialize<ImportManga>(manga.MangaJson);
 			if (def is null)
 			{
 				_logger.LogWarning("Failed to deserialize manga >> {Id}", manga.LegacyId);

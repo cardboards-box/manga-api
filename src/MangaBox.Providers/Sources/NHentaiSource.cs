@@ -2,10 +2,8 @@
 
 namespace MangaBox.Providers.Sources;
 
-using MangaBox.Models.Types;
+using Models.Types;
 using Utilities.Flare;
-
-using static Services.MangaSource;
 
 public interface INhentaiSource : IMangaSource { }
 
@@ -49,7 +47,7 @@ public class NhentaiSource : INhentaiSource, IRatedSource
 		return string.Join('/', parts.SkipLast().Append($"{fwext}{ext}"));
 	}
 
-	public async Task<MangaChapterPage[]> ChapterPages(string id, string _, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string id, string _, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
@@ -58,17 +56,17 @@ public class NhentaiSource : INhentaiSource, IRatedSource
 		return doc.DocumentNode
 				.SelectNodes("//div[@class='container']/div[@class='thumb-container']/a/img")
 				.Select(t => FixPreview(t.GetAttributeValue("data-src", "").Trim()))
-				.Select(t => new MangaChapterPage(t))
+				.Select(t => new ImportPage(t))
 				.ToArray();
 	}
 
-	public async Task<Manga?> Manga(string id, CancellationToken token)
+	public async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
-		var manga = new Manga
+		var manga = new ImportManga
 		{
 			Title = doc.InnerText("//div[@id='info']/h1")?.Trim() ?? "",
 			Id = id,
@@ -81,7 +79,7 @@ public class NhentaiSource : INhentaiSource, IRatedSource
 					  .ToArray()
 		};
 
-		manga.Chapters.Add(new MangaChapter
+		manga.Chapters.Add(new ImportChapter
 		{
 			Id = id,
 			Title = DEFAULT_CHAPTER_TITLE,

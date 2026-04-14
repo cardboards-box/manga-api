@@ -66,7 +66,7 @@ internal class GenerateOrmClassesVerb(
 {
     public override async Task<bool> Execute(GenerateOrmClassesOptions options, CancellationToken token)
     {
-        var directory = Path.GetFullPath(options.Directory);
+        var directory = Path.GetFullPath(options.Directory.GetOSPath());
         if (string.IsNullOrEmpty(directory))
         {
             _logger.LogError("Invalid directory specified");

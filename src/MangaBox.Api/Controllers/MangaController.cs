@@ -1,4 +1,6 @@
-﻿namespace MangaBox.Api.Controllers;
+﻿using MangaBox.Models.Composites.Import;
+
+namespace MangaBox.Api.Controllers;
 
 /// <summary>
 /// The controller for manga endpoints
@@ -173,6 +175,21 @@ public class MangaController(
 		if (!pid.HasValue) return Boxed.Unauthorized("User is not authenticated.");
 
 		return await _loader.Load(this.GetProfileId(), request.Url, request.Force, token);
+	});
+
+	/// <summary>
+	/// Imports a manga from the given request
+	/// </summary>
+	/// <param name="request">The request to import a manga</param>
+	/// <returns>The manga or the error</returns>
+	[HttpPost, Route("manga/import")]
+	[ProducesBox<MangaBoxType<MbManga>>, ProducesError(400), ProducesError(404), ProducesError(401)]
+	public Task<IActionResult> Import([FromBody] ImportRequest request) => Box(async () =>
+	{
+		if (!this.IsAdmin())
+			return Boxed.NotFound(nameof(MbProfile));
+
+		return await _loader.Load(request.Manga, request.SourceId, request.ProfileId, null);
 	});
 
 	/// <summary>

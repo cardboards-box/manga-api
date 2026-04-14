@@ -3,7 +3,6 @@
 namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
-using static Services.MangaSource;
 
 public interface IMangaClashSource : IMangaSource { }
 
@@ -27,7 +26,7 @@ public class MangaClashSource(
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}/";
 		var doc = await _api.GetHtml(url, token);
@@ -35,7 +34,7 @@ public class MangaClashSource(
 
 		return doc.DocumentNode
 				.SelectNodes("//div[@class='page-break no-gaps']/img")?
-				.Select(t => new MangaChapterPage(t.GetAttributeValue("data-src", "").Trim('\n', '\t', '\r')))
+				.Select(t => new ImportPage(t.GetAttributeValue("data-src", "").Trim('\n', '\t', '\r')))
 				.ToArray() ?? [];
 	}
 
@@ -47,13 +46,13 @@ public class MangaClashSource(
 			.Trim();
 	}
 
-	public async Task<Manga?> Manga(string id, CancellationToken token)
+	public async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.StartsWith("http", StringComparison.InvariantCultureIgnoreCase) ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
-		var manga = new Manga
+		var manga = new ImportManga
 		{
 			Title = CleanTitle(doc.Attribute("//meta[@property='og:title']", "content") ?? ""),
 			Id = id,
@@ -94,7 +93,7 @@ public class MangaClashSource(
 			var href = chap.GetAttributeValue("href", "");
 			var name = chap.InnerText;
 
-			manga.Chapters.Add(new MangaChapter
+			manga.Chapters.Add(new ImportChapter
 			{
 				Title = name.Trim(),
 				Url = href.Trim(),

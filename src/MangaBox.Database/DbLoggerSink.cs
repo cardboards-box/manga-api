@@ -14,6 +14,13 @@ using Models.Types;
 public class DbLoggerSink(
 	IFormatProvider? _provider = null) : ILogEventSink
 {
+
+#if DEBUG
+	internal static bool DEBUG = true;
+#else
+	internal static bool DEBUG = false;
+#endif
+
 	private static readonly JsonSerializerOptions JsonOptions = new()
 	{
 		WriteIndented = false
@@ -108,9 +115,9 @@ public class DbLoggerSink(
 		}
 		catch
 		{
-#if DEBUG
-			throw;
-#endif
+			//Only throw in debug mode, otherwise void the error
+			if (DEBUG)
+				throw;
 			return null;
 		}
 	}

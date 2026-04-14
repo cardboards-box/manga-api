@@ -10,6 +10,7 @@
         "Tables/mb_logs.sql",
         "Tables/mb_sources.sql",
         "Tables/mb_profiles.sql",
+        "Tables/mb_api_keys.sql",
         "Tables/mb_lists.sql",
         "Tables/mb_tags.sql",
         "Tables/mb_manga.sql",

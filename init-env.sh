@@ -1,7 +1,7 @@
 #!/bin/sh
 
 app_name="mangabox"
-root_dir="$app_name"
+root_dir="temp-env"
 
 create_dirs() {
   mkdir -p "./$root_dir"
@@ -25,6 +25,7 @@ create_env() {
   api_port=$((starting_port + 1))
   db_port=$((starting_port + 2))
   redis_port=$((starting_port + 3))
+  flare_port=$((starting_port + 4))
 
   postgres_username=$(tr -dc 'a-z' < /dev/urandom | head -c 10)
   postgres_password=$(tr -dc 'A-Za-z0-9!?%=' < /dev/urandom | head -c 64)
@@ -41,6 +42,7 @@ REDIS_PASSWORD=$redis_password
 PORT_API=$api_port
 PORT_DB=$db_port
 PORT_REDIS=$redis_port
+PORT_FLARE=$flare_port
 
 OAUTH_APPID=
 OAUTH_SECRET=
@@ -67,7 +69,7 @@ services:
 
   app-redis:
     image: redis/redis-stack-server:latest
-    restart: always
+    restart: unless-stopped
     ports:
       - ${PORT_REDIS}:6379
     environment:
@@ -79,7 +81,7 @@ services:
 
   app-db:
     image: postgres:latest
-    restart: always
+    restart: unless-stopped
     ports:
       - ${PORT_DB}:5432
     volumes:
@@ -95,10 +97,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  app-solver:
+    image: image: ghcr.io/flaresolverr/flaresolverr:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT_FLARE}:8191"
+    networks:
+      - app-network
   
   app-api:
     image: ghcr.io/cardboards-box/manga-api/api:latest
-    restart: always
+    restart: unless-stopped
     ports:
       - ${PORT_API}:8080
     volumes:
@@ -109,7 +119,7 @@ services:
     environment:
       - Database:ConnectionString=User ID=${POSTGRES_USERNAME};Password=${POSTGRES_PASSWORD};Host=app-db;Database=${POSTGRES_SCHEMA};
       - Redis:Connection=app-redis,password=${REDIS_PASSWORD}
-      - FlareSolver:Url=${FLARE_URL}
+      - FlareSolver:Url=http://app-solver:8191
       - OAuth:Jwt:KeyPath=./jwt-key/key.pem
       - OAuth:AppId=${OAUTH_APPID}
       - OAuth:Secret=${OAUTH_SECRET}
@@ -122,6 +132,7 @@ services:
     depends_on:
       - app-db
       - app-redis
+      - app-solver
 EOF
   echo "$filename created"
 }

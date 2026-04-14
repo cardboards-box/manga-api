@@ -3,7 +3,6 @@
 namespace MangaBox.Providers.Sources.Comix;
 
 using Utilities.Flare;
-using static Services.MangaSource;
 
 public interface IComixSource : IMangaSource, IFlareImageSource
 {
@@ -30,7 +29,7 @@ internal class ComixSource(
 
 	public bool UseFlareImages => true;
 
-	public async Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var chapter = await _api.Chapter(chapterId, token);
 		if (chapter?.Result?.Images is null)
@@ -40,16 +39,16 @@ internal class ComixSource(
 		}
 
 		return [..chapter.Result.Images
-			.Select(i => new MangaChapterPage(i.Url, (int)i.Width, (int)i.Height))];
+			.Select(i => new ImportPage(i.Url, (int)i.Width, (int)i.Height))];
 	}
 
-	public async Task<Manga?> Manga(string id, CancellationToken token)
+	public async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
-		async IAsyncEnumerable<MangaChapter> GetChapters(Comix<Comix.Manga> manga, [EnumeratorCancellation] CancellationToken token)
+		async IAsyncEnumerable<ImportChapter> GetChapters(Comix<Comix.Manga> manga, [EnumeratorCancellation] CancellationToken token)
 		{
 			await foreach (var chapter in _api.AllChapters(id, token))
 			{
-				yield return new MangaChapter
+				yield return new ImportChapter
 				{
 					Title = chapter.Name,
 					Url = $"{HomeUrl}/title/{manga.Result.HashId}-{manga.Result.Slug}/{chapter.ChapterId}-chapter-{chapter.Number}",
@@ -69,7 +68,7 @@ internal class ComixSource(
 			return null;
 		}
 
-		return new Manga
+		return new ImportManga
 		{
 			Title = manga.Result.Title,
 			Id = manga.Result.HashId,

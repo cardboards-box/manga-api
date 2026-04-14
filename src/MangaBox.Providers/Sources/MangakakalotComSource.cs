@@ -3,7 +3,6 @@
 namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
-using static Services.MangaSource;
 
 public abstract class MangakakalotComBase(
 	IFlareSolverService _flare, 
@@ -26,12 +25,12 @@ public abstract class MangakakalotComBase(
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public Task<MangaChapterPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		throw new NotImplementedException();
 	}
 
-	public async Task<MangaChapterPage[]> ChapterPages(string url, CancellationToken token)
+	public async Task<ImportPage[]> ChapterPages(string url, CancellationToken token)
 	{
 		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return [];
@@ -39,11 +38,11 @@ public abstract class MangakakalotComBase(
 		return doc
 			.DocumentNode
 			.SelectNodes("//div[@class='container-chapter-reader']/img")
-			.Select(t => new MangaChapterPage(t.GetAttributeValue("src", "")))
+			.Select(t => new ImportPage(t.GetAttributeValue("src", "")))
 			.ToArray();
 	}
 
-	public virtual async Task<Manga?> Manga(string id, CancellationToken token)
+	public virtual async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		try
 		{
@@ -54,7 +53,7 @@ public abstract class MangakakalotComBase(
 			var title = doc.DocumentNode.SelectSingleNode("//ul[@class=\"manga-info-text\"]/li/h1").InnerText;
 			var cover = doc.DocumentNode.SelectSingleNode("//div[@class=\"manga-info-pic\"]/img").GetAttributeValue("src", "");
 
-			var manga = new Manga
+			var manga = new ImportManga
 			{
 				Title = title,
 				Id = id,
@@ -91,7 +90,7 @@ public abstract class MangakakalotComBase(
 				var href = a.GetAttributeValue("href", "").TrimStart('/');
 				if (!href.StartsWith("http")) href = HomeUrl + "/" + href;
 
-				var c = new MangaChapter
+				var c = new ImportChapter
 				{
 					Title = a.InnerText.Trim(),
 					Url = href,
