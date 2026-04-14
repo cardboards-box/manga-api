@@ -223,6 +223,7 @@ if [ "$local_build" != "true" ]; then
   docker pull ghcr.io/cardboards-box/manga-api/api:latest
   docker pull ghcr.io/cardboards-box/manga-api/cli:latest
 fi
+
 docker compose up -d
 
 cd ..
