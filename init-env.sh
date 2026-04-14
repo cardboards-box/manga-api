@@ -1,7 +1,32 @@
 #!/bin/sh
 
+set -eu
+
 app_name="mangabox"
 root_dir="temp-env"
+local_build=true
+
+clean_env() {
+  if [ ! -d "./$root_dir" ]; then
+    echo "Directory ./$root_dir does not exist. Nothing to clean."
+    return
+  fi
+
+  if [ -f "./$root_dir/docker-compose.yml" ]; then
+    (
+      cd "./$root_dir"
+      docker compose down --remove-orphans || true
+    )
+  fi
+
+  find "./$root_dir" -mindepth 1 \
+    ! -name "logs" \
+    ! -name "jwt-key" \
+    -exec rm -rf {} +
+
+  mkdir -p "./$root_dir/logs" "./$root_dir/jwt-key"
+  echo "Cleaned ./$root_dir (preserved logs and jwt-key)."
+}
 
 create_dirs() {
   mkdir -p "./$root_dir"
@@ -27,12 +52,11 @@ create_env() {
   redis_port=$((starting_port + 3))
   flare_port=$((starting_port + 4))
 
-  postgres_username=$(tr -dc 'a-z' < /dev/urandom | head -c 10)
-  postgres_password=$(tr -dc 'A-Za-z0-9!?%=' < /dev/urandom | head -c 64)
-  redis_password=$(tr -dc 'A-Za-z0-9!?%=' < /dev/urandom | head -c 64)
+  postgres_username=$(LC_ALL=C tr -dc 'a-z' < /dev/urandom | head -c 10)
+  postgres_password=$(LC_ALL=C tr -dc 'A-Za-z0-9!?%=' < /dev/urandom | head -c 64)
+  redis_password=$(LC_ALL=C tr -dc 'A-Za-z0-9!?%=' < /dev/urandom | head -c 64)
 
   cat > "$filename" <<EOF
-
 POSTGRES_USERNAME=$postgres_username
 POSTGRES_PASSWORD=$postgres_password
 POSTGRES_SCHEMA=$app_name
@@ -80,7 +104,7 @@ services:
       - app-network
 
   app-db:
-    image: postgres:latest
+    image: postgres:17
     restart: unless-stopped
     ports:
       - ${PORT_DB}:5432
@@ -99,15 +123,55 @@ services:
       retries: 5
 
   app-solver:
-    image: image: ghcr.io/flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr:latest
     restart: unless-stopped
     ports:
       - "${PORT_FLARE}:8191"
     networks:
       - app-network
+
+  app-cli:
+EOF
+
+  if [ "$local_build" = "true" ]; then
+    cat >> "$filename" <<'EOF'
+    build:
+      context: ..
+      dockerfile: cli.Dockerfile
+EOF
+  else
+    cat >> "$filename" <<'EOF'
+    image: ghcr.io/cardboards-box/manga-api/cli:latest
+EOF
+  fi
+
+  cat >> "$filename" <<'EOF'
+    command: ["setup"]
+    restart: "no"
+    environment:
+      - Database:ConnectionString=User ID=${POSTGRES_USERNAME};Password=${POSTGRES_PASSWORD};Host=app-db;Database=${POSTGRES_SCHEMA};
+    networks:
+      - app-network
+    depends_on:
+      app-db:
+        condition: service_healthy
   
   app-api:
+EOF
+
+  if [ "$local_build" = "true" ]; then
+    cat >> "$filename" <<'EOF'
+    build:
+      context: ..
+      dockerfile: api.Dockerfile
+EOF
+  else
+    cat >> "$filename" <<'EOF'
     image: ghcr.io/cardboards-box/manga-api/api:latest
+EOF
+  fi
+
+  cat >> "$filename" <<'EOF'
     restart: unless-stopped
     ports:
       - ${PORT_API}:8080
@@ -130,23 +194,35 @@ services:
     networks:
       - app-network
     depends_on:
-      - app-db
-      - app-redis
-      - app-solver
+      app-cli:
+        condition: service_completed_successfully
+      app-db:
+        condition: service_healthy
+      app-redis:
+        condition: service_started
+      app-solver:
+        condition: service_started
 EOF
   echo "$filename created"
 }
 
 
+if [ "${1:-}" = "clean" ]; then
+  clean_env
+fi
+
 create_dirs
 create_env
 create_compose
 
-chmod 777 -R "./$root_dir"
+chmod -R 777 "./$root_dir"
 
 cd "./$root_dir"
 
-docker pull ghcr.io/cardboards-box/manga-api/api:latest
+if [ "$local_build" != "true" ]; then
+  docker pull ghcr.io/cardboards-box/manga-api/api:latest
+  docker pull ghcr.io/cardboards-box/manga-api/cli:latest
+fi
 docker compose up -d
 
 cd ..
