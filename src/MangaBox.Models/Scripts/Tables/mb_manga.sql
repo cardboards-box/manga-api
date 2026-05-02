@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS mb_manga (
 	source_created TIMESTAMP NULL,
 	ordinal_volume_reset BOOLEAN NOT NULL,
 	legacy_id INTEGER NULL,
+	work_id UUID NULL REFERENCES mb_works(id),
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	deleted_at TIMESTAMP NULL,
@@ -31,3 +32,7 @@ ADD COLUMN IF NOT EXISTS
 			text_array_join(alt_titles, ' ')
 		)
 	) STORED;
+
+ALTER TABLE mb_manga
+ADD COLUMN IF NOT EXISTS 
+	work_id UUID NULL REFERENCES mb_works(id);

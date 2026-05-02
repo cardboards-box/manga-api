@@ -41,6 +41,7 @@ public static class DiExtensions
 			.Add<IMbLogDbService, MbLogDbService, MbLog>()
 			.Add<IMbTagDbService, MbTagDbService, MbTag>()
 			.Add<IMbListDbService, MbListDbService, MbList>()
+			.Add<IMbWorkDbService, MbWorkDbService, MbWork>()
 			.Add<IMbImageDbService, MbImageDbService, MbImage>()
 			.Add<IMbMangaDbService, MbMangaDbService, MbManga>()
 			.Add<IMbApiKeyDbService, MbApiKeyDbService, MbApiKey>()
@@ -59,6 +60,7 @@ public static class DiExtensions
 			.Model<MbRelatedPerson>()
 			.Model<MbListItemResponse>()
 			.Model<MbListCoverImage>()
+			.Model<MbRelatedManga>()
 
 			.Mapping(c => c
 				.Enum<MbLogLevel>()

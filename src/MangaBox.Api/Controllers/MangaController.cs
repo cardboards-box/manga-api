@@ -1,6 +1,7 @@
-﻿using MangaBox.Models.Composites.Import;
+﻿namespace MangaBox.Api.Controllers;
 
-namespace MangaBox.Api.Controllers;
+using Models.Composites;
+using Models.Composites.Import;
 
 /// <summary>
 /// The controller for manga endpoints
@@ -8,6 +9,7 @@ namespace MangaBox.Api.Controllers;
 public class MangaController(
 	IDbService _db,
 	IVolumeService _volume,
+	IRelatingService _relating,
 	IMangaLoaderService _loader,
 	ILogger<MangaController> logger) : BaseController(logger)
 {
@@ -235,7 +237,7 @@ public class MangaController(
 	/// <summary>
 	/// Refreshes all of the chapter pages of the given manga
 	/// </summary>
-	/// <param name="id">The ID of the </param>
+	/// <param name="id">The ID of the manga</param>
 	/// <param name="token">The cancellation token</param>
 	/// <returns>The chapters or the error</returns>
 	[HttpGet, Route("manga/{id}/chapters/refresh")]
@@ -273,6 +275,28 @@ public class MangaController(
 			Order = ChapterOrderBy.Ordinal,
 			Asc = true,
 		}, this.GetProfileId());
+	});
+
+	/// <summary>
+	/// Relates one manga with another
+	/// </summary>
+	/// <param name="first">The ID of the first manga</param>
+	/// <param name="second">The ID of the second manga</param>
+	/// <returns>The manga</returns>
+	[HttpGet, Route("manga/{first}/relate/{second}")]
+	[ProducesBox<MangaBoxType<MbManga>>, ProducesError(400), ProducesError(401)]
+	public Task<IActionResult> RefreshAllChapters(
+		[FromRoute] string first,
+		[FromRoute] string second) => Box(async () =>
+	{
+		if (!Guid.TryParse(first, out var fid) ||
+			!Guid.TryParse(second, out var sid))
+			return Boxed.Bad("Manga ID is not a valid GUID.");
+
+		if (!this.IsAdmin())
+			return Boxed.Unauthorized("You cannot perform this action");
+
+		return await _relating.Relate(fid, sid);
 	});
 
 	/// <summary>

@@ -126,4 +126,11 @@ public class MbManga : MbDbObjectLegacy
 	[Column("ordinal_volume_reset")]
 	[JsonPropertyName("ordinalVolumeReset")]
 	public bool OrdinalVolumeReset { get; set; } = false;
+
+	/// <summary>
+	/// Indicates that the same manga is available on other sources
+	/// </summary>
+	[Column("work_id", ExcludeUpdates = true), Fk<MbWork>]
+	[JsonPropertyName("workId")]
+	public Guid? WorkId { get; set; }
 }

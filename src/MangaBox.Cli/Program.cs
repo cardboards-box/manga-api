@@ -21,4 +21,5 @@ return await services
 		.Add<HandleImageQueueVerb>()
 		.Add<InitVerb>()
 		.Add<ClearChapterQueueVerb>()
+		.Add<RelateMangaVerb>()
 		.AddDatabaseGeneration());

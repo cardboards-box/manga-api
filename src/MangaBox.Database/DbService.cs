@@ -7,90 +7,95 @@ using Services;
 /// </summary>
 public interface IDbService
 {
-    /// <summary>
-    /// The service for interacting with the mb_api_keys table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_api_keys table
+	/// </summary>
 	IMbApiKeyDbService ApiKey { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_chapters table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_chapters table
+	/// </summary>
 	IMbChapterDbService Chapter { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_chapter_progress table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_chapter_progress table
+	/// </summary>
 	IMbChapterProgressDbService ChapterProgress { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_images table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_images table
+	/// </summary>
 	IMbImageDbService Image { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_lists table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_lists table
+	/// </summary>
 	IMbListDbService List { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_list_ext table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_list_ext table
+	/// </summary>
 	IMbListExtDbService ListExt { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_list_items table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_list_items table
+	/// </summary>
 	IMbListItemDbService ListItem { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_logs table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_logs table
+	/// </summary>
 	IMbLogDbService Log { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_manga table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_manga table
+	/// </summary>
 	IMbMangaDbService Manga { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_manga_ext table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_manga_ext table
+	/// </summary>
 	IMbMangaExtDbService MangaExt { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_manga_progress table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_manga_progress table
+	/// </summary>
 	IMbMangaProgressDbService MangaProgress { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_manga_relationships table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_manga_relationships table
+	/// </summary>
 	IMbMangaRelationshipDbService MangaRelationship { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_manga_tags table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_manga_tags table
+	/// </summary>
 	IMbMangaTagDbService MangaTag { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_people table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_people table
+	/// </summary>
 	IMbPersonDbService Person { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_profiles table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_profiles table
+	/// </summary>
 	IMbProfileDbService Profile { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_sources table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_sources table
+	/// </summary>
 	IMbSourceDbService Source { get; }
 
-    /// <summary>
-    /// The service for interacting with the mb_tags table
-    /// </summary>
+	/// <summary>
+	/// The service for interacting with the mb_tags table
+	/// </summary>
 	IMbTagDbService Tag { get; }
+
+	/// <summary>
+	/// The service for interacting with the mb_works table
+	/// </summary>
+	IMbWorkDbService Work { get; }
 }
 
 internal class DbService(IServiceProvider _provider) : IDbService
@@ -113,6 +118,7 @@ internal class DbService(IServiceProvider _provider) : IDbService
 	private IMbProfileDbService? _profile;
 	private IMbSourceDbService? _source;
 	private IMbTagDbService? _tag;
+	private IMbWorkDbService? _work;
 	#endregion
 
 	#region Service Implementations
@@ -133,6 +139,7 @@ internal class DbService(IServiceProvider _provider) : IDbService
 	public IMbProfileDbService Profile => _profile ??= _provider.GetRequiredService<IMbProfileDbService>();
 	public IMbSourceDbService Source => _source ??= _provider.GetRequiredService<IMbSourceDbService>();
 	public IMbTagDbService Tag => _tag ??= _provider.GetRequiredService<IMbTagDbService>();
+	public IMbWorkDbService Work => _work ??= _provider.GetRequiredService<IMbWorkDbService>();
 	#endregion
 }
 

@@ -58,12 +58,19 @@ public interface IMbMangaDbService
 	/// <returns>All of the records</returns>
 	Task<MbManga[]> Get();
 
-    /// <summary>
-    /// Fetches the record and all related records
-    /// </summary>
-    /// <param name="id">The ID of the record to fetch</param>
-    /// <returns>The record and all related records</returns>
-    Task<MangaBoxType<MbManga>?> FetchWithRelationships(Guid id);
+	/// <summary>
+	/// Gets all of the records from the mb_manga table
+	/// </summary>
+    /// <param name="ids">The IDs of the manga</param>
+	/// <returns>All of the records</returns>
+	Task<MbManga[]> Get(Guid[] ids);
+
+	/// <summary>
+	/// Fetches the record and all related records
+	/// </summary>
+	/// <param name="id">The ID of the record to fetch</param>
+	/// <returns>The record and all related records</returns>
+	Task<MangaBoxType<MbManga>?> FetchWithRelationships(Guid id);
 
 	/// <summary>
 	/// Upserts the import manga JSON data
@@ -178,6 +185,29 @@ WHERE
     i.chapter_id IS NULL AND
     i.deleted_at IS NULL AND
     m.deleted_at IS NULL;
+
+SELECT DISTINCT c.*
+FROM mb_works c
+JOIN mb_manga p ON p.work_id = c.id
+WHERE 
+    p.original_source_id = :id AND
+    p.source_id = :source AND
+    p.deleted_at IS NULL AND
+    c.deleted_at IS NULL;
+
+SELECT
+    b.id as manga_id,
+    b.work_id as work_id,
+    b.source_id as source_id
+FROM mb_manga a
+JOIN mb_works w ON w.id = a.work_id
+JOIN mb_manga b ON b.work_id = w.id AND b.id <> a.id
+WHERE
+    a.original_source_id = :id AND
+    a.source_id = :source AND
+    a.deleted_at IS NULL AND
+    b.deleted_at IS NULL AND
+    w.deleted_at IS NULL;
 ";
 		using var con = await _sql.CreateConnection();
 		using var rdr = await con.QueryMultipleAsync(QUERY, new { id, source });
@@ -191,6 +221,8 @@ WHERE
 		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbTag>());
 		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbMangaExt>());
 		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbImage>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbWork>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbRelatedManga>());
 
 		return new MangaBoxType<MbManga>(item, [.. related]);
 	}
@@ -241,6 +273,27 @@ WHERE
     manga_id = :id AND
     chapter_id IS NULL AND
     deleted_at IS NULL;
+
+SELECT DISTINCT c.*
+FROM mb_works c
+JOIN mb_manga p ON p.work_id = c.id
+WHERE 
+    p.id = :id AND
+    p.deleted_at IS NULL AND
+    c.deleted_at IS NULL;
+
+SELECT
+    b.id as manga_id,
+    b.work_id as work_id,
+    b.source_id as source_id
+FROM mb_manga a
+JOIN mb_works w ON w.id = a.work_id
+JOIN mb_manga b ON b.work_id = w.id AND b.id <> a.id
+WHERE
+    a.id = :id AND
+    a.deleted_at IS NULL AND
+    b.deleted_at IS NULL AND
+    w.deleted_at IS NULL;
 ";
         using var con = await _sql.CreateConnection();
         using var rdr = await con.QueryMultipleAsync(QUERY, new { id });
@@ -254,6 +307,8 @@ WHERE
 		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbTag>());
         MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbMangaExt>());
         MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbImage>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbWork>());
+        MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbRelatedManga>());
 
 		return new MangaBoxType<MbManga>(item, [..related]);
     }
@@ -502,5 +557,15 @@ COMMIT;";
 	{
         var query = await _cache.Required("fetch_refresh_manga");
         return await Get(query);
+	}
+
+	public Task<MbManga[]> Get(Guid[] ids)
+	{
+		const string QUERY = @"SELECT * 
+FROM mb_manga 
+WHERE 
+    id = ANY(:ids) AND 
+    deleted_at IS NULL;";
+        return Get(QUERY, new { ids });
 	}
 }
