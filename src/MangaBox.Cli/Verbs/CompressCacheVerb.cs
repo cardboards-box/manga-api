@@ -20,6 +20,7 @@ internal class CompressCacheVerb(
 {
 	public const string EXT_COMP = "gz";
 	public const string EXT_DAT = "dat";
+	public const int PRINT_AFTER = 1000;
 
 	public static async Task Compress(string from, string to, CancellationToken token)
 	{
@@ -37,7 +38,7 @@ internal class CompressCacheVerb(
 		await gzip.CopyToAsync(output, token);
 	}
 
-	public async ValueTask HandleImage(string path, bool compress, CancellationToken token)
+	public async ValueTask<bool> HandleImage(string path, bool compress, CancellationToken token)
 	{
 		try
 		{
@@ -45,7 +46,7 @@ internal class CompressCacheVerb(
 			if (!File.Exists(path))
 			{
 				_logger.LogInformation("Could not find path: {Path}", path);
-				return;
+				return false;
 			}
 
 			var compressedPath = Path.ChangeExtension(path, ext);
@@ -54,10 +55,12 @@ internal class CompressCacheVerb(
 				: Decompress(path, compressedPath, token));
 
 			File.Delete(path);
+			return true;
 		}
 		catch (Exception ex)
 		{
 			_logger.LogError(ex, "Failed to compress image at path: {Path}", path);
+			return false;
 		}
 	}
 
@@ -87,11 +90,27 @@ internal class CompressCacheVerb(
 			MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 5),
 			CancellationToken = token
 		};
-		await Parallel.ForEachAsync(images, opts, (i, t) => HandleImage(i, compress, t));
+		int success = 0;
+		int failed = 0;
+		int total = 0;
 
-		_logger.LogInformation("Finished {Mode} {Image} images in cache directory: {Path}", 
+		await Parallel.ForEachAsync(images, opts, async (i, t) =>
+		{
+			var worked = await HandleImage(i, compress, t);
+			Interlocked.Increment(ref total);
+			if (worked) Interlocked.Increment(ref success);
+			else Interlocked.Increment(ref failed);
+
+			if (total % PRINT_AFTER == 0)
+			{
+				_logger.LogInformation("Processed {Total}/{Count} ({Percentage:P2}) images. Success: {Success}, Failed: {Failed}",
+					total, images.Length, (double)total / images.Length, success, failed);
+			}
+		});
+
+		_logger.LogInformation("Finished {Mode} {Image} images (Succeeded: {Success}, Failed: {Failed}) in cache directory: {Path}", 
 			compress ? "compressing" : "decompressing",
-			images.Length, options.Directory);
+			images.Length, success, failed, options.Directory);
 		return true;
 	}
 }
