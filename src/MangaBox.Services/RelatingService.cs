@@ -19,6 +19,14 @@ public interface IRelatingService
 	/// <param name="ids">The manga to relate</param>
 	/// <returns>The response</returns>
 	Task<Boxed> Relate(Guid id, params Guid[] ids);
+
+	/// <summary>
+	/// Un-relates a manga from its related manga
+	/// </summary>
+	/// <param name="id">The primary manga to relate</param>
+	/// <param name="ids">The manga to relate</param>
+	/// <returns>The response</returns>
+	Task<Boxed> Unrelate(Guid id, params Guid[] ids);
 }
 
 internal class RelatingService(
@@ -39,6 +47,25 @@ internal class RelatingService(
 			return Boxed.NotFound(nameof(MbManga), "One of the manga was not found.");
 
 		await Relate(manga);
+
+		var primary = await _db.Manga.FetchWithRelationships(id);
+		if (primary is null)
+			return Boxed.NotFound(nameof(MbManga), "The manga was not found.");
+
+		return Boxed.Ok(primary);
+	}
+
+	public async Task<Boxed> Unrelate(Guid id, params Guid[] ids)
+	{
+		var manga = await _db.Manga.Get(ids);
+		if (manga.Length == 0)
+			return Boxed.NotFound(nameof(MbManga), "One of the manga was not found.");
+
+		foreach(var m in manga)
+			if (m.WorkId is not null)
+				await _db.Work.UnlinkManga(m.Id);
+
+		await _db.Work.ClearOrphaned();
 
 		var primary = await _db.Manga.FetchWithRelationships(id);
 		if (primary is null)

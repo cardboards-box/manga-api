@@ -42,6 +42,12 @@ public interface IMbWorkDbService
 	Task LinkManga(Guid workId, Guid[] ids);
 
 	/// <summary>
+	/// Unlinks the manga from its work group
+	/// </summary>
+	/// <param name="id">The ID of the manga to unlink</param>
+	Task UnlinkManga(Guid id);
+
+	/// <summary>
 	/// Clears any orphaned works.
 	/// </summary>
 	Task ClearOrphaned();
@@ -60,6 +66,18 @@ internal class MbWorkDbService(
 				deleted_at IS NULL
 			""";
 		return Execute(QUERY, new { workId, ids });
+	}
+
+	public Task UnlinkManga(Guid id)
+	{
+		const string QUERY = """
+			UPDATE mb_manga 
+			SET work_id = NULL
+			WHERE 
+				id = :id AND 
+				deleted_at IS NULL
+			""";
+		return Execute(QUERY, new { id });
 	}
 
 	public Task ClearOrphaned()
