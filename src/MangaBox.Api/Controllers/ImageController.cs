@@ -59,6 +59,9 @@ public class ImageController(
 			Response.Headers.TryAdd("X-Image-Height", result.Height.Value.ToString());
 		Response.Headers.TryAdd("X-Image-Id", result.FileId.ToString());
 
+		//Ensure all disposables are cleaned up 
+		Response.RegisterForDispose(result);
+
 		return File(result.Stream, result.MimeType ?? "application/octet-stream", result.FileName);
 	}
 
@@ -79,6 +82,8 @@ public class ImageController(
 
 		if (!string.IsNullOrEmpty(results.Error))
 			Response.Headers.TryAdd("X-Image-Strip-Error", results.Error);
+
+		Response.RegisterForDispose(results.Stream);
 
 		return File(results.Stream, results.MimeType ?? "application/octet-stream", results.FileName);
 	}

@@ -22,4 +22,5 @@ return await services
 		.Add<InitVerb>()
 		.Add<ClearChapterQueueVerb>()
 		.Add<RelateMangaVerb>()
+		.Add<CompressCacheVerb>()
 		.AddDatabaseGeneration());

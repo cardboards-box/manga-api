@@ -10,15 +10,16 @@ public interface ICacheService
 	/// <summary>
 	/// The place where the image cache is stored
 	/// </summary>
-	string StoragePath { get; }
+	string StoragePath { get; set; }
 
 	/// <summary>
 	/// Gets the path to the cache for the given image
 	/// </summary>
 	/// <param name="image">The image to get the cache path for</param>
 	/// <param name="hash">The hash of the image URL</param>
+	/// <param name="compress">Whether or not to use compressed extensions</param>
 	/// <returns>The path to the cache file</returns>
-	string GetCachePath(MbImage image, out string hash);
+	string GetCachePath(MbImage image, out string hash, bool compress);
 
 	/// <summary>
 	/// Gets the path to the cache for an external image
@@ -63,9 +64,15 @@ internal class CacheService(
 	public const string DIR_EXTERNAL = "external";
 	public const string DIR_ZIP = "zips";
 	public const string EXT_DAT = HttpService.EXT_DAT;
+	public const string EXT_ZIP = "zip";
+	public const string EXT_COMP = "gz";
 
 	/// <inheritdoc />
-	public string StoragePath => field ??= _config["Imaging:CacheDir"]?.ForceNull() ?? "file-cache";
+	public string StoragePath
+	{
+		get => field ??= _config["Imaging:CacheDir"]?.ForceNull() ?? "file-cache";
+		set => field = value;
+	}
 
 	/// <summary>
 	/// Generates a cache path
@@ -89,9 +96,9 @@ internal class CacheService(
 	}
 
 	/// <inheritdoc />
-	public string GetCachePath(MbImage image, out string hash)
+	public string GetCachePath(MbImage image, out string hash, bool compress)
 	{
-		return CachePath(image.Url, EXT_DAT, out hash,
+		return CachePath(image.Url, compress ? EXT_COMP : EXT_DAT, out hash,
 			image.MangaId.ToString(),
 			image.ChapterId.HasValue ? DIR_PAGES : DIR_COVERS);
 	}
@@ -105,7 +112,7 @@ internal class CacheService(
 	/// <inheritdoc />
 	public string GetZipCachePath(string url, out string hash)
 	{
-		return CachePath(url, "zip", out hash, DIR_ZIP);
+		return CachePath(url, EXT_ZIP, out hash, DIR_ZIP);
 	}
 
 	/// <inheritdoc />

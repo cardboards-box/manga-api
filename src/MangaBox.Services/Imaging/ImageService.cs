@@ -100,6 +100,11 @@ internal class ImageService(
 	public double ErrorWaitPeriodSeconds => double.TryParse(_config["Imaging:ErrorWaitPeriod"], out var sec) ? sec : 60 * 60 * 24;
 
 	/// <summary>
+	/// Whether or not to use image compression for caching
+	/// </summary>
+	public bool UseCompression => !bool.TryParse(_config["Imaging:UseCompression"], out var c) || c;
+
+	/// <summary>
 	/// How long to wait between requesting failed images
 	/// </summary>
 	public TimeSpan ErrorWaitPeriod => _waitPeriod ??= TimeSpan.FromSeconds(ErrorWaitPeriodSeconds);
@@ -178,6 +183,28 @@ internal class ImageService(
 	}
 
 	/// <summary>
+	/// Checks to see if the image exists
+	/// </summary>
+	/// <param name="image">The image to check for</param>
+	/// <param name="path">The path to the image</param>
+	/// <param name="zipPath">The path to the zipped version of the image</param>
+	/// <param name="zipped">Whether the image is zipped</param>
+	/// <param name="hash">The hash of the image</param>
+	/// <returns>Whether it exists, the path, and whether it's zipped</returns>
+	public bool ImageExists(MbImage image, out string path, out string zipPath, out bool zipped, out string hash)
+	{
+		var valid = !string.IsNullOrEmpty(image.FileName) &&
+			!string.IsNullOrEmpty(image.MimeType);
+		path = _cache.GetCachePath(image, out hash, false);
+		zipPath = _cache.GetCachePath(image, out _, true);
+		zipped = File.Exists(zipPath);
+		if (File.Exists(path)) 
+			return valid;
+
+		return zipped && valid;
+	}
+
+	/// <summary>
 	/// Fetches the image result
 	/// </summary>
 	/// <param name="source">The source of the manga</param>
@@ -192,32 +219,47 @@ internal class ImageService(
 
 		try
 		{
-			var path = _cache.GetCachePath(image, out var hash);
+			//Check to see if the image exists and get it's various properties
+			var exists = ImageExists(image, out var path, out var zipPath, out var zipped, out var hash);
+			//Lock the cache so we aren't double writing to it
 			using var cacheLock = await _cacheLocks.LockAsync(path, token);
 
-			if (File.Exists(path) &&
-				!string.IsNullOrEmpty(image.FileName) &&
-				!string.IsNullOrEmpty(image.MimeType))
+			//If it exists and isn't zipped, return it as is
+			if (exists && !zipped)
 				return new(null, image, File.OpenRead(path), true, overrideOrdinal);
 
+			//If it exists and is zipped, decompress and return it
+			if (exists && zipped)
+			{
+				var eio = File.OpenRead(zipPath);
+				return new(null, image, 
+					new GZipStream(eio, CompressionMode.Decompress), 
+					true, overrideOrdinal, [eio]);
+			}
+
+			//If the image failed to fetch recently, don't try it again yet
 			if (image.LastFailedAt is not null && image.LastFailedAt.Value + ErrorWaitPeriod > DateTime.UtcNow)
 			{
 				var waitTime = (image.LastFailedAt.Value + ErrorWaitPeriod) - DateTime.UtcNow;
 				return new($"Image is in cooldown period. Retry after {waitTime.TotalSeconds:F0} seconds", image, OverrideOrdinal: overrideOrdinal);
 			}
 
+			//If the source provider is not found, return an error
 			var loader = await _sources.FindById(source.Id, token);
 			if (loader is null)
 				return await HandleError("Could not find source provider for image");
 
+			//Rate limit the request to the source provider
 			var limiter = loader.Service.GetRateLimiter(image.Url);
 			using var lease = await limiter.AcquireAsync(1, token);
+			//If we failed to get a lease, return an error (though this shouldn't happen)
 			if (!lease.IsAcquired)
 			{
 				var after = lease.TryGetMetadata(MetadataName.RetryAfter, out var val) ? val : TimeSpan.FromSeconds(5);
 				return await HandleError("Rate Limits Reached - Retry after " + after);
 			}
 
+			//If the image source returns a zip of the entire chapter, extract the image we want
 			var zipResult = await _zip.Get(source, manga, image, path, hash, overrideOrdinal, token);
 			if (zipResult is not null)
 			{
@@ -225,15 +267,20 @@ internal class ImageService(
 				return zipResult;
 			}
 
+			//Check to see if we should use FlareSolverr to download images with headers
 			var useFlare = (source.UseFlareImages && image.ChapterId is not null) ||
 				(source.UseFlareImagesCover && image.ChapterId is null);
+			//Determine the headers to use for the image request
 			var headers = _http.HeadersFrom(image.Url, source, manga, image);
+			//Download the image from the source
 			using var download = await (useFlare
 				? _flare.Download(image.Url, headers, token)
 				: _http.Download(image.Url, headers, token));
+			//If the image failed, forward the error
 			if (!string.IsNullOrEmpty(download.Error) || download.Stream is null)
 				return await HandleError(download.Error ?? "Stream came back empty!");
 
+			//Assign the various properties of the image 
 			var expectedLength = download.Length;
 			if (!string.IsNullOrWhiteSpace(download.MimeType))
 				image.MimeType = download.MimeType;
@@ -241,12 +288,13 @@ internal class ImageService(
 				image.FileName = download.FileName;
 			image.UrlHash = hash;
 
+			//Ensure the download completed correctly and write it to the cache
 			var (error, written) = await EnsureDownload(path, expectedLength, download, token);
 			if (!string.IsNullOrEmpty(error))
 				return await HandleError(error);
 
+			//Get more image properties
 			image.ImageSize = written;
-
 			if (image.ImageWidth is null || image.ImageHeight is null)
 			{
 				var (width, height) = await _http.DetermineImageSize(path);
@@ -254,15 +302,38 @@ internal class ImageService(
 				image.ImageHeight = height ?? image.ImageHeight;
 			}
 
+			//Update the image's metadata in the database
 			await _db.Image.Update(image);
-			return new(null, image, File.OpenRead(path), false, overrideOrdinal);
+			//If compression isn't enabled, return the image as is
+			if (!UseCompression)
+				return new(null, image, File.OpenRead(path), false, overrideOrdinal);
+
+			//Compress the image for caching
+			using var zipOut = File.Create(zipPath);
+			using var gzip = new GZipStream(zipOut, CompressionLevel.SmallestSize);
+			using var io = File.OpenRead(path);
+			await io.CopyToAsync(gzip, token);
+			await gzip.FlushAsync(token);
+			gzip.Close();
+			await io.DisposeAsync();
+			await zipOut.DisposeAsync();
+			//Delete the original image
+			TryDelete(path);
+
+			//Return the decompressed image
+			var outStream = File.OpenRead(zipPath);
+			return new(null, image, 
+				new GZipStream(outStream, CompressionMode.Decompress), 
+				false, overrideOrdinal, [outStream]);
 		}
 		catch (OperationCanceledException)
 		{
+			//Skip error handling if the operation was cancelled
 			return new("Request cancelled", image);
 		}
 		catch (Exception ex)
 		{
+			//Return the error message after handling it
 			_logger.LogError(ex, "Failed to fetch image >> {URL}", image.Url);
 			return await HandleError("Image not found (4) - " + ex.Message);
 		}
@@ -525,13 +596,18 @@ internal class ImageService(
 	/// Attempt to delete a path, ignoring errors
 	/// </summary>
 	/// <param name="path">The path to delete</param>
-	public static void TryDelete(string path)
+	public void TryDelete(string path)
 	{
 		try
 		{
 			if (File.Exists(path))
 				File.Delete(path);
 		}
-		catch { }
+		catch (Exception ex)
+		{
+#if DEBUG
+			_logger.LogError(ex, "Error occurred while deleting path: {Path}", path);
+#endif
+		}
 	}
 }
