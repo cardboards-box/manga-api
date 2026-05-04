@@ -81,6 +81,13 @@ public interface IMangaDexService
 	/// <param name="id">The ID of the chapter</param>
 	/// <returns>The pages data</returns>
 	Task<Pages> Pages(string id);
+
+	/// <summary>
+	/// Fetches a custom list by it's ID
+	/// </summary>
+	/// <param name="id">The ID of the custom list</param>
+	/// <returns>The custom list data</returns>
+	Task<MangaDexRoot<CustomList>> List(string id);
 }
 
 internal class MangaDexService(
@@ -209,6 +216,11 @@ internal class MangaDexService(
 			_logger.LogError(ex, "Error occurred while getting pages for {Id}", id);
 			return new Pages() { };
 		}
+	}
+
+	public Task<MangaDexRoot<CustomList>> List(string id)
+	{
+		return Limit(md => md.Lists.Get(id, true), $"List Fetch: {id}", CancellationToken.None);
 	}
 
 }

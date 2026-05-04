@@ -46,6 +46,7 @@
 		<ProjectReference Include="..\MangaBox.Database\MangaBox.Database.csproj" />
 		<ProjectReference Include="..\MangaBox.Jwt\MangaBox.Jwt.csproj" />
 		<ProjectReference Include="..\MangaBox.Utilities.Flare\MangaBox.Utilities.Flare.csproj" />
+		<ProjectReference Include="..\MangaBox.Utilities.MangaDex\MangaBox.Utilities.MangaDex.csproj" />
 	</ItemGroup>
 
 </Project>

@@ -61,6 +61,7 @@ public static class DiExtensions
 			.Model<MbListItemResponse>()
 			.Model<MbListCoverImage>()
 			.Model<MbRelatedManga>()
+			.Model<MbTagCount>()
 
 			.Mapping(c => c
 				.Enum<MbLogLevel>()

@@ -128,4 +128,17 @@ public class ListController(
 	[HttpGet, Route("list")]
 	[ProducesPaged<MangaBoxType<MbList>>, ProducesError(400)]
 	public Task<IActionResult> SearchQuery([FromQuery] ListSearchFilter filter) => Search(filter);
+
+	/// <summary>
+	/// Imports a list from MD
+	/// </summary>
+	/// <param name="request">The request to import the list</param>
+	/// <param name="token">The token to cancel the request</param>
+	/// <returns>The response</returns>
+	[HttpPost, Route("list/import/md")]
+	[ProducesBox<MbListImportResponse>, ProducesError(404), ProducesError(500), ProducesError(401)]
+	public Task<IActionResult> ImportMd([FromBody] MbList.ListImportMD request, CancellationToken token) => Box(() =>
+	{
+		return _list.Import(request, this.GetProfileId(), token);
+	});
 }

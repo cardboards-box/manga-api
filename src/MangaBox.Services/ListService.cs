@@ -1,4 +1,8 @@
-﻿namespace MangaBox.Services;
+﻿using MangaDexSharp;
+
+namespace MangaBox.Services;
+
+using Utilities.MangaDex;
 
 using static Constants;
 
@@ -45,10 +49,23 @@ public interface IListService
 	/// <param name="request">The request</param>
 	/// <returns>The results of the operation</returns>
 	Task<Boxed> Unlink(MbListItem.LinkRequest request);
+
+	/// <summary>
+	/// Imports a list from MD. 
+	/// </summary>
+	/// <param name="request">The request to import the list</param>
+	/// <param name="profileId">The ID of the profile who owns the list</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The response</returns>
+	Task<Boxed> Import(MbList.ListImportMD request, Guid? profileId, CancellationToken token);
 }
 
 internal class ListService(
-	IDbService _db) : IListService
+	IDbService _db,
+	IMangaDexService _md,
+	ISourceService _sources,
+	IMangaLoaderService _loader,
+	ILogger<ListService> _logger) : IListService
 {
 	/// <summary>
 	/// Cleans the <see cref="MbList.Name"/>
@@ -169,5 +186,86 @@ internal class ListService(
 		var result = await _db.ListItem.Delete(request);
 		await _db.ListExt.Update(request.ListId);
 		return await Validate(result, request);
+	}
+
+	public async Task<Boxed> Import(MbList.ListImportMD request, Guid? profileId, CancellationToken token)
+	{
+		if (!profileId.HasValue) return Boxed.Unauthorized();
+
+		var mdList = await _md.List(request.MdListId);
+		if (mdList is null)
+			return Boxed.NotFound("MangaDex List", "The list with the given ID wasn't found");
+
+		if (mdList.IsError(out string error))
+			return Boxed.Exception("MangaDex List Fetch Error: " + error);
+
+		var name = CleanName(request.Name?.ForceNull()
+			?? mdList.Data?.Attributes?.Name?.ForceNull()
+			?? "Imported MD List");
+
+		var description = request.Description?.ForceNull()
+			?? $"Imported from a [MangaDex List](https://mangadex.org/list/{request.MdListId})";
+
+		var list = await _db.List.Fetch(name, profileId.Value);
+		if (list is not null)
+			return Boxed.Conflict(nameof(MbList));
+
+		var mangaIds = mdList.Data.Manga().Select(t => t.Id).Distinct().ToArray();
+		if (mangaIds.Length == 0)
+			return Boxed.Bad("The MD list is empty");
+
+		var md = await _sources.FindBySlug("mangadex", token);
+		if (md is null)
+			return Boxed.Exception("MangaDex source not found");
+
+		var found = (await _db.Manga.ByIds(md.Info.Id, mangaIds)).Select(t => t.Entity).ToList();
+		var missing = mangaIds.Except(found.Select(t => t.OriginalSourceId)).ToArray();
+		var failed = new Dictionary<string, string>();
+		foreach(var manga in missing)
+		{
+			try
+			{
+				var loaded = await _loader.Load(profileId, $"https://mangadex.org/title/{manga}", false, token);
+				if (!loaded.Success || 
+					loaded is not Boxed<MangaBoxType<MbManga>> loadedMb ||
+					loadedMb?.Data?.Entity is null)
+				{
+					var errorMessage = loaded.Errors is null || loaded.Errors.Length == 0 
+						? "Unknown error" : string.Join("; ", loaded.Errors);
+					failed[manga] = $"Failed to load manga: {errorMessage}";
+					continue;
+				}
+
+				found.Add(loadedMb.Data.Entity);
+			}
+			catch (Exception ex)
+			{
+				failed[manga] = $"Failed to load manga due to error: {ex.Message}";
+				_logger.LogError(ex, "Failed to load MD manga with ID {MangaId}", manga);
+			}
+		}
+
+		if (found.Count == 0)
+			return Boxed.Bad("None of the manga in the MD list could be imported. Errors: " + 
+				string.Join("; ", failed.Select(t => $"Manga {t.Key}: {t.Value}")));
+
+		list = new()
+		{
+			ProfileId = profileId.Value,
+			Name = name,
+			Description = description,
+			IsPublic = request.IsPublic
+		};
+		list.Id = await _db.List.Insert(list);
+
+		foreach (var item in found)
+			await _db.ListItem.Create(new(list.Id, item.Id, profileId));
+		await _db.ListExt.Update(list.Id);
+		var data = await _db.List.FetchWithRelationships(list.Id);
+		return Boxed.Ok(new MbListImportResponse
+		{
+			List = data,
+			Failures = failed
+		});
 	}
 }

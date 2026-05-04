@@ -2,7 +2,6 @@ namespace MangaBox.Database.Services;
 
 using Models;
 using Models.Composites;
-using System.Collections;
 
 /// <summary>
 /// The service for interacting with the mb_manga_progress table
@@ -82,6 +81,13 @@ public interface IMbMangaProgressDbService
     /// </summary>
     /// <returns>The progresses that were updated</returns>
     Task<MbMangaProgress[]> UpdateInProgress();
+
+	/// <summary>
+	/// Gets the count of each tag across all manga in a profile's library
+	/// </summary>
+	/// <param name="profileId">The ID of the user's profile</param>
+	/// <returns>The tag graph</returns>
+	Task<MbTagCount[]> TagGraph(Guid profileId);
 }
 
 internal class MbMangaProgressDbService(
@@ -253,4 +259,31 @@ WHERE
         var query = await _cache.Required("update_in_progress");
         return await Get(query);
     }
+
+    public Task<MbTagCount[]> TagGraph(Guid profileId)
+    {
+        const string QUERY = """
+            SELECT
+                mt.tag_id,
+                COUNT(*) as tag_count
+            FROM mb_profiles p
+            JOIN mb_manga_progress mp ON mp.profile_id = p.id
+            JOIN mb_manga m ON m.id = mp.manga_id
+            JOIN mb_manga_tags mt ON mt.manga_id = mp.manga_id
+            JOIN mb_tags t ON t.id = mt.tag_id
+            WHERE
+                p.id = :profileId AND
+                p.deleted_at IS NULL AND
+                mp.deleted_at IS NULL AND
+                mt.deleted_at IS NULL AND
+                m.deleted_at IS NULL AND
+                t.deleted_at IS NULL AND (
+                    mp.is_completed = TRUE OR
+                    mp.progress_percentage > 0
+                )
+            GROUP BY mt.tag_id
+            ORDER BY tag_count DESC
+            """;
+        return _sql.Get<MbTagCount>(QUERY, new { profileId });
+	}
 }

@@ -70,7 +70,7 @@ public class ProgressController(
 	});
 
 	/// <summary>
-	/// Fetches all of teh manga by the given IDs
+	/// Fetches all of the manga by the given IDs
 	/// </summary>
 	/// <param name="ids">The IDs of the manga</param>
 	/// <returns>The manga progress or an error if not found</returns>
@@ -107,6 +107,21 @@ public class ProgressController(
 		if (result is null) return Boxed.Exception("Failed to update page ordinal.");
 
 		return Boxed.Ok(result);
+	});
+
+	/// <summary>
+	/// Gets the tag graph for the user's library
+	/// </summary>
+	/// <returns>The tag group</returns>
+	[HttpGet, Route("progress/graph")]
+	[ProducesArray<MbTagCount>, ProducesError(401)]
+	public Task<IActionResult> Graph() => Box(async () =>
+	{
+		var id = this.GetProfileId();
+		if (!id.HasValue) return Boxed.Unauthorized("User is not authenticated.");
+
+		var graph = await _db.MangaProgress.TagGraph(id.Value);
+		return Boxed.Ok(graph);
 	});
 
 	/// <summary>
