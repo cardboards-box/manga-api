@@ -2,7 +2,6 @@ namespace MangaBox.Database.Services;
 
 using Models;
 using Models.Composites;
-using Models.Types;
 
 /// <summary>
 /// The service for interacting with the mb_profiles table

@@ -64,7 +64,7 @@ internal class MbNotificationDeviceDbService(
 
 	public Task<MbNotificationDevice[]> FetchByProfile(Guid profileId)
 	{
-		_queryByProfile ??= Map.Select(t => t.With(t => t.ProfileId));
+		_queryByProfile ??= Map.Select(t => t.With(t => t.ProfileId).Null(t => t.DeletedAt));
 		return Get(_queryByProfile, new { ProfileId = profileId });
 	}
 

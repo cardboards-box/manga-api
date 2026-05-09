@@ -13,11 +13,27 @@ public class NotificationController(
 	/// Sends a test notification
 	/// </summary>
 	/// <param name="token">The cancellation token for the request</param>
-	/// <returns>The user's devices</returns>
+	/// <returns>Whether or not the test executed successfully</returns>
 	[HttpGet, Route("notification/test"), ProducesBox<bool>]
 	public Task<IActionResult> Test(CancellationToken token) => Box(async () =>
 	{
 		var result = await _notifications.Test(token);
+		return Boxed.Ok(result);
+	});
+
+	/// <summary>
+	/// Sends a test notification
+	/// </summary>
+	/// <param name="id">The ID of the manga to send notifications for</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>Whether or not the test executed successfully</returns>
+	[HttpGet, Route("notification/test/{id}"), ProducesBox<bool>]
+	public Task<IActionResult> Test2([FromRoute] string id, CancellationToken token) => Box(async () =>
+	{
+		if (!Guid.TryParse(id, out var mid))
+			return Boxed.Bad("Invalid Device ID");
+
+		var result = await _notifications.Test(mid, token);
 		return Boxed.Ok(result);
 	});
 #endif

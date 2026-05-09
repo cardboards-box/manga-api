@@ -67,6 +67,14 @@ public interface INotificationService
 	Task<bool> Test(CancellationToken token);
 
 	/// <summary>
+	/// Sends a test notification for the given manga
+	/// </summary>
+	/// <param name="id">The ID of the manga</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>Whether or not the notification was successful</returns>
+	Task<bool> Test(Guid id, CancellationToken token);
+
+	/// <summary>
 	/// Subscribes the user to a given topic
 	/// </summary>
 	/// <param name="profileId">The ID of the profile</param>
@@ -181,6 +189,19 @@ internal class NotificationService(
 		return await Send(manga, notification, token);
 	}
 
+	public async Task<bool> Test(Guid id, CancellationToken token)
+	{
+		var manga = await _db.Manga.FetchWithRelationships(id);
+		if (manga is null) return false;
+
+		var chapter = (await _db.Chapter.ByManga(id))
+			.OrderByDescending(t => t.Ordinal)
+			.FirstOrDefault();
+		if (chapter is null) return false;
+
+		return await Chapter(manga, chapter, token);	
+	}
+
 	public async Task<bool> Chapter(Guid chapterId, CancellationToken token)
 	{
 		var fetch = await _db.Chapter.Fetch(chapterId);
@@ -194,8 +215,13 @@ internal class NotificationService(
 		var manga = await _db.Manga.FetchWithRelationships(chapter.MangaId);
 		if (manga is null) return false;
 
+		return await Chapter(manga, chapter, token);
+	}
+
+	public Task<bool> Chapter(MangaBoxType<MbManga> manga, MbChapter chapter, CancellationToken token)
+	{
 		var notification = FromChapter(chapter, manga);
-		return await Send(manga, notification, token);
+		return Send(manga, notification, token);
 	}
 
 	public async Task<bool> Manga(Guid mangaId, CancellationToken token)
@@ -258,7 +284,7 @@ internal class NotificationService(
 				yield return result;
 
 		var devices = await _db.NotificationDevice.GetDevicesForNotification(manga.Entity.Id);
-		var tokens = devices.Select(t => t.FcmToken).ToArray();
+		var tokens = devices.Select(t => t.FcmToken).Distinct().ToArray();
 		if (tokens.Length == 0) yield break;
 
 		await foreach (var result in _fcm.SendDevices(noti, tokens, token))
