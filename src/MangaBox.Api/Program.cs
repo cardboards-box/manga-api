@@ -29,6 +29,7 @@ builder.Services.AddScheduledTasks();
 await builder.Services.AddMangaBox(builder.Configuration);
 
 builder.Services.AddHostedService<LogLoaderBackgroundService>();
+builder.Services.AddHostedService<NewMangaBackgroundService>();
 
 #if !DEBUG
 builder.Services.AddHostedService<RISBackgroundService>();

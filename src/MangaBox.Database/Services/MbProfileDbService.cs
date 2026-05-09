@@ -63,6 +63,14 @@ public interface IMbProfileDbService
     /// <param name="settings">The settings blob</param>
     /// <returns>The profile that was updated</returns>
     Task<MbProfile?> Settings(Guid profileId, string? settings);
+
+	/// <summary>
+	/// Update the notification settings for the given profile
+	/// </summary>
+	/// <param name="profileId">The ID of the profile</param>
+	/// <param name="settings">The notification settings</param>
+	/// <returns>The profile that was updated</returns>
+	Task<MbProfile?> Notifications(Guid profileId, MbProfile.ProfileNotifications settings);
 }
 
 internal class MbProfileDbService(
@@ -93,18 +101,39 @@ WHERE
         return Fetch(QUERY, new { profileId, settings });
     }
 
+    public Task<MbProfile?> Notifications(Guid profileId, MbProfile.ProfileNotifications settings)
+    {
+        const string QUERY = """
+            UPDATE mb_profiles
+            SET
+                notify_favourites = :favourites,
+                notify_in_progress = :inProgress
+            WHERE
+                id = :profileId AND
+                deleted_at IS NULL;
+
+            SELECT * 
+            FROM mb_profiles 
+            WHERE 
+                id = :profileId AND
+                deleted_at IS NULL;
+            """;
+
+        return Fetch(QUERY, new
+        {
+            profileId,
+            favourites = settings.Favourites,
+            inProgress = settings.InProgress
+        });
+    }
+
     public async Task<MangaBoxType<MbProfile>?> FetchWithRelationships(Guid id)
     {
-        const string QUERY = @"SELECT * FROM mb_profiles WHERE id = :id AND deleted_at IS NULL;
-SELECT DISTINCT c.*
-FROM mb_profiles p
-JOIN mb_manga_progress b ON b.profile_id = p.id
-JOIN mb_manga c ON c.id = b.manga_id
+        const string QUERY = @"SELECT * 
+FROM mb_profiles 
 WHERE 
-    p.id = :id AND
-    p.deleted_at IS NULL AND
-    b.deleted_at IS NULL AND
-    c.deleted_at IS NULL;
+    id = :id AND 
+    deleted_at IS NULL;
 ";
         using var con = await _sql.CreateConnection();
         using var rdr = await con.QueryMultipleAsync(QUERY, new { id });
@@ -113,7 +142,7 @@ WHERE
         if (item is null) return null;
 
         var related = new List<MangaBoxRelationship>();
-        MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbManga>());
+
 
         return new MangaBoxType<MbProfile>(item, [..related]);
     }

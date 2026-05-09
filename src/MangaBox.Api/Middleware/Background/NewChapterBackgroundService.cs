@@ -1,39 +1,14 @@
-﻿using CardboardBox.Redis;
-
-namespace MangaBox.Api.Middleware.Background;
+﻿namespace MangaBox.Api.Middleware.Background;
 
 /// <summary>
 /// The background service for handling new chapters
 /// </summary>
 public class NewChapterBackgroundService(
-	IRedisService _redis,
-	IConfiguration _config,
 	IMangaLoaderService _loader,
 	IMangaPublishService _service,
+	INotificationService _notifications,
 	ILogger<NewChapterBackgroundService> _logger) : BackgroundService
 {
-	private const string MANGA_COOLDOWN_KEY = "manga:cooldown:{0}";
-
-	/// <summary>
-	/// The number of seconds to wait between allowing chapters to be pushed, to prevent spam
-	/// </summary>
-	public double CoolDownMin => double.TryParse(_config["NewChapterCooldownMin"], out var min) ? min : 60;
-
-	/// <summary>
-	/// Determine whether or not the chapter can be pushed
-	/// </summary>
-	/// <param name="mangaId">The ID of the manga</param>
-	/// <returns>Whether or not the chapter can be pushed</returns>
-	public async Task<bool> CanPush(Guid mangaId)
-	{
-		var key = string.Format(MANGA_COOLDOWN_KEY, mangaId);
-		var exists = await _redis.Get(key);
-		if (exists is not null) return false;
-
-		await _redis.Set(key, "1", TimeSpan.FromMinutes(CoolDownMin));
-		return true;
-	}
-
 	/// <summary>
 	/// Handles the new chapter being added to the queue
 	/// </summary>
@@ -53,9 +28,10 @@ public class NewChapterBackgroundService(
 				return;
 			}
 
-			if (!await CanPush(chapter.MangaId)) return;
+			if (!await _service.CanPushManga(chapter.MangaId)) return;
 
-			//Do the discord / push notification updates
+			if (!await _notifications.Chapter(chapter.Id, token))
+				_logger.LogError("[New Chapter Indexing] Error sending push notifications for {ChapterId}", chapter.Id);
 		}
 		catch (Exception ex)
 		{

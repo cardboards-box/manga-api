@@ -27,6 +27,13 @@ public interface IMangaPublishService : IDisposable
 	/// Init all of the queues
 	/// </summary>
 	Task Init();
+
+	/// <summary>
+	/// Determine whether or not the chapter can be pushed
+	/// </summary>
+	/// <param name="mangaId">The ID of the manga</param>
+	/// <returns>Whether or not the chapter can be pushed</returns>
+	Task<bool> CanPushManga(Guid mangaId);
 }
 
 /// <summary>

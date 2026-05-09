@@ -76,6 +76,20 @@ public class MbProfile : MbDbObjectLegacy
 	[Column("can_read", ExcludeUpdates = true)]
 	[JsonPropertyName("canRead")]
 	public bool CanRead { get; set; } = false;
+	
+	/// <summary>
+	/// Whether or not the user wants to receive notifications for their favourite manga
+	/// </summary>
+	[Column("notify_favourites", ExcludeUpdates = true)]
+	[JsonPropertyName("notifyFavourites")]
+	public bool NotifyFavourites { get; set; } = false;
+
+	/// <summary>
+	/// Whether or not the user wants to receive notifications for manga they are currently reading
+	/// </summary>
+	[Column("notify_in_progress", ExcludeUpdates = true)]
+	[JsonPropertyName("notifyInProgress")]
+	public bool NotifyInProgress { get; set; } = false;
 
 	/// <summary>
 	/// A partial profile used for authentication
@@ -91,4 +105,13 @@ public class MbProfile : MbDbObjectLegacy
 		[property: JsonPropertyName("email")] string Email,
 		[property: JsonPropertyName("username")] string Username,
 		[property: JsonPropertyName("avatar")] string? Avatar);
+
+	/// <summary>
+	/// The settings for notifications related to a profile
+	/// </summary>
+	/// <param name="Favourites">Whether or not the user wants to receive notifications for their favourite manga</param>
+	/// <param name="InProgress">Whether or not the user wants to receive notifications for manga they are currently reading</param>
+	public record class ProfileNotifications(
+		[property: JsonPropertyName("favourites")] bool Favourites,
+		[property: JsonPropertyName("inProgress")] bool InProgress);
 }

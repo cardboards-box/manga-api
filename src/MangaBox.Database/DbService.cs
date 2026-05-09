@@ -73,6 +73,16 @@ public interface IDbService
 	IMbMangaTagDbService MangaTag { get; }
 
 	/// <summary>
+	/// The service for interacting with the mb_notification_devices table
+	/// </summary>
+	IMbNotificationDeviceDbService NotificationDevice { get; }
+
+	/// <summary>
+	/// The service for interacting with the mb_notification_subscriptions table
+	/// </summary>
+	IMbNotificationSubscriptionDbService NotificationSubscription { get; }
+
+	/// <summary>
 	/// The service for interacting with the mb_people table
 	/// </summary>
 	IMbPersonDbService Person { get; }
@@ -114,6 +124,8 @@ internal class DbService(IServiceProvider _provider) : IDbService
 	private IMbMangaProgressDbService? _mangaProgress;
 	private IMbMangaRelationshipDbService? _mangaRelationship;
 	private IMbMangaTagDbService? _mangaTag;
+	private IMbNotificationDeviceDbService? _notificationDevice;
+	private IMbNotificationSubscriptionDbService? _notificationSubscription;
 	private IMbPersonDbService? _person;
 	private IMbProfileDbService? _profile;
 	private IMbSourceDbService? _source;
@@ -135,6 +147,8 @@ internal class DbService(IServiceProvider _provider) : IDbService
 	public IMbMangaProgressDbService MangaProgress => _mangaProgress ??= _provider.GetRequiredService<IMbMangaProgressDbService>();
 	public IMbMangaRelationshipDbService MangaRelationship => _mangaRelationship ??= _provider.GetRequiredService<IMbMangaRelationshipDbService>();
 	public IMbMangaTagDbService MangaTag => _mangaTag ??= _provider.GetRequiredService<IMbMangaTagDbService>();
+	public IMbNotificationDeviceDbService NotificationDevice => _notificationDevice ??= _provider.GetRequiredService<IMbNotificationDeviceDbService>();
+	public IMbNotificationSubscriptionDbService NotificationSubscription => _notificationSubscription ??= _provider.GetRequiredService<IMbNotificationSubscriptionDbService>();
 	public IMbPersonDbService Person => _person ??= _provider.GetRequiredService<IMbPersonDbService>();
 	public IMbProfileDbService Profile => _profile ??= _provider.GetRequiredService<IMbProfileDbService>();
 	public IMbSourceDbService Source => _source ??= _provider.GetRequiredService<IMbSourceDbService>();

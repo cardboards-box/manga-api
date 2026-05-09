@@ -73,11 +73,18 @@ public interface IMbMangaDbService
 	Task<MangaBoxType<MbManga>?> FetchWithRelationships(Guid id);
 
 	/// <summary>
+	/// Fetches the record and all related records by the legacy ID
+	/// </summary>
+	/// <param name="id">The legacy ID of the record to fetch</param>
+	/// <returns>The record and all related records</returns>
+	Task<MangaBoxType<MbManga>?> FetchWithRelationships(int id);
+
+	/// <summary>
 	/// Upserts the import manga JSON data
 	/// </summary>
 	/// <param name="sourceId">The source the manga was loaded from</param>
 	/// <param name="json">The JSON data of the manga to upsert</param>
-    /// <param name="profileId">The ID of the profile who created the JSON</param>
+	/// <param name="profileId">The ID of the profile who created the JSON</param>
 	/// <returns>The result of the upsert operation</returns>
 	Task<UpsertResult?> UpsertJson(Guid sourceId, Guid? profileId, string json);
 
@@ -311,9 +318,99 @@ WHERE
         MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbRelatedManga>());
 
 		return new MangaBoxType<MbManga>(item, [..related]);
-    }
+	}
 
-    public async Task<UpsertResult?> UpsertJson(Guid sourceId, Guid? profileId, string json)
+	public async Task<MangaBoxType<MbManga>?> FetchWithRelationships(int id)
+	{
+		const string QUERY = @"SELECT * FROM mb_manga WHERE legacy_id = :id AND deleted_at IS NULL;
+SELECT p.* 
+FROM mb_sources p
+JOIN mb_manga c ON p.id = c.source_id
+WHERE 
+    c.legacy_id = :id AND
+    c.deleted_at IS NULL AND
+    p.deleted_at IS NULL;
+
+SELECT 
+    DISTINCT 
+    c.*,
+    b.type
+FROM mb_manga p
+JOIN mb_manga_relationships b ON b.manga_id = p.id
+JOIN mb_people c ON c.id = b.person_id
+WHERE 
+    p.legacy_id = :id AND
+    p.deleted_at IS NULL AND
+    b.deleted_at IS NULL AND
+    c.deleted_at IS NULL;
+
+SELECT DISTINCT c.*
+FROM mb_manga p
+JOIN mb_manga_tags b ON b.manga_id = p.id
+JOIN mb_tags c ON c.id = b.tag_id
+WHERE 
+    p.legacy_id = :id AND
+    p.deleted_at IS NULL AND
+    b.deleted_at IS NULL AND
+    c.deleted_at IS NULL;
+
+SELECT DISTINCT e.*
+FROM mb_manga_ext e
+JOIN mb_manga m ON e.manga_id = m.id
+WHERE 
+    m.legacy_id = :id AND
+    e.deleted_at IS NULL AND
+    m.deleted_at IS NULL;
+
+SELECT DISTINCT i.*
+FROM mb_images i
+JOIN mb_manga m ON i.manga_id = m.id
+WHERE 
+    m.legacy_id = :id AND
+    i.chapter_id IS NULL AND
+    i.deleted_at IS NULL AND
+    m.deleted_at IS NULL;
+
+SELECT DISTINCT c.*
+FROM mb_works c
+JOIN mb_manga p ON p.work_id = c.id
+WHERE 
+    p.legacy_id = :id AND
+    p.deleted_at IS NULL AND
+    c.deleted_at IS NULL;
+
+SELECT
+    b.id as manga_id,
+    b.work_id as work_id,
+    b.source_id as source_id
+FROM mb_manga a
+JOIN mb_works w ON w.id = a.work_id
+JOIN mb_manga b ON b.work_id = w.id AND b.id <> a.id
+WHERE
+    a.legacy_id = :id AND
+    a.deleted_at IS NULL AND
+    b.deleted_at IS NULL AND
+    w.deleted_at IS NULL;
+";
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(QUERY, new { id });
+
+		var item = await rdr.ReadSingleOrDefaultAsync<MbManga>();
+		if (item is null) return null;
+
+		var related = new List<MangaBoxRelationship>();
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbSource>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbRelatedPerson>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbTag>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbMangaExt>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbImage>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbWork>());
+		MangaBoxRelationship.Apply(related, await rdr.ReadAsync<MbRelatedManga>());
+
+		return new MangaBoxType<MbManga>(item, [.. related]);
+	}
+
+	public async Task<UpsertResult?> UpsertJson(Guid sourceId, Guid? profileId, string json)
     {
         var query = await _cache.Required("upsert_manga");
         using var con = await _sql.CreateConnection();

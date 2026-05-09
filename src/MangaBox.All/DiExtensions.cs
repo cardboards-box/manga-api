@@ -13,6 +13,7 @@ using Match;
 using Providers;
 using Services;
 using Utilities.Auth;
+using Utilities.FCM;
 using Utilities.Flare;
 using Utilities.MangaDex;
 
@@ -44,7 +45,8 @@ public static class DiExtensions
 				{
 					AutomaticDecompression = DecompressionMethods.All
 				});
-			});
+			})
+			.AddFcmServices(config);
 
 		await services.AddServices(config, c => c
 			.AddDatabase()

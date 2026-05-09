@@ -56,6 +56,8 @@ public static class DiExtensions
 			.Add<IMbMangaProgressDbService, MbMangaProgressDbService, MbMangaProgress>()
 			.Add<IMbChapterProgressDbService, MbChapterProgressDbService, MbChapterProgress>()
 			.Add<IMbMangaRelationshipDbService, MbMangaRelationshipDbService, MbMangaRelationship>()
+			.Add<IMbNotificationDeviceDbService, MbNotificationDeviceDbService, MbNotificationDevice>()
+			.Add<IMbNotificationSubscriptionDbService, MbNotificationSubscriptionDbService, MbNotificationSubscription>()
 
 			.Model<MbRelatedPerson>()
 			.Model<MbListItemResponse>()
