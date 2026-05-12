@@ -1,0 +1,60 @@
+{
+  "chain": [
+    {
+      "depth": 0,
+      "fnName": "_0x259fcb",
+      "fnLen": 1,
+      "fnSrc": "function(){let Qe=void 0!==new.target?new.target:vmx_26c226._$XXzRY4;return QC(Qi,arguments,Qx,Qd,Qe,this)}",
+      "metaSummary": {
+        "O": {
+          "type": "function",
+          "name": "(anon)",
+          "len": 1
+        },
+        "I": {
+          "type": "function",
+          "name": "_0x447547",
+          "len": 1
+        },
+        "D": {
+          "type": "function",
+          "name": "_0x8ebec7",
+          "len": 1
+        },
+        "R": {
+          "type": "function",
+          "name": "_0x259fcb",
+          "len": 1
+        }
+      }
+    },
+    {
+      "depth": 1,
+      "fnName": "_0x447547",
+      "fnLen": 1,
+      "fnSrc": "function(){let Qe=void 0!==new.target?new.target:vmx_26c226._$XXzRY4;return QC(Qi,arguments,Qx,Qd,Qe,this)}",
+      "metaSummary": {
+        "O": {
+          "type": "function",
+          "name": "(anon)",
+          "len": 1
+        },
+        "I": {
+          "type": "function",
+          "name": "_0x447547",
+          "len": 1
+        },
+        "D": {
+          "type": "function",
+          "name": "_0x8ebec7",
+          "len": 1
+        },
+        "R": {
+          "type": "function",
+          "name": "_0x259fcb",
+          "len": 1
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,667 @@
+{
+  "vmxKeys": [
+    "Zi",
+    "v",
+    "qi",
+    "Yi",
+    "Vi",
+    "Ui",
+    "Ei",
+    "_$7nAlNc",
+    "Oi",
+    "_$65Xto2",
+    "Ii",
+    "Si",
+    "Di",
+    "ji",
+    "Ri",
+    "Ti",
+    "f",
+    "Ai",
+    "Vr",
+    "xi",
+    "_$8wIE00",
+    "Bi",
+    "Pi",
+    "Wi",
+    "Li",
+    "Mi",
+    "$i",
+    "Gi",
+    "Ji",
+    "Hi",
+    "zi",
+    "b"
+  ],
+  "vmxOwnProps": [
+    "String",
+    "btoa",
+    "atob",
+    "document",
+    "encodeURIComponent",
+    "decodeURIComponent",
+    "Array",
+    "JSON",
+    "Date",
+    "escape",
+    "Object",
+    "Symbol",
+    "TypeError",
+    "ReferenceError",
+    "Reflect",
+    "Proxy",
+    "Boolean",
+    "window",
+    "console",
+    "setTimeout",
+    "location",
+    "navigator",
+    "Math",
+    "RegExp",
+    "unescape",
+    "parseInt",
+    "localStorage",
+    "setInterval",
+    "Zi",
+    "v",
+    "qi",
+    "Yi",
+    "Vi",
+    "Ui",
+    "Ei",
+    "_$7nAlNc",
+    "Oi",
+    "_$65Xto2",
+    "Ii",
+    "Si",
+    "Di",
+    "ji",
+    "Ri",
+    "Ti",
+    "f",
+    "Ai",
+    "Vr",
+    "xi",
+    "_$8wIE00",
+    "Bi",
+    "Pi",
+    "Wi",
+    "Li",
+    "Mi",
+    "$i",
+    "Gi",
+    "Ji",
+    "Hi",
+    "zi",
+    "b"
+  ],
+  "details": {
+    "String": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "btoa": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "atob": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "document": {
+      "type": "object",
+      "ctor": "HTMLDocument",
+      "ownKeys": [
+        "location",
+        "_reactListeninghlhti602qi8"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "encodeURIComponent": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "decodeURIComponent": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Array": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "JSON": {
+      "type": "object",
+      "ctor": "Object",
+      "ownKeys": [
+        "parse",
+        "stringify",
+        "rawJSON",
+        "isRawJSON",
+        "Symbol(Symbol.toStringTag)"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Date": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "escape": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Object": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Symbol": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "TypeError": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "ReferenceError": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Reflect": {
+      "type": "object",
+      "ctor": "Object",
+      "ownKeys": [
+        "defineProperty",
+        "deleteProperty",
+        "apply",
+        "construct",
+        "get",
+        "getOwnPropertyDescriptor",
+        "getPrototypeOf",
+        "has",
+        "isExtensible",
+        "ownKeys",
+        "preventExtensions",
+        "set",
+        "setPrototypeOf",
+        "Symbol(Symbol.toStringTag)"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Proxy": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Boolean": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "window": {
+      "type": "object",
+      "ctor": "Window",
+      "ownKeys": [
+        "0",
+        "Object",
+        "Function",
+        "Array",
+        "Number",
+        "parseFloat",
+        "parseInt",
+        "Infinity",
+        "NaN",
+        "undefined",
+        "Boolean",
+        "String",
+        "Symbol",
+        "Date",
+        "Promise",
+        "RegExp",
+        "Error",
+        "AggregateError",
+        "EvalError",
+        "RangeError"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "console": {
+      "type": "object",
+      "ctor": "Object",
+      "ownKeys": [
+        "debug",
+        "error",
+        "info",
+        "log",
+        "warn",
+        "dir",
+        "dirxml",
+        "table",
+        "trace",
+        "group",
+        "groupCollapsed",
+        "groupEnd",
+        "clear",
+        "count",
+        "countReset",
+        "assert",
+        "profile",
+        "profileEnd",
+        "time",
+        "timeLog"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "setTimeout": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "location": {
+      "type": "object",
+      "ctor": "Location",
+      "ownKeys": [
+        "valueOf",
+        "ancestorOrigins",
+        "href",
+        "origin",
+        "protocol",
+        "host",
+        "hostname",
+        "port",
+        "pathname",
+        "search",
+        "hash",
+        "assign",
+        "reload",
+        "replace",
+        "toString",
+        "Symbol(Symbol.toPrimitive)"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "navigator": {
+      "type": "object",
+      "ctor": "Navigator",
+      "ownKeys": [],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Math": {
+      "type": "object",
+      "ctor": "Object",
+      "ownKeys": [
+        "abs",
+        "acos",
+        "acosh",
+        "asin",
+        "asinh",
+        "atan",
+        "atanh",
+        "atan2",
+        "ceil",
+        "cbrt",
+        "expm1",
+        "clz32",
+        "cos",
+        "cosh",
+        "exp",
+        "floor",
+        "fround",
+        "hypot",
+        "imul",
+        "log"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "RegExp": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "unescape": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "parseInt": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "localStorage": {
+      "type": "object",
+      "ctor": "Storage",
+      "ownKeys": [
+        "front_t3.searchHistory",
+        "auth"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "setInterval": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Zi": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "v": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "qi": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Yi": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Vi": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Ui": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Ei": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "_$7nAlNc": {
+      "type": "undefined",
+      "ctor": null,
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Oi": {
+      "type": "object",
+      "ctor": "Array",
+      "ownKeys": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "length"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "_$65Xto2": {
+      "type": "object",
+      "ctor": "WeakMap",
+      "ownKeys": [],
+      "isWeakMap": true,
+      "isMap": false
+    },
+    "Ii": {
+      "type": "object",
+      "ctor": "Object",
+      "ownKeys": [
+        "O",
+        "I",
+        "D",
+        "R"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Si": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Di": {
+      "type": "string",
+      "ctor": "String",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "ji": {
+      "type": "string",
+      "ctor": "String",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Ri": {
+      "type": "string",
+      "ctor": "String",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Ti": {
+      "type": "string",
+      "ctor": "String",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "f": {
+      "type": "object",
+      "ctor": "Object",
+      "ownKeys": [
+        "T",
+        "A",
+        "U",
+        "i",
+        "P",
+        "W",
+        "t"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Ai": {
+      "type": "object",
+      "ctor": "Object",
+      "ownKeys": [
+        "read",
+        "write"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Vr": {
+      "type": "object",
+      "ctor": "Object",
+      "ownKeys": [
+        "attributes",
+        "converter"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "xi": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "_$8wIE00": {
+      "type": "boolean",
+      "ctor": null,
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Bi": {
+      "type": "boolean",
+      "ctor": null,
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Pi": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Wi": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Li": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Mi": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "$i": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Gi": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Ji": {
+      "type": "function",
+      "ctor": "Function",
+      "ownKeys": null,
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "Hi": {
+      "type": "object",
+      "ctor": "Array",
+      "ownKeys": [
+        "0",
+        "1",
+        "2",
+        "length"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "zi": {
+      "type": "object",
+      "ctor": "Object",
+      "ownKeys": [
+        "get",
+        "set",
+        "remove",
+        "clear"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    },
+    "b": {
+      "type": "object",
+      "ctor": "Object",
+      "ownKeys": [
+        "get",
+        "set",
+        "remove",
+        "clear"
+      ],
+      "isWeakMap": false,
+      "isMap": false
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "hasR": true,
+  "metaType": "object",
+  "metaOwnKeys": [
+    "O",
+    "I",
+    "D",
+    "R"
+  ],
+  "metaProto": "Object",
+  "metaEntries": [
+    {
+      "key": "O",
+      "type": "function",
+      "ctor": "Function",
+      "isArray": false,
+      "len": null
+    },
+    {
+      "key": "I",
+      "type": "function",
+      "ctor": "Function",
+      "isArray": false,
+      "len": null
+    },
+    {
+      "key": "D",
+      "type": "function",
+      "ctor": "Function",
+      "isArray": false,
+      "len": null
+    },
+    {
+      "key": "R",
+      "type": "function",
+      "ctor": "Function",
+      "isArray": false,
+      "len": null
+    }
+  ]
+}

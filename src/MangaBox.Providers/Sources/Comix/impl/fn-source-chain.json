@@ -1,0 +1,53 @@
+{
+  "count": 4,
+  "items": [
+    {
+      "depth": 0,
+      "name": "_0x259fcb",
+      "len": 1,
+      "srcHead": "function(){let Qe=void 0!==new.target?new.target:vmx_26c226._$XXzRY4;return QC(Qi,arguments,Qx,Qd,Qe,this)}",
+      "metaKeys": [
+        "O",
+        "I",
+        "D",
+        "R"
+      ]
+    },
+    {
+      "depth": 1,
+      "name": "(anon)",
+      "len": 1,
+      "srcHead": "function(){let Qe=void 0!==new.target?new.target:vmx_26c226._$XXzRY4;return QC(Qi,arguments,Qx,Qd,Qe,this)}",
+      "metaKeys": [
+        "O",
+        "I",
+        "D",
+        "R"
+      ]
+    },
+    {
+      "depth": 2,
+      "name": "_0x447547",
+      "len": 1,
+      "srcHead": "function(){let Qe=void 0!==new.target?new.target:vmx_26c226._$XXzRY4;return QC(Qi,arguments,Qx,Qd,Qe,this)}",
+      "metaKeys": [
+        "O",
+        "I",
+        "D",
+        "R"
+      ]
+    },
+    {
+      "depth": 3,
+      "name": "_0x8ebec7",
+      "len": 1,
+      "srcHead": "function(){let Qe=void 0!==new.target?new.target:vmx_26c226._$XXzRY4;return QC(Qi,arguments,Qx,Qd,Qe,this)}",
+      "metaKeys": [
+        "O",
+        "I",
+        "D",
+        "R"
+      ]
+    }
+  ]
+}

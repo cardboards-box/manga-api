@@ -207,11 +207,29 @@ public class Comix
 public class Comix<T>
 {
 	[JsonPropertyName("status")]
-	public int Status { get; set; }
+	public string Status { get; set; } = string.Empty;
 
 	[JsonPropertyName("result")]
 	public T Result { get; set; } = default!;
 
 	[JsonIgnore]
 	public SolverSolution? Solver { get; set; }
+}
+
+public class ComixEncryptedResponse
+{
+	[JsonPropertyName("e")]
+	public string EncryptedPayload { get; set; } = string.Empty;
+}
+
+public class ComixErrorResponse
+{
+	[JsonPropertyName("status")]
+	public string Status { get; set; } = string.Empty;
+
+	[JsonPropertyName("message")]
+	public string Message { get; set; } = string.Empty;
+
+	[JsonPropertyName("code")]
+	public int Code { get; set; }
 }

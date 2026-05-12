@@ -28,6 +28,8 @@
 			<Pack>True</Pack>
 		</None>
 		<None Include="Sources\Comix\ComixSource.cs" />
+		<EmbeddedResource Include="Sources\Comix\impl\secure-teup0d-D6PE046x.js" />
+		<EmbeddedResource Include="Sources\Comix\impl\comix-node-decrypt.js" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -36,6 +38,7 @@
 
 	<ItemGroup>
 	  <PackageReference Include="Microsoft.ClearScript.V8" Version="7.5.0" />
+	  <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x64" Version="7.5.0" />
 	  <PackageReference Include="WeebDexSharp" Version="0.0.4" />
 	</ItemGroup>
 
@@ -45,7 +48,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Sources\Comix\impl\" />
+	  <Folder Include="Sources\Comix\impl\secure\" />
 	</ItemGroup>
 
 </Project>

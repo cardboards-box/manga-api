@@ -1,0 +1,12 @@
+Object.defineProperty(globalThis,'navigator',{value:{userAgent:'Node.js',appCodeName:'Mozilla',clipboard:null},configurable:true,writable:true});
+globalThis.document = { currentScript: null };
+globalThis.window = globalThis;
+globalThis.TextEncoder = (await import('node:util')).TextEncoder;
+globalThis.btoa = (s) => Buffer.from(s, 'binary').toString('base64');
+globalThis.atob = (s) => Buffer.from(s, 'base64').toString('binary');
+globalThis.performance = { now: () => Date.now() };
+globalThis.location = { href: 'https://comix.to/', host: 'comix.to' };
+globalThis.fetch = async () => ({ ok: true, headers: { get: () => null }, json: async () => ({ status: 200, result: [] }) });
+const mod = await import('./secure-tetuv2-CufdCtOV.mjs');
+console.log('exports', Object.keys(mod));
+console.log('types', typeof mod.i, typeof mod.n, typeof mod.r, typeof mod.t);

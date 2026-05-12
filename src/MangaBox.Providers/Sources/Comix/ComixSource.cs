@@ -106,7 +106,7 @@ internal class ComixApiService(
 	IFlareSolverService _flare,
 	ILogger<ComixApiService> _logger)
 {
-	public const string BASE_URL = "https://comix.to/api/v2";
+	public const string BASE_URL = "https://comix.to/api/v1";
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
@@ -133,8 +133,40 @@ internal class ComixApiService(
 			data = response.DocumentNode?.InnerText("//pre") 
 				?? response.FlareSolution.Response 
 				?? string.Empty;
+
+			if (data.StartsWith("{\"e\":"))
+			{
+				var payload = JsonSerializer.Deserialize<ComixEncryptedResponse>(data)?.EncryptedPayload;
+				if (!string.IsNullOrWhiteSpace(payload) && ComixPayloadDecryptor.TryDecryptPayload(payload, out var decryptedJson))
+				{
+					data = decryptedJson;
+				}
+				else
+				{
+					_logger.LogWarning("Unable to decrypt COMIX API encrypted payload for URL: {Url}", url);
+					return default;
+				}
+			}
+
 			var output = JsonSerializer.Deserialize<Comix<T>>(data);
-			if (output is null) return default;
+			if (output is null || output.Result is null)
+			{
+				_logger.LogWarning("Unable to parse COMIX API response for URL: {Url}", url);
+				return default;
+			}
+
+			if (string.Equals(output.Status, "error", StringComparison.OrdinalIgnoreCase))
+			{
+				var error = JsonSerializer.Deserialize<ComixErrorResponse>(data);
+				_logger.LogWarning("COMIX API returned error for URL: {Url} ({Code}) {Message}", url, error?.Code, error?.Message);
+				return default;
+			}
+
+			if (output.Result is null)
+			{
+				_logger.LogWarning("COMIX API response has no result payload for URL: {Url}", url);
+				return default;
+			}
 
 			output.Solver = response.FlareSolution;
 			return output;
@@ -153,7 +185,7 @@ internal class ComixApiService(
 
 	public Task<Comix<Comix.Chapter>?> Chapter(string id, CancellationToken token)
 	{
-		return Get<Comix.Chapter>($"chapters/{id}", token: token);
+		return Get<Comix.Chapter>($"manga/{id}/chapters", token: token);
 	}
 
 	public Task<Comix<Comix.ChapterList>?> Chapters(string id, int page, CancellationToken token)
@@ -169,21 +201,21 @@ internal class ComixApiService(
 		{
 			token.ThrowIfCancellationRequested();
 			var result = await Chapters(mangaId, page, token);
-			if (result == null || result.Result.Items.Length == 0)
+			var items = result?.Result?.Items;
+			if (items is null || items.Length == 0)
 				yield break;
 
-			foreach (var chap in result.Result.Items)
+			foreach (var chap in items)
 			{
-				chap.Solver = result.Solver;
+				chap.Solver = result?.Solver;
 				yield return chap;
 			}
 
-			if (page >= result.Result.Pagination.LastPage)
+			var lastPage = result?.Result?.Pagination?.LastPage ?? page;
+			if (page >= lastPage)
 				yield break;
 
 			page++;
 		}
 	}
 }
-
-
