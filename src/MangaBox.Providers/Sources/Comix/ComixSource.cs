@@ -32,14 +32,15 @@ internal class ComixSource(
 	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var chapter = await _api.Chapter(chapterId, token);
-		if (chapter?.Result?.Images is null)
+		var pages = chapter?.Result?.Pages?.Items;
+		if (pages is null || pages.Length == 0)
 		{
 			_logger.LogWarning("Chapter not found: {ChapterId}", chapterId);
 			return [];
 		}
 
-		return [..chapter.Result.Images
-			.Select(i => new ImportPage(i.Url, (int)i.Width, (int)i.Height))];
+		var baseUrl = chapter!.Result.Pages.BaseUrl;
+		return [..pages.Select(i => new ImportPage(new Uri(new Uri(baseUrl), i.Url).ToString(), (int)i.Width, (int)i.Height))];
 	}
 
 	public async Task<ImportManga?> Manga(string id, CancellationToken token)
@@ -61,12 +62,34 @@ internal class ComixSource(
 			}
 		}
 
+		static string? GetName(Comix.ComixNamedItem item)
+		{
+			return item.Name?.ForceNull() ?? item.Title?.ForceNull();
+		}
+
 		var manga = await _api.Manga(id, token);
 		if (manga is null)
 		{
 			_logger.LogWarning("Manga not found: {MangaId}", id);
 			return null;
 		}
+
+		var authors = (manga.Result.Authors?.Select(GetName).ToArray() ?? [])
+			.Concat(manga.Result.Artists?.Select(GetName).ToArray() ?? [])
+			.Where(t => !string.IsNullOrWhiteSpace(t))
+			.ToArray();
+		var tags = (manga.Result.Tags?.Select(GetName).ToArray() ?? [])
+			.Concat(manga.Result.Genres?.Select(GetName).ToArray() ?? [])
+			.Concat(manga.Result.Demographics?.Select(GetName).ToArray() ?? [])
+			.Concat(manga.Result.Formats?.Select(GetName).ToArray() ?? [])
+			.Where(t => !string.IsNullOrWhiteSpace(t))
+			.ToArray();
+
+		var links = (manga.Result.Links?.Select(t => new ImportAttribute("link-" + t.Key, t.Value)) ?? [])
+			.Append(new ImportAttribute("content-rating", manga.Result.ContentRating))
+			.Where(t => !string.IsNullOrWhiteSpace(t.Value))
+			.ToArray();
+
 
 		return new ImportManga
 		{
@@ -77,11 +100,11 @@ internal class ComixSource(
 			Cover = manga.Result.Poster.Large,
 			Description = manga.Result.Synopsis,
 			AltTitles = manga.Result.AltTitles,
-			Tags = [],
+			Tags = tags!,
+			Authors = authors!,
 			Chapters = await GetChapters(manga, token).OrderBy(t => t.Number).ToListA(),
 			Nsfw = manga.Result.IsNsfw,
-			Attributes = [],
-			SourceCreated = DateTimeOffset.FromUnixTimeSeconds(manga.Result.CreatedAt).DateTime,
+			Attributes = [..links],
 			OrdinalVolumeReset = false,
 		};
 	}
@@ -130,23 +153,9 @@ internal class ComixApiService(
 				return default;
 			}
 
-			data = response.DocumentNode?.InnerText("//pre") 
-				?? response.FlareSolution.Response 
+			data = response.DocumentNode?.InnerText("//pre")
+				?? response.FlareSolution.Response
 				?? string.Empty;
-
-			if (data.StartsWith("{\"e\":"))
-			{
-				var payload = JsonSerializer.Deserialize<ComixEncryptedResponse>(data)?.EncryptedPayload;
-				if (!string.IsNullOrWhiteSpace(payload) && ComixPayloadDecryptor.TryDecryptPayload(payload, out var decryptedJson))
-				{
-					data = decryptedJson;
-				}
-				else
-				{
-					_logger.LogWarning("Unable to decrypt COMIX API encrypted payload for URL: {Url}", url);
-					return default;
-				}
-			}
 
 			var output = JsonSerializer.Deserialize<Comix<T>>(data);
 			if (output is null || output.Result is null)
@@ -183,9 +192,10 @@ internal class ComixApiService(
 		return Get<Comix.Manga>($"manga/{id}", token: token);
 	}
 
-	public Task<Comix<Comix.Chapter>?> Chapter(string id, CancellationToken token)
+	public Task<Comix<Comix.ChapterDetail>?> Chapter(string id, CancellationToken token)
 	{
-		return Get<Comix.Chapter>($"manga/{id}/chapters", token: token);
+		var url = ComixToSigner.SignChapter(id);
+		return Get<Comix.ChapterDetail>(url, token: token);
 	}
 
 	public Task<Comix<Comix.ChapterList>?> Chapters(string id, int page, CancellationToken token)

@@ -50,9 +50,18 @@ public static class ComixToSigner
 		122228004, 329020, 84033793, 34622328, 0, 21825298, 101321551, 123162950,
 	];
 
-	private static readonly byte[] LiveTokenSuffix = [127, 241, 120, 206, 4, 167, 103, 234, 234, 27, 134];
+	private static readonly ulong[] LiveVariableBitMasks4 =
+	[
+		105991738, 51780415, 106648650, 101453670, 102369579, 102369547, 1443341, 32,
+		105317703, 122032177, 4933456, 5785966, 38870390, 71703670, 105729616, 119299905,
+		4212491, 17781050, 122031462, 123668029, 100866919, 105336076, 102702646, 18498907,
+		118693414, 73028896, 34692474, 50988358, 35277078, 55513408, 102254145, 5330176,
+	];
 
-	public static string SignChapter(string mangaId, int page, int limit = 20)
+	private static readonly byte[] LiveTokenSuffix = [127, 241, 120, 206, 4, 167, 103, 234, 234, 27, 134];
+	private static readonly byte[] LiveTokenSuffix4 = [239, 59, 144, 129, 223, 218, 212, 83, 12, 179, 59];
+
+	public static string SignChapter(string mangaId, int page, int limit = 100)
 	{
 		var path = $"manga/{mangaId}/chapters";
 		var query = $"page={page}&limit={limit}&order%5Bnumber%5D=desc";
@@ -62,23 +71,38 @@ public static class ComixToSigner
 		return $"{path}?{query}&_={sig}";
 	}
 
+	public static string SignChapter(string chapterId)
+	{
+		var path = $"chapters/{chapterId}";
+		// Current Comix signer is manga-id driven (live token), not legacy RC4 path signing.
+		var sig = ComputeLiveSignature(chapterId);
+		return $"{path}?_={sig}";
+	}
+
 	private static string ComputeLiveSignature(string mangaId)
 	{
-		var bytes = new byte[65];
+		var isShortId = mangaId.Length <= 4;
+		var variableMasks = isShortId ? LiveVariableBitMasks4 : LiveVariableBitMasks;
+		var variableByteStart = 49;
+		var variableByteCount = isShortId ? 4 : 5;
+		var suffix = isShortId ? LiveTokenSuffix4 : LiveTokenSuffix;
+		var suffixStart = variableByteStart + variableByteCount;
+
+		var bytes = new byte[suffixStart + suffix.Length];
 		Buffer.BlockCopy(LiveTokenPrefix, 0, bytes, 0, LiveTokenPrefix.Length);
 
-		var featureBits = BuildFeatureBits(mangaId);
-		for (var outputBit = 0; outputBit < LiveVariableBitMasks.Length; outputBit++)
+		var featureBits = BuildFeatureBits(mangaId, isShortId ? 4 : 5);
+		for (var outputBit = 0; outputBit < variableMasks.Length; outputBit++)
 		{
-			if (Parity(featureBits & LiveVariableBitMasks[outputBit]) != 0)
+			if (Parity(featureBits & variableMasks[outputBit]) != 0)
 			{
-				var byteIndex = 49 + (outputBit >> 3);
+				var byteIndex = variableByteStart + (outputBit >> 3);
 				var bitIndex = outputBit & 7;
 				bytes[byteIndex] |= (byte)(1 << bitIndex);
 			}
 		}
 
-		Buffer.BlockCopy(LiveTokenSuffix, 0, bytes, 54, LiveTokenSuffix.Length);
+		Buffer.BlockCopy(suffix, 0, bytes, suffixStart, suffix.Length);
 
 		return Convert.ToBase64String(bytes)
 			.Replace('+', '-')
@@ -86,12 +110,12 @@ public static class ComixToSigner
 			.TrimEnd('=');
 	}
 
-	private static ulong BuildFeatureBits(string mangaId)
+	private static ulong BuildFeatureBits(string mangaId, int charsToUse)
 	{
 		ulong bits = 0;
 		var bitIndex = 0;
 
-		for (var i = 0; i < 5; i++)
+		for (var i = 0; i < charsToUse; i++)
 		{
 			var ch = i < mangaId.Length ? (byte)mangaId[i] : (byte)0;
 			for (var bit = 0; bit < 8; bit++)

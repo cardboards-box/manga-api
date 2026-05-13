@@ -10,7 +10,7 @@ public static class ComixDecryptor
 	private const string SecureBundleResourceName = "MangaBox.Providers.Sources.Comix.impl.secure-teup0d-D6PE046x.js";
 	private const string NodeDecryptScriptResourceName = "MangaBox.Providers.Sources.Comix.impl.comix-node-decrypt.js";
 	private static readonly UTF8Encoding StrictUtf8 = new(false, true);
-	private static readonly object DecryptLock = new();
+	private static readonly Lock DecryptLock = new();
 	private static V8ScriptEngine? _decryptEngine;
 	private static bool _decryptEngineInitialized;
 	private static string _decryptInitError = string.Empty;

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
 
@@ -215,17 +216,11 @@ internal static class ComixPayloadDecryptor
 			if (!current.Contains('%'))
 				break;
 
-			try
-			{
-				var decoded = Uri.UnescapeDataString(current);
-				if (decoded == current)
-					break;
-				current = decoded;
-			}
-			catch
-			{
+			var decoded = WebUtility.UrlDecode(current);
+			if (string.Equals(decoded, current, StringComparison.Ordinal))
 				break;
-			}
+
+			current = decoded;
 		}
 
 		if (current.Length > 1 && current[0] == '"' && current[^1] == '"')
@@ -250,6 +245,26 @@ internal static class ComixPayloadDecryptor
 			if (TryParseJsonCandidate(wrapped, out json))
 				return true;
 		}
+
+		if (!current.StartsWith('{') && !current.StartsWith('[') && current.Contains("\":") && !current.Contains('%'))
+		{
+			var wrapped = "{" + current + "}";
+			if (TryParseJsonCandidate(wrapped, out json))
+				return true;
+		}
+
+		if (!current.StartsWith('{') && !current.StartsWith('[') && current.Contains('%'))
+		{
+			var htmlDecoded = WebUtility.HtmlDecode(current);
+			if (!string.Equals(htmlDecoded, current, StringComparison.Ordinal) && TryNormalizeJsonText(htmlDecoded, out json))
+				return true;
+		}
+
+		if (TryNormalizeAnchoredSegment(current, out json))
+			return true;
+
+		if (TryExtractJsonSegment(current, out json))
+			return true;
 
 		return false;
 	}
@@ -294,6 +309,52 @@ internal static class ComixPayloadDecryptor
 		}
 	}
 
+	private static bool TryNormalizeAnchoredSegment(string text, out string json)
+	{
+		json = string.Empty;
+		if (string.IsNullOrWhiteSpace(text))
+			return false;
+
+		var normalized = text.Trim();
+		var statusAnchor = normalized.IndexOf("%22status%22", StringComparison.Ordinal);
+		if (statusAnchor >= 0)
+		{
+			normalized = normalized[statusAnchor..];
+		}
+		else
+		{
+			statusAnchor = normalized.IndexOf("\"status\"", StringComparison.Ordinal);
+			if (statusAnchor >= 0)
+				normalized = normalized[statusAnchor..];
+		}
+
+		if (!normalized.Contains("status", StringComparison.Ordinal))
+			return false;
+
+		if (normalized.Contains('%'))
+			normalized = WebUtility.UrlDecode(normalized);
+
+		normalized = normalized.Trim();
+		if (normalized.Length == 0)
+			return false;
+
+		if (!normalized.StartsWith('{') && !normalized.StartsWith('['))
+			normalized = "{" + normalized + "}";
+
+		if (TryParseJsonCandidate(normalized, out json))
+			return true;
+
+		var resultAnchor = normalized.IndexOf("\"result\"", StringComparison.Ordinal);
+		if (resultAnchor > 0)
+		{
+			var candidate = "{" + normalized[resultAnchor..];
+			if (TryParseJsonCandidate(candidate, out json))
+				return true;
+		}
+
+		return false;
+	}
+
 	private static bool LooksLikeBase64Text(string value)
 	{
 		if (value.Length < 8)
@@ -307,6 +368,38 @@ internal static class ComixPayloadDecryptor
 		}
 
 		return true;
+	}
+
+	private static bool TryExtractJsonSegment(string text, out string json)
+	{
+		json = string.Empty;
+		if (string.IsNullOrWhiteSpace(text))
+			return false;
+
+		var decoded = text;
+		if (decoded.Contains('%'))
+			decoded = WebUtility.UrlDecode(decoded);
+
+		var start = decoded.IndexOf('{');
+		if (start < 0)
+			start = decoded.IndexOf('[');
+		if (start < 0)
+			return false;
+
+		var candidate = decoded[start..].Trim();
+		while (candidate.Length > 0)
+		{
+			if (TryParseJsonCandidate(candidate, out json))
+				return true;
+
+			var trimIndex = candidate.LastIndexOfAny(['}', ']']);
+			if (trimIndex <= 0)
+				break;
+
+			candidate = candidate[..trimIndex].TrimEnd();
+		}
+
+		return false;
 	}
 
 	private static byte Add(byte value, int amount) => (byte)((value + amount) & 255);

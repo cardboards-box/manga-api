@@ -6,146 +6,329 @@ public class Comix
 {
 	public partial class Manga
 	{
-		//[JsonPropertyName("manga_id")]
-		//public long MangaId { get; set; }
+		[JsonPropertyName("id")]
+		public long Id { get; set; }
 
-		[JsonPropertyName("hash_id")]
-		public string HashId { get; set; } = string.Empty;
+		[JsonPropertyName("hid")]
+		public string Hid { get; set; } = string.Empty;
+
+		[JsonIgnore]
+		public string HashId => Hid;
 
 		[JsonPropertyName("title")]
 		public string Title { get; set; } = string.Empty;
 
-		[JsonPropertyName("alt_titles")]
-		public string[] AltTitles { get; set; } = [];
+		[JsonIgnore]
+		public string Slug
+		{
+			get
+			{
+				if (string.IsNullOrWhiteSpace(Url))
+					return string.Empty;
 
-		[JsonPropertyName("synopsis")]
-		public string Synopsis { get; set; } = string.Empty;
+				var path = new Uri(Url).AbsolutePath.Trim('/');
+				var titleIndex = path.IndexOf("title/", StringComparison.OrdinalIgnoreCase);
+				if (titleIndex >= 0)
+					path = path[(titleIndex + 6)..];
 
-		[JsonPropertyName("slug")]
-		public string Slug { get; set; } = string.Empty;
+				var slashIndex = path.IndexOf('/');
+				if (slashIndex >= 0)
+					path = path[..slashIndex];
 
-		//[JsonPropertyName("rank")]
-		//public long Rank { get; set; }
+				var dashIndex = path.IndexOf('-');
+				if (dashIndex >= 0)
+					path = path[(dashIndex + 1)..];
 
-		//[JsonPropertyName("type")]
-		//public string Type { get; set; } = string.Empty;
+				return path;
+			}
+		}
+
+		[JsonPropertyName("type")]
+		public string Type { get; set; } = string.Empty;
+
+		[JsonPropertyName("status")]
+		public string Status { get; set; } = string.Empty;
+
+		[JsonPropertyName("originalLanguage")]
+		public string OriginalLanguage { get; set; } = string.Empty;
 
 		[JsonPropertyName("poster")]
 		public Poster Poster { get; set; } = new();
 
-		//[JsonPropertyName("original_language")]
-		//public string OriginalLanguage { get; set; } = string.Empty;
+		[JsonPropertyName("latestChapter")]
+		public double LatestChapter { get; set; }
 
-		//[JsonPropertyName("status")]
-		//public string Status { get; set; } = string.Empty;
+		[JsonPropertyName("finalChapter")]
+		public double FinalChapter { get; set; }
 
-		//[JsonPropertyName("final_volume")]
-		//public long FinalVolume { get; set; }
+		[JsonPropertyName("finalVolume")]
+		public double FinalVolume { get; set; }
 
-		//[JsonPropertyName("final_chapter")]
-		//public long FinalChapter { get; set; }
+		[JsonPropertyName("hasChapters")]
+		public bool HasChapters { get; set; }
 
-		//[JsonPropertyName("has_chapters")]
-		//public bool HasChapters { get; set; }
+		[JsonPropertyName("chapterUpdatedAtFormatted")]
+		public string ChapterUpdatedAtFormatted { get; set; } = string.Empty;
 
-		//[JsonPropertyName("latest_chapter")]
-		//public long LatestChapter { get; set; }
+		[JsonPropertyName("createdAtFormatted")]
+		public string CreatedAtFormatted { get; set; } = string.Empty;
 
-		//[JsonPropertyName("chapter_updated_at")]
-		//public long ChapterUpdatedAt { get; set; }
+		[JsonPropertyName("updatedAtFormatted")]
+		public string UpdatedAtFormatted { get; set; } = string.Empty;
 
-		//[JsonPropertyName("start_date")]
-		//public long StartDate { get; set; }
+		[JsonPropertyName("startDate")]
+		public string StartDate { get; set; } = string.Empty;
 
-		//[JsonPropertyName("end_date")]
-		//public string EndDate { get; set; } = string.Empty;
+		[JsonPropertyName("endDate")]
+		public string EndDate { get; set; } = string.Empty;
 
-		[JsonPropertyName("created_at")]
-		public long CreatedAt { get; set; }
+		[JsonPropertyName("year")]
+		public long Year { get; set; }
 
-		//[JsonPropertyName("updated_at")]
-		//public long UpdatedAt { get; set; }
+		[JsonPropertyName("rank")]
+		public long Rank { get; set; }
 
-		//[JsonPropertyName("rated_avg")]
-		//public double RatedAvg { get; set; }
+		[JsonPropertyName("synopsis")]
+		public string Synopsis { get; set; } = string.Empty;
 
-		//[JsonPropertyName("rated_count")]
-		//public long RatedCount { get; set; }
+		[JsonPropertyName("synopsisHtml")]
+		public string SynopsisHtml { get; set; } = string.Empty;
 
-		//[JsonPropertyName("follows_total")]
-		//public long FollowsTotal { get; set; }
+		[JsonPropertyName("followsTotal")]
+		public long FollowsTotal { get; set; }
 
-		//[JsonPropertyName("links")]
-		//public Dictionary<string, string> Links { get; set; } = [];
+		[JsonPropertyName("ratedAvg")]
+		public double RatedAvg { get; set; }
 
-		[JsonPropertyName("is_nsfw")]
-		public bool IsNsfw { get; set; }
+		[JsonPropertyName("ratedCount")]
+		public long RatedCount { get; set; }
 
-		//[JsonPropertyName("year")]
-		//public long Year { get; set; }
+		[JsonPropertyName("contentRating")]
+		public string ContentRating { get; set; } = string.Empty;
 
-		//[JsonPropertyName("term_ids")]
-		//public long[] TermIds { get; set; } = [];
+		[JsonIgnore]
+		public bool IsNsfw => !string.IsNullOrWhiteSpace(ContentRating) && !string.Equals(ContentRating, "safe", StringComparison.OrdinalIgnoreCase);
+
+		[JsonIgnore]
+		public long CreatedAt => 0;
+
+		[JsonPropertyName("links")]
+		public Dictionary<string, string> Links { get; set; } = [];
+
+		[JsonPropertyName("url")]
+		public string Url { get; set; } = string.Empty;
+
+		[JsonPropertyName("uploadUrl")]
+		public string UploadUrl { get; set; } = string.Empty;
+
+		[JsonPropertyName("editUrl")]
+		public string EditUrl { get; set; } = string.Empty;
+
+		[JsonPropertyName("altTitles")]
+		public string[] AltTitles { get; set; } = [];
+
+		[JsonPropertyName("genres")]
+		public ComixNamedItem[] Genres { get; set; } = [];
+
+		[JsonPropertyName("demographics")]
+		public ComixNamedItem[] Demographics { get; set; } = [];
+
+		[JsonPropertyName("formats")]
+		public ComixNamedItem[] Formats { get; set; } = [];
+
+		[JsonPropertyName("tags")]
+		public ComixNamedItem[] Tags { get; set; } = [];
+
+		[JsonPropertyName("authors")]
+		public ComixNamedItem[] Authors { get; set; } = [];
+
+		[JsonPropertyName("artists")]
+		public ComixNamedItem[] Artists { get; set; } = [];
+
+		[JsonPropertyName("publishers")]
+		public ComixNamedItem[] Publishers { get; set; } = [];
+
+		[JsonPropertyName("sources")]
+		public ComixNamedItem[] Sources { get; set; } = [];
+
+		[JsonPropertyName("firstChapterUrl")]
+		public string FirstChapterUrl { get; set; } = string.Empty;
+
+		[JsonPropertyName("latestChapterUrl")]
+		public string LatestChapterUrl { get; set; } = string.Empty;
 	}
 
 	public partial class Poster
 	{
-		//[JsonPropertyName("small")]
-		//public string Small { get; set; } = string.Empty;
-
-		//[JsonPropertyName("medium")]
-		//public string Medium { get; set; } = string.Empty;
+		[JsonPropertyName("medium")]
+		public string Medium { get; set; } = string.Empty;
 
 		[JsonPropertyName("large")]
 		public string Large { get; set; } = string.Empty;
 	}
 
-	public partial class Chapter
+	public partial class ComixNamedItem
 	{
-		[JsonPropertyName("chapter_id")]
-		public long ChapterId { get; set; }
+		[JsonPropertyName("id")]
+		public long Id { get; set; }
 
-		//[JsonPropertyName("manga_id")]
-		//public long MangaId { get; set; }
-
-		//[JsonPropertyName("scanlation_group_id")]
-		//public long ScanlationGroupId { get; set; }
-
-		//[JsonPropertyName("is_official")]
-		//public long IsOfficial { get; set; }
-
-		[JsonPropertyName("number")]
-		public double Number { get; set; }
+		[JsonPropertyName("title")]
+		public string Title { get; set; } = string.Empty;
 
 		[JsonPropertyName("name")]
 		public string Name { get; set; } = string.Empty;
 
-		//[JsonPropertyName("language")]
-		//public string Language { get; set; } = string.Empty;
+		[JsonPropertyName("slug")]
+		public string Slug { get; set; } = string.Empty;
+	}
+
+	public partial class Chapter
+	{
+		[JsonPropertyName("id")]
+		public long Id { get; set; }
+
+		[JsonIgnore]
+		public long ChapterId => Id;
+
+		[JsonPropertyName("mangaId")]
+		public long MangaId { get; set; }
+
+		[JsonPropertyName("number")]
+		public double Number { get; set; }
 
 		[JsonPropertyName("volume")]
 		public double Volume { get; set; }
 
-		//[JsonPropertyName("votes")]
-		//public long Votes { get; set; }
+		[JsonPropertyName("name")]
+		public string Name { get; set; } = string.Empty;
 
-		//[JsonPropertyName("created_at")]
-		//public long CreatedAt { get; set; }
+		[JsonPropertyName("language")]
+		public string Language { get; set; } = string.Empty;
 
-		//[JsonPropertyName("updated_at")]
-		//public long UpdatedAt { get; set; }
+		[JsonPropertyName("isOfficial")]
+		public bool IsOfficial { get; set; }
 
-		//[JsonPropertyName("scanlation_group")]
-		//public ScanlationGroup ScanlationGroup { get; set; } = new();
+		[JsonPropertyName("votes")]
+		public long Votes { get; set; }
 
-		[JsonPropertyName("images")]
-		public Image[] Images { get; set; } = [];
+		[JsonPropertyName("createdAtFormatted")]
+		public string CreatedAtFormatted { get; set; } = string.Empty;
+
+		[JsonPropertyName("group")]
+		public ComixNamedItem? Group { get; set; }
+
+		[JsonIgnore]
+		public ComixNamedItem? ScanlationGroup
+		{
+			get => Group;
+			set => Group = value;
+		}
+
+		[JsonPropertyName("creator")]
+		public ComixNamedItem? Creator { get; set; }
+
+		[JsonPropertyName("url")]
+		public string Url { get; set; } = string.Empty;
 
 		[JsonIgnore]
 		public SolverSolution? Solver { get; set; }
 	}
 
-	public partial class Image
+	public class ChapterList
+	{
+		[JsonPropertyName("items")]
+		public Chapter[] Items { get; set; } = [];
+
+		[JsonPropertyName("meta")]
+		public ChapterMeta Meta { get; set; } = new();
+
+		[JsonIgnore]
+		public ChapterMeta Pagination
+		{
+			get => Meta;
+			set => Meta = value;
+		}
+	}
+
+	public partial class ChapterMeta
+	{
+		[JsonPropertyName("total")]
+		public long Total { get; set; }
+
+		[JsonPropertyName("perPage")]
+		public long PerPage { get; set; }
+
+		[JsonPropertyName("page")]
+		public long Page { get; set; }
+
+		[JsonPropertyName("lastPage")]
+		public long LastPage { get; set; }
+
+		[JsonPropertyName("from")]
+		public long From { get; set; }
+
+		[JsonPropertyName("to")]
+		public long To { get; set; }
+	}
+
+	public partial class ChapterDetail
+	{
+		[JsonPropertyName("id")]
+		public long Id { get; set; }
+
+		[JsonPropertyName("mangaId")]
+		public long MangaId { get; set; }
+
+		[JsonPropertyName("number")]
+		public double Number { get; set; }
+
+		[JsonPropertyName("volume")]
+		public double Volume { get; set; }
+
+		[JsonPropertyName("name")]
+		public string Name { get; set; } = string.Empty;
+
+		[JsonPropertyName("language")]
+		public string Language { get; set; } = string.Empty;
+
+		[JsonPropertyName("isOfficial")]
+		public bool IsOfficial { get; set; }
+
+		[JsonPropertyName("votes")]
+		public long Votes { get; set; }
+
+		[JsonPropertyName("createdAtFormatted")]
+		public string CreatedAtFormatted { get; set; } = string.Empty;
+
+		[JsonPropertyName("group")]
+		public ComixNamedItem? Group { get; set; }
+
+		[JsonPropertyName("creator")]
+		public ComixNamedItem? Creator { get; set; }
+
+		[JsonPropertyName("url")]
+		public string Url { get; set; } = string.Empty;
+
+		[JsonPropertyName("pages")]
+		public ChapterPages Pages { get; set; } = new();
+
+		[JsonPropertyName("prev")]
+		public ChapterLink? Prev { get; set; }
+
+		[JsonPropertyName("next")]
+		public ChapterLink? Next { get; set; }
+	}
+
+	public partial class ChapterPages
+	{
+		[JsonPropertyName("baseUrl")]
+		public string BaseUrl { get; set; } = string.Empty;
+
+		[JsonPropertyName("items")]
+		public ChapterPage[] Items { get; set; } = [];
+	}
+
+	public partial class ChapterPage
 	{
 		[JsonPropertyName("width")]
 		public long Width { get; set; }
@@ -157,49 +340,19 @@ public class Comix
 		public string Url { get; set; } = string.Empty;
 	}
 
-	public partial class ScanlationGroup
+	public partial class ChapterLink
 	{
-		[JsonPropertyName("scanlation_group_id")]
-		public long ScanlationGroupId { get; set; }
+		[JsonPropertyName("id")]
+		public long Id { get; set; }
 
-		[JsonPropertyName("name")]
-		public string Name { get; set; } = string.Empty;
+		[JsonPropertyName("number")]
+		public double Number { get; set; }
 
-		[JsonPropertyName("slug")]
-		public string Slug { get; set; } = string.Empty;
-	}
+		[JsonPropertyName("volume")]
+		public double Volume { get; set; }
 
-	public class ChapterList
-	{
-		[JsonPropertyName("items")]
-		public Chapter[] Items { get; set; } = [];
-
-		[JsonPropertyName("pagination")]
-		public Pagination Pagination { get; set; } = new();
-	}
-
-	public partial class Pagination
-	{
-		//[JsonPropertyName("count")]
-		//public long Count { get; set; }
-
-		//[JsonPropertyName("total")]
-		//public long Total { get; set; }
-
-		//[JsonPropertyName("per_page")]
-		//public long PerPage { get; set; }
-
-		//[JsonPropertyName("current_page")]
-		//public long CurrentPage { get; set; }
-
-		[JsonPropertyName("last_page")]
-		public long LastPage { get; set; }
-
-		//[JsonPropertyName("from")]
-		//public long From { get; set; }
-
-		//[JsonPropertyName("to")]
-		//public long To { get; set; }
+		[JsonPropertyName("url")]
+		public string Url { get; set; } = string.Empty;
 	}
 
 }
