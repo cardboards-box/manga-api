@@ -27,7 +27,7 @@
 			<PackagePath>\</PackagePath>
 			<Pack>True</Pack>
 		</None>
-		<None Include="Sources\Comix\ComixSource.cs" />
+		<None Include="Sources\ComixSource.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -42,10 +42,6 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\MangaBox.Match\MangaBox.Match.csproj" />
 	  <ProjectReference Include="..\MangaBox.Utilities.Flare\MangaBox.Utilities.Flare.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Folder Include="Sources\Comix\impl\" />
 	</ItemGroup>
 
 </Project>

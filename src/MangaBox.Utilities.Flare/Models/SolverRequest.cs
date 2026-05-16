@@ -34,6 +34,18 @@ internal class SolverRequest
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool ReturnOnlyCookies { get; set; } = false;
 
+    [JsonPropertyName("returnScreenshot")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ReturnScreenshot { get; set; } = false;
+
+	[JsonPropertyName("disableMedia")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+	public bool DisableMedia { get; set; } = false;
+
+    [JsonPropertyName("waitInSeconds")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? WaitInSeconds { get; set; } = null;
+
     [JsonPropertyName("postData")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? StrPostData { get; set; } = null;

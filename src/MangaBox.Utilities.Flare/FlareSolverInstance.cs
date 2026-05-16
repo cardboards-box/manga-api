@@ -25,7 +25,7 @@ public class FlareSolverInstance(
 	/// </summary>
 	public int MaxRequestsBeforePauseMin
 	{
-		get => field;
+		get;
 		set { field = value; _rateLimiter = null; }
 	} = 2;
 
@@ -34,7 +34,7 @@ public class FlareSolverInstance(
 	/// </summary>
 	public int MaxRequestsBeforePauseMax
 	{
-		get => field;
+		get;
 		set { field = value; _rateLimiter = null; }
 	} = 6;
 
@@ -43,7 +43,7 @@ public class FlareSolverInstance(
 	/// </summary>
 	public int PauseDurationSecondsMin
 	{
-		get => field;
+		get;
 		set { field = value; _rateLimiter = null; }
 	} = 15;
 
@@ -52,7 +52,7 @@ public class FlareSolverInstance(
 	/// </summary>
 	public int PauseDurationSecondsMax
 	{
-		get => field;
+		get;
 		set { field = value; _rateLimiter = null; }
 	} = 35;
 
@@ -60,6 +60,30 @@ public class FlareSolverInstance(
 	/// The maximum number of retries for a request
 	/// </summary>
 	public int MaxRetries { get; set; } = 4;
+
+	/// <summary>
+	/// How long to wait between the turnstile being solved and the request being made.
+	/// </summary>
+	public TimeSpan? ResponseWait { get; set; } = null;
+
+	/// <summary>
+	/// How long to wait (in seconds) between the turnstile being solved and the request being made.
+	/// </summary>
+	public double? ResponseWaitSeconds
+	{
+		get => ResponseWait?.TotalSeconds;
+		set => ResponseWait = value.HasValue ? TimeSpan.FromSeconds(value.Value) : null;
+	}
+
+	/// <summary>
+	/// Whether or not to return a screenshot of the page
+	/// </summary>
+	public bool ReturnScreenshot { get; set; } = false;
+
+	/// <summary>
+	/// Whether or not to disable media requests
+	/// </summary>
+	public bool DisableMedia { get; set; } = false;
 
 	/// <summary>
 	/// The rate limiter to use
@@ -164,8 +188,16 @@ public class FlareSolverInstance(
 		{
 			_logger.LogInformation("Getting data from {url}", url);
 			var data = get 
-				? await _flare.Get(url, _cookies, timeout: 30_000, token: token)
-				: await _flare.Post(url, body ?? [], _cookies, timeout: 30_000, token: token);
+				? await _flare.Get(url, _cookies, timeout: 30_000, 
+					waitInSeconds: ResponseWaitSeconds, 
+					returnScreenshot: ReturnScreenshot, 
+					disableMedia: DisableMedia, 
+					token: token)
+				: await _flare.Post(url, body ?? [], _cookies, timeout: 30_000, 
+					waitInSeconds: ResponseWaitSeconds, 
+					returnScreenshot: ReturnScreenshot, 
+					disableMedia: DisableMedia, 
+					token: token);
 			if (data is null || data.Solution is null) throw new Exception("Failed to get data");
 
 			if (data.Solution.Status < 200 || data.Solution.Status >= 300)

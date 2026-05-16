@@ -40,4 +40,18 @@ public class SolverSolution
     /// </summary>
     [JsonPropertyName("response")]
     public string Response { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The screenshot of the page
+    /// </summary>
+    [JsonPropertyName("screenshot")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Screenshot { get; set; } = null;
+
+    /// <summary>
+    /// The turnstile token from the solver
+    /// </summary>
+    [JsonPropertyName("turnstile_token")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TurnstileToken { get; set; } = null;
 }

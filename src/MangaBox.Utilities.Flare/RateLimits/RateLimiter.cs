@@ -1,6 +1,4 @@
-﻿using System.Runtime.CompilerServices;
-
-namespace MangaBox.Utilities.Flare.RateLimits;
+﻿namespace MangaBox.Utilities.Flare.RateLimits;
 
 /// <summary>
 /// Represents a rate limiter for some request

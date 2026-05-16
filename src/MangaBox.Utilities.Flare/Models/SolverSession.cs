@@ -17,26 +17,52 @@ public class SolverSession : IAsyncDisposable, IFlareSolverBase
     }
 
     /// <inheritdoc />
-	public Task<SolverResponse?> Get(string url, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default)
+	public Task<SolverResponse?> Get(
+		string url,
+		SolverCookie[]? cookies = null,
+		SolverProxy? proxy = null,
+		int? timeout = null,
+		bool returnScreenshot = false,
+		bool disableMedia = false,
+		double? waitInSeconds = null,
+		CancellationToken token = default)
     {
-        return _api.Get(url, _sessionId, cookies, proxy, false, timeout, token);
+        return _api.Get(url, _sessionId, cookies, proxy, false, timeout, disableMedia, returnScreenshot, waitInSeconds, token);
     }
 
 	/// <inheritdoc />
-	public Task<SolverResponse?> Post(string url, NameValueCollection data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default)
+	public Task<SolverResponse?> Post(
+		string url,
+		NameValueCollection data,
+		SolverCookie[]? cookies = null,
+		SolverProxy? proxy = null,
+		int? timeout = null,
+		bool returnScreenshot = false,
+		bool disableMedia = false,
+		double? waitInSeconds = null,
+		CancellationToken token = default)
     {
-        return _api.Post(url, data, _sessionId, cookies, proxy, false, timeout, token);
+        return _api.Post(url, data, _sessionId, cookies, proxy, false, timeout, disableMedia, returnScreenshot, waitInSeconds, token);
     }
 
 	/// <inheritdoc />
-	public Task<SolverResponse?> Post(string url, Dictionary<string, string> data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default)
+	public Task<SolverResponse?> Post(
+		string url,
+		Dictionary<string, string> data,
+		SolverCookie[]? cookies = null,
+		SolverProxy? proxy = null,
+		int? timeout = null,
+		bool returnScreenshot = false,
+		bool disableMedia = false,
+		double? waitInSeconds = null, 
+		CancellationToken token = default)
     {
         var collection = new NameValueCollection();
         foreach (var (key, value) in data)
         {
             collection.Add(key, value);
         }
-        return Post(url, collection, cookies, proxy, timeout, token);
+        return Post(url, collection, cookies, proxy, timeout, disableMedia, returnScreenshot, waitInSeconds, token);
     }
 
 	/// <inheritdoc />

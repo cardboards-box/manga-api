@@ -16,9 +16,20 @@ public interface IFlareSolverBase
 	/// <param name="cookies">The cookies for the request</param>
 	/// <param name="proxy">Optional proxy to use for the session</param>
 	/// <param name="timeout">The timeout to use</param>
+	/// <param name="disableMedia">Whether to disable media</param>
+	/// <param name="returnScreenshot">Whether or not to return a screenshot of the page</param>
+	/// <param name="waitInSeconds">The number of seconds to wait after the page loads</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The response from flare solver</returns>
-	Task<SolverResponse?> Get(string url, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default);
+	Task<SolverResponse?> Get(
+        string url, 
+        SolverCookie[]? cookies = null, 
+        SolverProxy? proxy = null, 
+        int? timeout = null,
+        bool returnScreenshot = false,
+        bool disableMedia = false,
+        double? waitInSeconds = null,
+        CancellationToken token = default);
 
 	/// <summary>
 	/// Fetches a URL using FlareSolverr with POST data
@@ -28,9 +39,21 @@ public interface IFlareSolverBase
 	/// <param name="cookies">The cookies for the request</param>
 	/// <param name="proxy">Optional proxy to use for the session</param>
 	/// <param name="timeout">The timeout to use</param>
+	/// <param name="disableMedia">Whether to disable media</param>
+	/// <param name="returnScreenshot">Whether or not to return a screenshot of the page</param>
+	/// <param name="waitInSeconds">The number of seconds to wait after the page loads</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The response from flare solver</returns>
-	Task<SolverResponse?> Post(string url, NameValueCollection data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default);
+	Task<SolverResponse?> Post(
+        string url, 
+        NameValueCollection data, 
+        SolverCookie[]? cookies = null, 
+        SolverProxy? proxy = null, 
+        int? timeout = null,
+		bool returnScreenshot = false,
+		bool disableMedia = false,
+		double? waitInSeconds = null,
+		CancellationToken token = default);
 
 	/// <summary>
 	/// Fetches a URL using FlareSolverr with POST data
@@ -40,9 +63,21 @@ public interface IFlareSolverBase
 	/// <param name="cookies">The cookies for the request</param>
 	/// <param name="proxy">Optional proxy to use for the session</param>
 	/// <param name="timeout">The timeout to use</param>
+	/// <param name="disableMedia">Whether to disable media</param>
+	/// <param name="returnScreenshot">Whether or not to return a screenshot of the page</param>
+	/// <param name="waitInSeconds">The number of seconds to wait after the page loads</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The response from flare solver</returns>
-	Task<SolverResponse?> Post(string url, Dictionary<string, string> data, SolverCookie[]? cookies = null, SolverProxy? proxy = null, int? timeout = null, CancellationToken token = default);
+	Task<SolverResponse?> Post(
+        string url, 
+        Dictionary<string, string> data, 
+        SolverCookie[]? cookies = null, 
+        SolverProxy? proxy = null, 
+        int? timeout = null,
+		bool returnScreenshot = false,
+		bool disableMedia = false,
+		double? waitInSeconds = null,
+		CancellationToken token = default);
 }
 
 /// <summary>
@@ -92,24 +127,50 @@ internal class FlareSolverService(
         return new SolverSession(_api, session.SessionId);
     }
 
-    public Task<SolverResponse?> Get(string url, SolverCookie[]? cookies, SolverProxy? proxy, int? timeout, CancellationToken token)
+    public Task<SolverResponse?> Get(
+        string url, 
+        SolverCookie[]? cookies, 
+        SolverProxy? proxy, 
+        int? timeout,
+		bool returnScreenshot,
+		bool disableMedia,
+		double? waitInSeconds,
+		CancellationToken token)
     {
-        return _api.Get(url, null, cookies, proxy, false, timeout, token);
+        return _api.Get(url, null, cookies, proxy, false, timeout, disableMedia, returnScreenshot, waitInSeconds, token);
     }
 
-    public Task<SolverResponse?> Post(string url, NameValueCollection data, SolverCookie[]? cookies, SolverProxy? proxy, int? timeout, CancellationToken token)
+    public Task<SolverResponse?> Post(
+        string url, 
+        NameValueCollection data, 
+        SolverCookie[]? cookies, 
+        SolverProxy? proxy, 
+        int? timeout,
+		bool returnScreenshot,
+		bool disableMedia,
+		double? waitInSeconds,
+		CancellationToken token)
     {
-        return _api.Post(url, data, null, cookies, proxy, false, timeout, token);
+        return _api.Post(url, data, null, cookies, proxy, false, timeout, disableMedia, returnScreenshot, waitInSeconds, token);
     }
 
-    public Task<SolverResponse?> Post(string url, Dictionary<string, string> data, SolverCookie[]? cookies, SolverProxy? proxy, int? timeout, CancellationToken token)
+    public Task<SolverResponse?> Post(
+        string url, 
+        Dictionary<string, string> data, 
+        SolverCookie[]? cookies, 
+        SolverProxy? proxy, 
+        int? timeout,
+		bool returnScreenshot,
+		bool disableMedia,
+		double? waitInSeconds,
+		CancellationToken token)
     {
         var collection = new NameValueCollection();
         foreach (var (key, value) in data)
         {
             collection.Add(key, value);
         }
-        return Post(url, collection, cookies, proxy, timeout, token);
+        return Post(url, collection, cookies, proxy, timeout, returnScreenshot, disableMedia, waitInSeconds, token);
     }
 
     public FlareSolverInstance Limiter() => new(this, _logger);

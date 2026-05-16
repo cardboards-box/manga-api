@@ -3,7 +3,6 @@
 namespace MangaBox.Providers;
 
 using Sources;
-using Sources.Comix;
 
 public static class DiExtensions
 {
@@ -26,11 +25,8 @@ public static class DiExtensions
 			.AddWeebDex(c => c.WithCredentialsApiKey(string.Empty, string.Empty))
 			.AddSource<IWeebDexSource, WeebDexSource>()
 
-			//Register everything Comix related
-			.AddTransient<ComixApiService>()
-			.AddSource<IComixSource, ComixSource>()
-
 			//Register other sources
+			.AddSource<IComixSource, ComixSource>()
 			.AddSource<IMangakakalotTvSource, MangakakalotTvSource>()
 			.AddSource<IMangakakalotComSource, MangakakalotComSource>()
 			.AddSource<IMangakakalotComAltSource, MangakakalotComAltSource>()

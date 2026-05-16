@@ -19,6 +19,9 @@ internal interface IFlareSolverApiService
 	/// <param name="proxy">The proxy to use</param>
 	/// <param name="returnOnlyCookies">Whether to return only cookies</param>
 	/// <param name="maxTimeout">The maximum timeout</param>
+    /// <param name="disableMedia">Whether to disable media</param>
+    /// <param name="returnScreenshot">Whether or not to return a screenshot of the page</param>
+    /// <param name="waitInSeconds">The number of seconds to wait after the page loads</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The solver response</returns>
 	Task<SolverResponse?> Get(string url,
@@ -27,6 +30,9 @@ internal interface IFlareSolverApiService
         SolverProxy? proxy,
         bool returnOnlyCookies,
         int? maxTimeout,
+        bool disableMedia,
+        bool returnScreenshot,
+		double? waitInSeconds,
         CancellationToken token);
 
 	/// <summary>
@@ -39,6 +45,9 @@ internal interface IFlareSolverApiService
 	/// <param name="proxy">The proxy to use</param>
 	/// <param name="returnOnlyCookies">Whether to return only cookies</param>
 	/// <param name="maxTimeout">The maximum timeout</param>
+	/// <param name="disableMedia">Whether to disable media</param>
+	/// <param name="returnScreenshot">Whether or not to return a screenshot of the page</param>
+	/// <param name="waitInSeconds">The number of seconds to wait after the page loads</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The solver response</returns>
 	Task<SolverResponse?> Post(string url,
@@ -48,6 +57,9 @@ internal interface IFlareSolverApiService
         SolverProxy? proxy,
 		bool returnOnlyCookies,
 		int? maxTimeout,
+		bool disableMedia,
+		bool returnScreenshot,
+		double? waitInSeconds,
 		CancellationToken token);
 
 	/// <summary>
@@ -95,7 +107,10 @@ internal class FlareSolverApiService(
         SolverProxy? proxy,
         bool returnOnlyCookies,
         int? maxTimeout,
-        CancellationToken token)
+		bool disableMedia,
+		bool returnScreenshot,
+		double? waitInSeconds,
+		CancellationToken token)
     {
         var request = new SolverRequest
         {
@@ -105,7 +120,10 @@ internal class FlareSolverApiService(
             Cookies = cookies,
             Proxy = proxy,
             MaxTimeout = maxTimeout ?? DEFAULT_TIMEOUT,
-            ReturnOnlyCookies = returnOnlyCookies
+            ReturnOnlyCookies = returnOnlyCookies,
+            DisableMedia = disableMedia,
+            WaitInSeconds = waitInSeconds,
+            ReturnScreenshot = returnScreenshot,
         };
         return _api.Post<SolverResponse, SolverRequest>(ServerUrl, request, token: token);
     }
@@ -117,7 +135,10 @@ internal class FlareSolverApiService(
         SolverProxy? proxy, 
         bool returnOnlyCookies, 
         int? maxTimeout,
-        CancellationToken token)
+		bool disableMedia,
+		bool returnScreenshot,
+		double? waitInSeconds,
+		CancellationToken token)
     {
         var request = new SolverRequest
         {
@@ -128,8 +149,11 @@ internal class FlareSolverApiService(
             Cookies = cookies,
             Proxy = proxy,
             MaxTimeout = maxTimeout ?? DEFAULT_TIMEOUT,
-            ReturnOnlyCookies = returnOnlyCookies
-        };
+            ReturnOnlyCookies = returnOnlyCookies,
+			DisableMedia = disableMedia,
+			WaitInSeconds = waitInSeconds,
+			ReturnScreenshot = returnScreenshot,
+		};
         return _api.Post<SolverResponse, SolverRequest>(ServerUrl, request, token: token);
     }
 

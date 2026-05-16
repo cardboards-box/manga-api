@@ -4,9 +4,9 @@ using Database;
 using Models;
 using Models.Composites;
 using Providers.Sources;
-using Providers.Sources.Comix;
 using Services;
 using Services.Imaging;
+using Utilities.Flare;
 
 [Verb("test", HelpText = "Run tests.")]
 internal class TestOption
@@ -21,6 +21,7 @@ internal class TestVerb(
 	IHyakuroSource _hyakuro,
 	IFlareImageService _flare,
 	IMangaLoaderService _loader,
+	IFlareSolverService _flareHtml,
 	ILogger<TestVerb> logger) : BooleanVerb<TestOption>(logger)
 {
 	private static readonly JsonSerializerOptions _options = new()
@@ -101,9 +102,46 @@ internal class TestVerb(
 
 	public Task TestComix(CancellationToken token)
 	{
-		//const string URL = "https://comix.to/title/60jxz-tsuihou-saikyou-kuzu-kenja-no-henkyou-kosodate-slow-life-kuzu-da-to-kanchigaisaregachi-na-saikyou-no-zennin-wa-maou-no-musume-wo-chouzetsu-iko-ni-sodateageru";
-		const string URL = "https://comix.to/title/8w6dm-i-saved-you-but-im-not-responsible";
-		return TestSource(_comix, URL, true, token);
+		Task BasicTest(CancellationToken token)
+		{
+			const string URL = "https://comix.to/title/vvnqy-mangatitle";//"https://comix.to/title/8w6dm-i-saved-you-but-im-not-responsible";
+			return TestSource(_comix, URL, true, token);
+		}
+
+		async Task DebugChapters(CancellationToken token)
+		{
+			const string DIR = "debug";
+			string[] urls =
+			[
+				"https://comix.to/title/yrqn-mangatitle/8884381-chapter-1",
+				"https://comix.to/title/vvnqy-mangatitle/5634451-chapter-1"
+			];
+
+			if (!Directory.Exists(DIR))
+				Directory.CreateDirectory(DIR);
+
+			await using var session = await _flareHtml.CreateSession(null, token);
+			var instance = new FlareSolverInstance(session, _logger)
+			{
+				MaxRequestsBeforePauseMin = 5,
+				MaxRequestsBeforePauseMax = 15,
+				ResponseWait = TimeSpan.FromSeconds(5),
+				DisableMedia = false,
+			};
+
+			for (var i = 0; i < urls.Length; i++)
+			{
+				var url = urls[i];
+				var doc = await instance.GetHtml(url, token);
+
+				await File.WriteAllTextAsync($"{DIR}/debug-{i}.html", doc.FlareSolution.Response, token);
+				var result = JsonSerializer.Serialize(doc.FlareSolution, _options);
+				await File.WriteAllTextAsync($"{DIR}/debug-{i}.json", result, token);
+			}
+		}
+
+		////const string URL = "https://comix.to/title/60jxz-tsuihou-saikyou-kuzu-kenja-no-henkyou-kosodate-slow-life-kuzu-da-to-kanchigaisaregachi-na-saikyou-no-zennin-wa-maou-no-musume-wo-chouzetsu-iko-ni-sodateageru";
+		return BasicTest(token);
 	}
 
 	public async Task LoadManga(CancellationToken token)
@@ -206,7 +244,7 @@ internal class TestVerb(
 			MaxDegreeOfParallelism = 4,
 			CancellationToken = token
 		};
-		await Parallel.ForEachAsync(pages, async (page, token) =>
+		await Parallel.ForEachAsync(pages.Take(10), async (page, token) =>
 		{
 			try
 			{
