@@ -1,0 +1,14 @@
+Downloaded 6 script files
+
+CANDIDATE: https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/main-teyj2t-Ba7VRWLS.js (223599 bytes) -> ts_build_35595e3de3c99889c1aa70_dist_main_teyj2t_Ba7VRWLS_js.js
+  MATCH[52]: return(0,H.jsxs)(H.Fragment,{children:["register"===n&&(0,H.jsxs)("label",{className:"auth__field "+(_?"is-invalid":""),children:[(0,H.jsx)("span",{children:"Username"}),(0,H.jsx)("input",{type:"text"
+
+CANDIDATE: https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/secure-teyj2t-DpfA5hYx.js (243646 bytes) -> _build_35595e3de3c99889c1aa70_dist_secure_teyj2t_DpfA5hYx_js.js
+
+CANDIDATE: https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/vendor-teyj2t-s1WJUPFp.js (354468 bytes) -> _build_35595e3de3c99889c1aa70_dist_vendor_teyj2t_s1WJUPFp_js.js
+
+CANDIDATE: https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516 (31169 bytes) -> beacon_min_js_v8c78df7c7c0f484497ecbca7046644da1771523124516.js
+
+CANDIDATE: https://comix.to/cdn-cgi/challenge-platform/h/b/scripts/jsd/883a1f27d85f/main.js? (23322 bytes) -> cgi_challenge_platform_h_b_scripts_jsd_883a1f27d85f_main_js_.js
+
+Best candidate: https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/main-teyj2t-Ba7VRWLS.js (score=25)

@@ -1,0 +1,10 @@
+Captured tokens: [
+  {
+    "id": "55kym",
+    "token": "YchAkKIHsEZwpi6s3QD9H8QKGSBjiB3l0g2WM4T81UgQ3lUQMcWv5mQGeOkg-aeEaplvlPPof_F4zgSnZ-rqG4Y",
+    "url": "/api/v1/manga/55kym/chapters?page=1&limit=20&order%5Bnumber%5D=desc&_=YchAkKIHsEZwpi6s3QD9H8QKGSBjiB3l0g2WM4T81UgQ3lUQMcWv5mQGeOkg-aeEaplvlPPof_F4zgSnZ-rqG4Y",
+    "via": "xhr"
+  }
+]
+Functions with chapters: [ 'fetch' ]
+Webpack global: none

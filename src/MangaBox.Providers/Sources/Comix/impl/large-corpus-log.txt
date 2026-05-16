@@ -1,0 +1,10 @@
+Seed https://comix.to/: +0 ids, total=0
+Seed https://comix.to/comics?page=1: +0 ids, total=0
+Seed https://comix.to/comics?page=2: +0 ids, total=0
+Seed https://comix.to/comics?page=3: +0 ids, total=0
+Seed https://comix.to/new: +0 ids, total=0
+Seed https://comix.to/popular: +0 ids, total=0
+
+Total IDs: 0, 5-char: 0, other: 0
+
+Done! Captured 0 total (0 five-char, 0 four-char)

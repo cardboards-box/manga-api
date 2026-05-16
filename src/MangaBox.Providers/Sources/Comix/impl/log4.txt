@@ -1,0 +1,166 @@
+Fetching homepage page 1...
+Total IDs so far: 103
+Fetching homepage page 2...
+Total IDs so far: 121
+Fetching homepage page 3...
+Total IDs so far: 143
+Unique IDs found: 143
+captured [1] 5r7m (4-char)
+captured [2] 55kym (5-char)
+captured [3] 936j (4-char)
+captured [4] qqwrm (5-char)
+captured [5] n93ny (5-char)
+captured [6] mr3m0 (5-char)
+captured [7] gxgm9 (5-char)
+captured [8] 8v88 (4-char)
+captured [9] 80d0m (5-char)
+captured [10] nr83 (4-char)
+captured [11] 2zxnk (5-char)
+captured [12] ll172 (5-char)
+captured [13] xqz07 (5-char)
+captured [14] 793e (4-char)
+captured [15] d0n78 (5-char)
+captured [16] 50l0g (5-char)
+captured [17] e3jg (4-char)
+captured [18] 0m05n (5-char)
+captured [19] l7re (4-char)
+captured [20] qk31 (4-char)
+captured [21] n8we (4-char)
+captured [22] 6exl0 (5-char)
+captured [23] 9wz0j (5-char)
+captured [24] ydq0v (5-char)
+captured [25] lldl2 (5-char)
+captured [26] zdm9j (5-char)
+captured [27] dx5jr (5-char)
+captured [28] nk9re (5-char)
+captured [29] 13ml (4-char)
+captured [30] q9gjd (5-char)
+captured [31] dkgd8 (5-char)
+captured [32] e071e (5-char)
+captured [33] qd5kd (5-char)
+captured [34] w0wm8 (5-char)
+captured [35] lw2j (4-char)
+captured [36] 9dmm0 (5-char)
+captured [37] 3rq32 (5-char)
+captured [38] keyz (4-char)
+captured [39] m12d (4-char)
+captured [40] 70w00 (5-char)
+captured [41] lgkg7 (5-char)
+captured [42] 9nwr (4-char)
+captured [43] 166d (4-char)
+captured [44] 3v80 (4-char)
+captured [45] vw9zy (5-char)
+captured [46] rm7l (4-char)
+captured [47] w0ren (5-char)
+captured [48] 3rdr3 (5-char)
+captured [49] 87dld (5-char)
+captured [50] 7n3xg (5-char)
+captured [51] d19rg (5-char)
+captured [52] k9317 (5-char)
+captured [53] vw2lq (5-char)
+captured [54] 7ldne (5-char)
+captured [55] eqy5m (5-char)
+captured [56] yegj1 (5-char)
+captured [57] zgj83 (5-char)
+captured [58] j6126 (5-char)
+captured [59] w9k2g (5-char)
+captured [60] exx6r (5-char)
+captured [61] 101vd (5-char)
+captured [62] 0r65 (4-char)
+captured [63] 39jrg (5-char)
+captured [64] m00yd (5-char)
+captured [65] l6g12 (5-char)
+captured [66] 1r05n (5-char)
+captured [67] j2kv (4-char)
+captured [68] 5yrz (4-char)
+captured [69] m8ky0 (5-char)
+captured [70] ol1z (4-char)
+captured [71] x9r6j (5-char)
+captured [72] xly9j (5-char)
+captured [73] x8gj (4-char)
+captured [74] xlyyj (5-char)
+captured [75] ymmr (4-char)
+captured [76] nnx3e (5-char)
+captured [77] 6elqg (5-char)
+captured [78] e07xe (5-char)
+captured [79] grrz7 (5-char)
+captured [80] 9wj0 (4-char)
+captured [81] zxry6 (5-char)
+captured [82] 8d9ye (5-char)
+captured [83] y5nn (4-char)
+captured [84] 25j2 (4-char)
+captured [85] 0klwl (5-char)
+captured [86] 81glm (5-char)
+captured [87] 199qd (5-char)
+captured [88] zgk96 (5-char)
+captured [89] rg5k8 (5-char)
+captured [90] 2015n (5-char)
+Total captured: 90
+Short: 26, Long: 64
+Short (4-char, 32-bit): only 26 tokens (need >=32), skipping
+Long (5-char, 40-bit): inconsistent=24
+  FAIL 55kym
+  FAIL qqwrm
+  FAIL n93ny
+  FAIL mr3m0
+  FAIL gxgm9
+  FAIL 80d0m
+  FAIL 2zxnk
+  FAIL ll172
+  FAIL xqz07
+  FAIL d0n78
+  FAIL 50l0g
+  FAIL 0m05n
+  FAIL 6exl0
+  FAIL 9wz0j
+  FAIL ydq0v
+  FAIL lldl2
+  FAIL zdm9j
+  FAIL dx5jr
+  FAIL nk9re
+  FAIL q9gjd
+  FAIL dkgd8
+  FAIL e071e
+  FAIL qd5kd
+  FAIL w0wm8
+  FAIL 9dmm0
+  FAIL 3rq32
+  FAIL 70w00
+  FAIL lgkg7
+  FAIL vw9zy
+  FAIL w0ren
+  FAIL 3rdr3
+  FAIL 87dld
+  FAIL 7n3xg
+  FAIL d19rg
+  FAIL k9317
+  FAIL vw2lq
+  FAIL 7ldne
+  FAIL eqy5m
+  FAIL yegj1
+  FAIL zgj83
+  FAIL j6126
+  FAIL w9k2g
+  FAIL exx6r
+  FAIL 101vd
+  FAIL 39jrg
+  FAIL m00yd
+  FAIL l6g12
+  FAIL 1r05n
+  FAIL m8ky0
+  FAIL x9r6j
+  FAIL xly9j
+  FAIL xlyyj
+  FAIL nnx3e
+  FAIL 6elqg
+  FAIL e07xe
+  FAIL grrz7
+  FAIL zxry6
+  FAIL 8d9ye
+  FAIL 0klwl
+  FAIL 81glm
+  FAIL 199qd
+  FAIL zgk96
+  FAIL rg5k8
+  FAIL 2015n
+Long (5-char, 40-bit): 0/64 pass, 64 fail

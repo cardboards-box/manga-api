@@ -188,7 +188,7 @@ internal class TestVerb(
 			return;
 		}
 
-		_logger.LogInformation("Fetched manga from {Name}: {Manga}", name, Serialize(manga));
+		//_logger.LogInformation("Fetched manga from {Name}: {Manga}", name, Serialize(manga));
 
 		var chapter = manga.Chapters.FirstOrDefault();
 		if (chapter is null)
@@ -213,7 +213,7 @@ internal class TestVerb(
 			MaxDegreeOfParallelism = 4,
 			CancellationToken = token
 		};
-		await Parallel.ForEachAsync(pages, async (page, token) =>
+		await Parallel.ForEachAsync(pages.Take(Math.Min(pages.Length, 10)), async (page, token) =>
 		{
 			try
 			{

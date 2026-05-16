@@ -1,0 +1,12 @@
+[
+  {
+    "btoa": "YchAkKIHsEZwpi6s3QD9H8QKGSBjiB3l0g2WM4T81UgQ3lUQMcWv5mQGeOkg+aeEaplvlPPof/F4zgSnZ+rqG4Y=",
+    "stack": "    at window.btoa (<anonymous>:35:61)|    at JQ (https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/secure-teyj2t-DpfA5hYx.js:1:197576)|    at J8 (https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/secure-teyj2t-DpfA5hYx.js:1:216678)"
+  },
+  {
+    "id": "55kym",
+    "token": "YchAkKIHsEZwpi6s3QD9H8QKGSBjiB3l0g2WM4T81UgQ3lUQMcWv5mQGeOkg-aeEaplvlPPof_F4zgSnZ-rqG4Y",
+    "stack": "Error: CAPTURED\n    at XMLHttpRequest.open (<anonymous>:12:19)\n    at https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/vendor-teyj2t-s1WJUPFp.js:1:253546\n    at new Promise (<anonymous>)\n    at xhr (https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/vendor-teyj2t-s1WJUPFp.js:1:252952)\n    at ep.Vh (https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/vendor-teyj2t-s1WJUPFp.js:1:260649)\n    at async ep.request (https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/vendor-teyj2t-s1WJUPFp.js:1:262131)\n    at async Object.get (https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/main-teyj2t-Ba7VRWLS.js:2:1405)"
+  }
+]
+Signer fn: null

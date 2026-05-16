@@ -1,0 +1,197 @@
+Resuming with 0 already captured IDs
+Seed : +166, total=102
+Seed wse: +56, total=124
+Seed wse?sort=views_7d%3Adesc: +56, total=144
+Seed wse?sort=created_at%3Adesc: +56, total=161
+Seed wse?page=2: +56, total=188
+Seed wse?page=3: +56, total=210
+Seed wse?page=4: +56, total=237
+Seed wse?page=5: +56, total=263
+Seed wse?page=6: +56, total=291
+Seed wse?page=7: +56, total=318
+
+To capture: 5-char=248, 4-char=70
+Including known target: 8w6dm in list: false
+Added 8w6dm explicitly
+✓ 55kym (5-char, 65B) total=1
+✓ qqwrm (5-char, 65B) total=2
+✓ n93ny (5-char, 65B) total=3
+✓ mr3m0 (5-char, 65B) total=4
+✓ gxgm9 (5-char, 65B) total=5
+✓ 80d0m (5-char, 65B) total=6
+✓ 2zxnk (5-char, 65B) total=7
+✓ ll172 (5-char, 65B) total=8
+✓ d0n78 (5-char, 65B) total=9
+✓ xqz07 (5-char, 65B) total=10
+✓ 50l0g (5-char, 65B) total=11
+✓ 0m05n (5-char, 65B) total=12
+✓ 6exl0 (5-char, 65B) total=13
+✓ 9wz0j (5-char, 65B) total=14
+✓ ydq0v (5-char, 65B) total=15
+✓ lldl2 (5-char, 65B) total=16
+✓ zdm9j (5-char, 65B) total=17
+✓ dkgd8 (5-char, 65B) total=18
+✓ w0wm8 (5-char, 65B) total=19
+✓ nk9re (5-char, 65B) total=20
+✓ q9gjd (5-char, 65B) total=21
+✓ dx5jr (5-char, 65B) total=22
+✓ qd5kd (5-char, 65B) total=23
+✓ e071e (5-char, 65B) total=24
+✓ 9dmm0 (5-char, 65B) total=25
+✓ lgkg7 (5-char, 65B) total=26
+✓ vw9zy (5-char, 65B) total=27
+✓ 70w00 (5-char, 65B) total=28
+✓ 3rq32 (5-char, 65B) total=29
+✓ 3rdr3 (5-char, 65B) total=30
+✓ w0ren (5-char, 65B) total=31
+✓ 87dld (5-char, 65B) total=32
+✓ eqy5m (5-char, 65B) total=33
+✓ d19rg (5-char, 65B) total=34
+✓ k9317 (5-char, 65B) total=35
+✓ vw2lq (5-char, 65B) total=36
+✓ 7ldne (5-char, 65B) total=37
+✓ yegj1 (5-char, 65B) total=38
+✓ j6126 (5-char, 65B) total=39
+✓ zgj83 (5-char, 65B) total=40
+✓ w9k2g (5-char, 65B) total=41
+✓ exx6r (5-char, 65B) total=42
+✓ l96ee (5-char, 65B) total=43
+✓ 39jrg (5-char, 65B) total=44
+✓ m00yd (5-char, 65B) total=45
+✓ l6g12 (5-char, 65B) total=46
+✓ 1r05n (5-char, 65B) total=47
+✓ m8ky0 (5-char, 65B) total=48
+✓ x9r6j (5-char, 65B) total=49
+✓ xly9j (5-char, 65B) total=50
+✓ xlyyj (5-char, 65B) total=51
+✓ nnx3e (5-char, 65B) total=52
+✓ 6elqg (5-char, 65B) total=53
+✓ e07xe (5-char, 65B) total=54
+✓ grrz7 (5-char, 65B) total=55
+✓ zxry6 (5-char, 65B) total=56
+✓ 8d9ye (5-char, 65B) total=57
+✓ 0klwl (5-char, 65B) total=58
+✓ 81glm (5-char, 65B) total=59
+✓ l209j (5-char, 65B) total=60
+✓ x5wym (5-char, 65B) total=61
+✓ vwnyq (5-char, 65B) total=62
+✓ zgk96 (5-char, 65B) total=63
+✗ rg5k8 err: page.waitForTimeout: Target page, context or browser has bee
+Resuming with 0 already captured IDs
+Seed : +166, total=102
+Seed wse: +56, total=124
+Seed wse?sort=views_7d%3Adesc: +56, total=144
+Seed wse?sort=created_at%3Adesc: +56, total=162
+Seed wse?page=2: +56, total=189
+Seed wse?page=3: +56, total=211
+Seed wse?page=4: +56, total=238
+Seed wse?page=5: +56, total=265
+Seed wse?page=6: +56, total=293
+Seed wse?page=7: +56, total=320
+
+To capture: 5-char=250, 4-char=70
+Including known target: 8w6dm in list: false
+Added 8w6dm explicitly
+✓ 55kym (5-char, 65B) total=1
+✓ qqwrm (5-char, 65B) total=2
+✓ n93ny (5-char, 65B) total=3
+✓ mr3m0 (5-char, 65B) total=4
+✓ gxgm9 (5-char, 65B) total=5
+✓ 80d0m (5-char, 65B) total=6
+✓ 2zxnk (5-char, 65B) total=7
+✓ ll172 (5-char, 65B) total=8
+✓ d0n78 (5-char, 65B) total=9
+✓ xqz07 (5-char, 65B) total=10
+✓ 50l0g (5-char, 65B) total=11
+✓ 0m05n (5-char, 65B) total=12
+✓ 6exl0 (5-char, 65B) total=13
+✓ 9wz0j (5-char, 65B) total=14
+✓ ydq0v (5-char, 65B) total=15
+✓ lldl2 (5-char, 65B) total=16
+✓ zdm9j (5-char, 65B) total=17
+✓ dkgd8 (5-char, 65B) total=18
+✓ w0wm8 (5-char, 65B) total=19
+✓ nk9re (5-char, 65B) total=20
+✓ q9gjd (5-char, 65B) total=21
+✓ dx5jr (5-char, 65B) total=22
+✓ qd5kd (5-char, 65B) total=23
+✓ e071e (5-char, 65B) total=24
+✓ 9dmm0 (5-char, 65B) total=25
+✓ lgkg7 (5-char, 65B) total=26
+✓ vw9zy (5-char, 65B) total=27
+✓ 70w00 (5-char, 65B) total=28
+✓ 3rq32 (5-char, 65B) total=29
+✓ 3rdr3 (5-char, 65B) total=30
+✓ w0ren (5-char, 65B) total=31
+✓ 87dld (5-char, 65B) total=32
+✓ eqy5m (5-char, 65B) total=33
+✓ d19rg (5-char, 65B) total=34
+✓ k9317 (5-char, 65B) total=35
+✓ vw2lq (5-char, 65B) total=36
+✓ 7ldne (5-char, 65B) total=37
+✓ yegj1 (5-char, 65B) total=38
+✓ j6126 (5-char, 65B) total=39
+✓ zgj83 (5-char, 65B) total=40
+✓ w9k2g (5-char, 65B) total=41
+✓ exx6r (5-char, 65B) total=42
+✓ l96ee (5-char, 65B) total=43
+✓ 39jrg (5-char, 65B) total=44
+✓ m00yd (5-char, 65B) total=45
+✓ l6g12 (5-char, 65B) total=46
+✓ 1r05n (5-char, 65B) total=47
+✓ m8ky0 (5-char, 65B) total=48
+✓ x9r6j (5-char, 65B) total=49
+✓ xly9j (5-char, 65B) total=50
+✓ xlyyj (5-char, 65B) total=51
+✓ nnx3e (5-char, 65B) total=52
+✓ 6elqg (5-char, 65B) total=53
+✓ e07xe (5-char, 65B) total=54
+✓ grrz7 (5-char, 65B) total=55
+✓ zxry6 (5-char, 65B) total=56
+✓ 8d9ye (5-char, 65B) total=57
+✓ 0klwl (5-char, 65B) total=58
+✓ 81glm (5-char, 65B) total=59
+✓ l209j (5-char, 65B) total=60
+✓ x5wym (5-char, 65B) total=61
+✓ vwnyq (5-char, 65B) total=62
+✓ zgk96 (5-char, 65B) total=63
+✓ rg5k8 (5-char, 65B) total=64
+✓ 2015n (5-char, 65B) total=65
+✓ 1013n (5-char, 65B) total=66
+✓ 605ng (5-char, 65B) total=67
+✗ mrzyd (token=no, events=0)
+✓ kx1rz (5-char, 65B) total=68
+✓ 816k8 (5-char, 65B) total=69
+✓ 80gw0 (5-char, 65B) total=70
+✓ 2rlzd (5-char, 65B) total=71
+✓ rm78l (5-char, 65B) total=72
+✓ gmq1x (5-char, 65B) total=73
+✓ kn2nz (5-char, 65B) total=74
+✓ dkq8g (5-char, 65B) total=75
+✓ 7ld71 (5-char, 65B) total=76
+✓ xl8jm (5-char, 65B) total=77
+✓ n8xde (5-char, 65B) total=78
+✓ 9ne2r (5-char, 65B) total=79
+✓ yvqgv (5-char, 65B) total=80
+✓ 5r7m (4-char, 64B) total=81
+✓ 936j (4-char, 64B) total=82
+✓ 8v88 (4-char, 64B) total=83
+✓ nr83 (4-char, 64B) total=84
+✓ 793e (4-char, 64B) total=85
+✓ e3jg (4-char, 64B) total=86
+✓ l7re (4-char, 64B) total=87
+✓ qk31 (4-char, 64B) total=88
+✓ n8we (4-char, 64B) total=89
+✓ 13ml (4-char, 64B) total=90
+✓ lw2j (4-char, 64B) total=91
+✓ m12d (4-char, 64B) total=92
+✓ keyz (4-char, 64B) total=93
+✓ 9nwr (4-char, 64B) total=94
+✓ 166d (4-char, 64B) total=95
+✓ 3v80 (4-char, 64B) total=96
+✓ rm7l (4-char, 64B) total=97
+✓ 0r65 (4-char, 64B) total=98
+✓ j2kv (4-char, 64B) total=99
+✓ 5yrz (4-char, 64B) total=100
+
+Done! 100 total | 5-char:80 4-char:20

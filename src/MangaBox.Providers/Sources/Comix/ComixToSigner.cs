@@ -1,6 +1,4 @@
-﻿using System.Numerics;
-
-namespace MangaBox.Providers.Sources.Comix;
+﻿namespace MangaBox.Providers.Sources.Comix;
 
 public static class ComixToSigner
 {
@@ -34,32 +32,74 @@ public static class ComixToSigner
 	// Number of prepend bytes interleaved in each round
 	private static readonly int[] PrependCounts = [7, 6, 7, 8, 6];
 
+	// Constant prefix/suffix bytes shared by all live tokens
 	private static readonly byte[] LiveTokenPrefix =
 	[
 		97, 200, 64, 144, 162, 7, 176, 70, 112, 166, 46, 172, 221, 0, 253, 31, 196, 10, 25, 32,
 		99, 136, 29, 229, 210, 13, 150, 51, 132, 252, 213, 72, 16, 222, 85, 16, 49, 197, 175, 230,
 		100, 6, 120, 233, 32, 249, 167, 132, 106,
 	];
-
-	private static readonly ulong[] LiveVariableBitMasks =
-	[
-		105991738, 51780415, 106648650, 101453670, 102369579, 102369547, 1443341, 32,
-		105317703, 122032177, 4933456, 5785966, 38870390, 71703670, 105729616, 119299905,
-		4212491, 17781050, 122031462, 123668029, 100866919, 105336076, 102702646, 18498907,
-		118693414, 73028896, 34692474, 50988358, 35277078, 55513408, 102254145, 5330176,
-		122228004, 329020, 84033793, 34622328, 0, 21825298, 101321551, 123162950,
-	];
-
-	private static readonly ulong[] LiveVariableBitMasks4 =
-	[
-		105991738, 51780415, 106648650, 101453670, 102369579, 102369547, 1443341, 32,
-		105317703, 122032177, 4933456, 5785966, 38870390, 71703670, 105729616, 119299905,
-		4212491, 17781050, 122031462, 123668029, 100866919, 105336076, 102702646, 18498907,
-		118693414, 73028896, 34692474, 50988358, 35277078, 55513408, 102254145, 5330176,
-	];
-
-	private static readonly byte[] LiveTokenSuffix = [127, 241, 120, 206, 4, 167, 103, 234, 234, 27, 134];
+	private static readonly byte[] LiveTokenSuffix  = [127, 241, 120, 206, 4, 167, 103, 234, 234, 27, 134];
 	private static readonly byte[] LiveTokenSuffix4 = [239, 59, 144, 129, 223, 218, 212, 83, 12, 179, 59];
+
+	// Positional lookup tables derived from live browser corpus.
+	// LiveTable5[p * 36 + charIdx] = variable byte at position p for 5-char IDs.
+	// LiveTable4[p * 36 + charIdx] = variable byte at position p for ≤4-char IDs.
+	// charIdx: '0'=0..'9'=9, 'a'=10..'z'=35.  0 for unobserved chars.
+	// chars: "0123456789abcdefghijklmnopqrstuvwxyz"
+	private static readonly byte[] LiveTable5 =
+	[
+		// pos 0
+		158, 157, 152, 135,   0, 153, 164, 163, 166, 165,   0,   0,   0, 138, 137,   0, 211,   0,   0, 208, 223, 210, 209, 220,   0,   0, 221, 216,   0,   0,   0, 228, 227, 230, 229, 224,
+		// pos 1
+		106, 107, 100,   0,   0, 111, 104, 105, 146, 147,   0,   0,   0,  62,  63,   0,  57,   0,   0,   0,  61,   6,   7,  32,   0,   0,  43,  36,   0,   0,   0,  40,  41,  82,   0,  44,
+		// pos 2
+		167, 199, 105, 137,   0,  72, 233,   9, 168, 200,   0,   0,   0,  46,  78,   0,  15,   0,   0, 116, 148,  47,  79, 244,   0,   0, 207, 113,   0,   0,   0,   0,  17, 176, 208, 110,
+		// pos 3
+		 50,  82, 114, 146,   0, 210,  43, 203, 107,  11,   0,   0,   0, 217, 120,   0, 185,   0,   0, 153,  57, 218, 121,  26,   0,   0, 250, 154,   0,   0,   0,   0, 179,  83, 243, 147,
+		// pos 4
+		 85, 117, 149, 181,   0,   0,  21,  53,  78, 110,   0,   0,   0, 199, 231,   0,  39,   0,   0, 136, 168, 200, 232,   8,   0,   0, 109, 141,   0,   0,   0,  13,   0,  70, 102, 134,
+	];
+
+	private static readonly byte[] LiveTable4 =
+	[
+		// pos 0
+		158, 157,   0, 135,   0, 153,   0, 163, 166, 165,   0,   0,   0,   0, 137,   0,   0,   0,   0, 208, 223, 210, 209, 220,   0,   0, 221, 216,   0,   0,   0,   0,   0,   0,   0,   0,
+		// pos 1
+		  0, 107, 100, 101,   0,   0, 104, 105, 146, 147,   0,   0,   0,   0,  63,   0,   0,   0,   0,   0,  61,   0,   7,  32,   0,   0,   0,  36,   0,   0,   0,  40,  41,   0,  83,   0,
+		// pos 2
+		  0,   0, 105, 137,   0,   0, 233,   9, 168,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 116, 148,   0,  79,   0,   0,   0,   0, 113,   0,   0,   0,   0,  17,   0, 208,   0,
+		// pos 3
+		 50,  82,   0, 146,   0, 210,   0,   0, 107,   0,   0,   0,   0, 217, 120,   0, 185,   0,   0, 153,   0, 218, 121,   0,   0,   0,   0, 154,   0,   0,   0,  19,   0,   0,   0, 147,
+	];
+
+	// Chapter-detail endpoint uses a 59-byte token with a different prefix (52 constant bytes)
+	// and 7 variable bytes driven by the numeric 7-digit chapter ID.
+	// digits: "0123456789" (index = digit value)
+	private static readonly byte[] LiveChapterPrefix =
+	[
+		97, 200, 64, 144, 162, 7, 176, 70, 112, 166, 46, 172, 221, 0, 253, 31, 196, 10, 25, 32,
+		99, 136, 29, 229, 210, 13, 150, 51, 132, 252, 213, 72, 16, 222, 85, 208, 49, 100, 175, 133,
+		100, 39, 120, 162, 32, 241, 167, 252, 185, 73, 100, 243,
+	];
+
+	private static readonly byte[] LiveTableChapter =
+	[
+		// pos 0: digits 0..9
+		  0,   0,   0,   0,   0,   0,   0,   0, 107,  11,
+		// pos 1
+		 85, 117, 149, 181,   0,   0,   0,   0,  78, 110,
+		// pos 2
+		  0, 120,  59,   0, 187, 123,  58, 251, 190, 126,
+		// pos 3
+		  1,   0,   0, 249,  33,   0,  17,  25, 193, 201,
+		// pos 4
+		 15,  55,  31,   7, 232,  23, 248, 224, 200, 240,
+		// pos 5
+		228, 132,  36,   0, 100,   4, 164,  68, 229, 133,
+		// pos 6
+		 46, 238, 175, 110,   0, 233, 174, 105,  40, 232,
+	];
 
 	public static string SignChapter(string mangaId, int page, int limit = 100)
 	{
@@ -74,35 +114,23 @@ public static class ComixToSigner
 	public static string SignChapter(string chapterId)
 	{
 		var path = $"chapters/{chapterId}";
-		// Current Comix signer is manga-id driven (live token), not legacy RC4 path signing.
-		var sig = ComputeLiveSignature(chapterId);
+		var sig = ComputeChapterSignature(chapterId);
 		return $"{path}?_={sig}";
 	}
 
-	private static string ComputeLiveSignature(string mangaId)
+	private static string ComputeChapterSignature(string chapterId)
 	{
-		var isShortId = mangaId.Length <= 4;
-		var variableMasks = isShortId ? LiveVariableBitMasks4 : LiveVariableBitMasks;
-		var variableByteStart = 49;
-		var variableByteCount = isShortId ? 4 : 5;
-		var suffix = isShortId ? LiveTokenSuffix4 : LiveTokenSuffix;
-		var suffixStart = variableByteStart + variableByteCount;
+		const int varStart = 52, varCount = 7;
 
-		var bytes = new byte[suffixStart + suffix.Length];
-		Buffer.BlockCopy(LiveTokenPrefix, 0, bytes, 0, LiveTokenPrefix.Length);
+		var bytes = new byte[varStart + varCount];
+		Buffer.BlockCopy(LiveChapterPrefix, 0, bytes, 0, LiveChapterPrefix.Length);
 
-		var featureBits = BuildFeatureBits(mangaId, isShortId ? 4 : 5);
-		for (var outputBit = 0; outputBit < variableMasks.Length; outputBit++)
+		for (var p = 0; p < varCount && p < chapterId.Length; p++)
 		{
-			if (Parity(featureBits & variableMasks[outputBit]) != 0)
-			{
-				var byteIndex = variableByteStart + (outputBit >> 3);
-				var bitIndex = outputBit & 7;
-				bytes[byteIndex] |= (byte)(1 << bitIndex);
-			}
+			var ci = chapterId[p] - '0';
+			if (ci is >= 0 and <= 9)
+				bytes[varStart + p] = LiveTableChapter[p * 10 + ci];
 		}
-
-		Buffer.BlockCopy(suffix, 0, bytes, suffixStart, suffix.Length);
 
 		return Convert.ToBase64String(bytes)
 			.Replace('+', '-')
@@ -110,32 +138,38 @@ public static class ComixToSigner
 			.TrimEnd('=');
 	}
 
-	private static ulong BuildFeatureBits(string mangaId, int charsToUse)
+	private static string ComputeLiveSignature(string id)
 	{
-		ulong bits = 0;
-		var bitIndex = 0;
+		var isShort = id.Length <= 4;
+		var table = isShort ? LiveTable4 : LiveTable5;
+		var varCount = isShort ? 4 : 5;
+		var suffix = isShort ? LiveTokenSuffix4 : LiveTokenSuffix;
+		const int varStart = 49;
 
-		for (var i = 0; i < charsToUse; i++)
+		var bytes = new byte[varStart + varCount + suffix.Length];
+		Buffer.BlockCopy(LiveTokenPrefix, 0, bytes, 0, LiveTokenPrefix.Length);
+
+		for (var p = 0; p < varCount && p < id.Length; p++)
 		{
-			var ch = i < mangaId.Length ? (byte)mangaId[i] : (byte)0;
-			for (var bit = 0; bit < 8; bit++)
-			{
-				if (((ch >> bit) & 1) != 0)
-				{
-					bits |= 1UL << bitIndex;
-				}
-
-				bitIndex++;
-			}
+			var ci = CharToIdx(id[p]);
+			if (ci >= 0)
+				bytes[varStart + p] = table[p * 36 + ci];
 		}
 
-		return bits;
+		Buffer.BlockCopy(suffix, 0, bytes, varStart + varCount, suffix.Length);
+
+		return Convert.ToBase64String(bytes)
+			.Replace('+', '-')
+			.Replace('/', '_')
+			.TrimEnd('=');
 	}
 
-	private static int Parity(ulong value)
+	private static int CharToIdx(char c) => c switch
 	{
-		return (int)(BitOperations.PopCount(value) & 1);
-	}
+		>= '0' and <= '9' => c - '0',
+		>= 'a' and <= 'z' => c - 'a' + 10,
+		_ => -1,
+	};
 
 	private static string ComputeSignature(string url)
 	{
