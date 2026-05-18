@@ -114,6 +114,7 @@ internal class MbNotificationDeviceDbService(
 			        -- has enabled in-progress notifications
 			        mp.last_read_at IS NOT NULL AND
 			        mp.is_completed = FALSE AND
+					mp.progress_percentage > 0 AND
 			        p.notify_in_progress = TRUE
 			    ) OR (
 			        --Check if the user has favourited the manga and 
