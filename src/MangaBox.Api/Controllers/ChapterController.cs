@@ -8,8 +8,9 @@ using Services.Imaging;
 /// </summary>
 public class ChapterController(
 	IDbService _db,
-	IMangaLoaderService _loader,
 	IImageService _images,
+	IMangaLoaderService _loader,
+	IRestitcherService _restitcher,
 	ILogger<ChapterController> logger) : BaseController(logger)
 {
 	/// <summary>
@@ -47,6 +48,26 @@ public class ChapterController(
 			return Boxed.Bad("Chapter ID is not a valid GUID.");
 		var deleted = await _db.Chapter.Delete(cid);
 		return Boxed.Ok(deleted);
+	});
+
+	/// <summary>
+	/// Fetches a chapter by it's ID
+	/// </summary>
+	/// <param name="id">The ID of the chapter</param>
+	/// <param name="slices">The slices of the image</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The chapter data</returns>
+	[HttpPost, Route("chapter/{id}/restitch")]
+	[ProducesBox<MangaBoxType<MbChapter>>, ProducesError(400), ProducesError(404)]
+	public Task<IActionResult> Restitch([FromRoute] string id, [FromBody] ImageSliceImage[] slices, CancellationToken token) => Box(async () =>
+	{
+		if (!this.IsAdmin())
+			return Boxed.NotFound(nameof(MbChapter), "Chapter was not found");
+
+		if (!Guid.TryParse(id, out var cid))
+			return Boxed.Bad("Chapter ID is not a valid GUID.");
+
+		return await _restitcher.Restitch(new(cid, slices), token);
 	});
 
 	/// <summary>
