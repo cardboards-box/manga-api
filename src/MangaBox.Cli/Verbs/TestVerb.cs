@@ -18,9 +18,11 @@ internal class TestOption
 internal class TestVerb(
 	IDbService _db,
 	IComixSource _comix,
+	IImageService _image,
 	IHyakuroSource _hyakuro,
 	IFlareImageService _flare,
 	IMangaLoaderService _loader,
+	IRestitcherService _restitch,
 	IFlareSolverService _flareHtml,
 	ILogger<TestVerb> logger) : BooleanVerb<TestOption>(logger)
 {
@@ -275,6 +277,70 @@ internal class TestVerb(
 	{
 		var items = await _db.Chapter.GetZeroPageChapters();
 		_logger.LogInformation("Chapters with zero pages: {Count}", items.Length);
+	}
+
+	public async Task TestRestitch(CancellationToken token)
+	{
+		static (Guid id, int start, int end) Slice(bool first, int start, int end)
+		{
+			Guid i1 = Guid.Parse("0c770d8d-6561-4751-a9df-17d700cbf628"),
+				 i2 = Guid.Parse("0a32a5b6-f21a-49fd-8141-fb2eaa0d2573");
+			return (first ? i1 : i2, start, end);
+		}
+
+		static IEnumerable<(Guid id, int start, int end)> SliceMany(bool first, int start, params int[] coords)
+		{
+			int last = start;
+			foreach(var coord in coords)
+			{
+				yield return Slice(first, last, coord);
+				last = coord;
+			}
+		}
+
+		var firstImage = SliceMany(true, 0, 472, 1607, 2743, 3880, 4980, 6152, 7288)
+			.Select((t, i) => new ImageSliceImage(i + 1, [new(1, t.id, t.start, t.end)]))
+			.ToArray();
+
+		var fs = Slice(true, 7289, 7349);
+		var ss = Slice(false, 0, 1075);
+		var inter = new ImageSliceImage(firstImage.Length + 1,
+			[
+				new(1, fs.id, fs.start, fs.end),
+				new(2, ss.id, ss.start, ss.end)
+			]);
+
+		var secondImage = SliceMany(false, 1076, 2211, 3346, 4483, 5619, 6755, 7348)
+			.Select((t, i) => new ImageSliceImage(inter.Ordinal + i + 1, [new(1, t.id, t.start, t.end)]))
+			.ToArray();
+
+		var request = new ImageRestitchRequest(
+			Guid.Parse("8e5a47be-5718-444e-b68c-74dccb223823"),
+			[
+				..firstImage,
+				inter,
+				..secondImage
+			]);
+
+		var resp = await _restitch.Restitch(request, token);
+		_logger.LogInformation("Restitch response: {Response}", Serialize(resp));
+	}
+
+	public async Task TestRestitcher(CancellationToken token)
+	{
+		var id = Guid.Parse("5e4520c7-2ae8-4965-8622-660bdecf35b7");
+		var result = await _image.Download(id, Services.CBZModels.ComicFormat.Zip, token);
+		if (!string.IsNullOrEmpty(result.Error) || result.Stream is null)
+		{
+			_logger.LogError("Error occurred while fetching image: {Error} >> {ID}", result.Error, id);
+			return;
+		}
+
+		using var io = File.Create("restitcher-test.zip");
+		await result.Stream.CopyToAsync(io, token);
+		await io.FlushAsync(token);
+
+		_logger.LogInformation("Successfully downloaded image with ID: {ID} >> restitcher-test.zip", id);
 	}
 
 	public override async Task<bool> Execute(TestOption options, CancellationToken token)

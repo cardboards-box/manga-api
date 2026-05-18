@@ -81,6 +81,7 @@ internal class ImageService(
 	ISourceService _sources,
 	IFlareImageService _flare,
 	IMangaLoaderService _loader,
+	IRestitcherService _stitcher,
 	ILogger<ImageService> _logger) : IImageService
 {
 	private const int BUFFER_SIZE = 81920;
@@ -88,6 +89,7 @@ internal class ImageService(
 	private TimeSpan? _waitPeriod;
 
 	private static readonly AsyncKeyedLocker<string> _cacheLocks = new();
+	private static readonly AsyncKeyedLocker<string> _readLocks = new();
 
 	/// <summary>
 	/// The number of times to wait before the image gets deleted
@@ -216,6 +218,15 @@ internal class ImageService(
 	public async Task<ImageResult> Get(MbSource source, MbManga manga, MbImage image, int? overrideOrdinal, CancellationToken token)
 	{
 		Task<ImageResult> HandleError(string reason) => HandleImageError(image, reason, overrideOrdinal);
+		Task<ImageResult> ForwardError(ImageResult result)
+		{
+			if (result.Stream is not null && string.IsNullOrEmpty(result.Error))
+				return Task.FromResult(result);
+
+			var error = result.Error ?? "Image steam is empty";
+			result.Dispose();
+			return HandleError(error);
+		}
 
 		try
 		{
@@ -223,18 +234,23 @@ internal class ImageService(
 			var exists = ImageExists(image, out var path, out var zipPath, out var zipped, out var hash);
 			//Lock the cache so we aren't double writing to it
 			using var cacheLock = await _cacheLocks.LockAsync(path, token);
+			IDisposable readLock;
 
 			//If it exists and isn't zipped, return it as is
 			if (exists && !zipped)
-				return new(null, image, File.OpenRead(path), true, overrideOrdinal);
+			{
+				readLock = await _readLocks.LockAsync(path, token);
+				return new(null, image, File.OpenRead(path), true, overrideOrdinal, [readLock]);
+			}
 
 			//If it exists and is zipped, decompress and return it
 			if (exists && zipped)
 			{
+				readLock = await _readLocks.LockAsync(path, token);
 				var eio = File.OpenRead(zipPath);
 				return new(null, image, 
 					new GZipStream(eio, CompressionMode.Decompress), 
-					true, overrideOrdinal, [eio]);
+					true, overrideOrdinal, [eio, readLock]);
 			}
 
 			//If the image failed to fetch recently, don't try it again yet
@@ -248,6 +264,18 @@ internal class ImageService(
 			var loader = await _sources.FindById(source.Id, token);
 			if (loader is null)
 				return await HandleError("Could not find source provider for image");
+
+			//If the image is a slicer image, stitch it together and return it
+			if (image.Slices.Length > 0)
+			{
+				var set = await _db.Image.FetchSlicerSet(image.Id);
+				if (set.Images.Length == 0)
+					return await HandleError("Image is a slicer image but no slices were found");
+
+				var stream = Stream(set, token);
+				var stitch = await _stitcher.Restitch(image, stream, token);
+				return await ForwardError(stitch);
+			}
 
 			//Rate limit the request to the source provider
 			var limiter = loader.Service.GetRateLimiter(image.Url);
@@ -264,7 +292,7 @@ internal class ImageService(
 			if (zipResult is not null)
 			{
 				await _db.Image.Update(image);
-				return zipResult;
+				return await ForwardError(zipResult);
 			}
 
 			//Check to see if we should use FlareSolverr to download images with headers
@@ -304,9 +332,12 @@ internal class ImageService(
 
 			//Update the image's metadata in the database
 			await _db.Image.Update(image);
+			//Get a lock for reading the file
+			readLock = await _readLocks.LockAsync(path, token);
+
 			//If compression isn't enabled, return the image as is
 			if (!UseCompression)
-				return new(null, image, File.OpenRead(path), false, overrideOrdinal);
+				return new(null, image, File.OpenRead(path), false, overrideOrdinal, [readLock]);
 
 			//Compress the image for caching
 			using var zipOut = File.Create(zipPath);
@@ -324,7 +355,7 @@ internal class ImageService(
 			var outStream = File.OpenRead(zipPath);
 			return new(null, image, 
 				new GZipStream(outStream, CompressionMode.Decompress), 
-				false, overrideOrdinal, [outStream]);
+				false, overrideOrdinal, [outStream, readLock]);
 		}
 		catch (OperationCanceledException)
 		{
@@ -462,7 +493,7 @@ internal class ImageService(
 			using var eio = entry.Open();
 			await image.Stream.CopyToAsync(eio, token);
 			await eio.FlushAsync(token);
-			await image.Stream.DisposeAsync();
+			image.Dispose();
 		}
 
 		if (format == ComicFormat.Cbz)
@@ -545,15 +576,14 @@ internal class ImageService(
 		output.Position = 0;
 
 		images.Each(t => t.Dispose());
-		await results.Select(async t =>
+		results.ForEach(t =>
 		{
 			try
 			{
-				if (t.Stream is not null)
-					await t.Stream.DisposeAsync();
+				t.Dispose();
 			}
 			catch { }
-		}).WhenAll();
+		});
 		return new(string.Join("; ", errors), output, "strip.png", "image/png");
 	}
 

@@ -1,7 +1,6 @@
 ﻿namespace MangaBox.Database.Services;
 
 using Models;
-using Models.Composites;
 
 /// <summary>
 /// The service for interacting with the mb_notification_devices table

@@ -234,10 +234,7 @@ public static class Extensions
 		{
 			var result = await action(item, ct).ConfigureAwait(false);
 			await channel.Writer.WriteAsync(result, ct).ConfigureAwait(false);
-		}).ContinueWith(t =>
-		{
-			channel.Writer.Complete(t.Exception);
-		}, token);
+		}).ContinueWith(t => channel.Writer.Complete(t.Exception), token);
 
 		return channel.Reader.ReadAllAsync(token);
 	}

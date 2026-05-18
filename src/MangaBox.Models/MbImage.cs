@@ -115,4 +115,10 @@ public class MbImage : MbDbObject
 	[Column("headers")]
 	[JsonIgnore]
 	public MbHeader[] Headers { get; set; } = [];
+
+	/// <summary>
+	/// The slice data for the image, if applicable
+	/// </summary>
+	[Column("slices")]
+	public MbImageSlice[] Slices { get; set; } = [];
 }

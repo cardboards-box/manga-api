@@ -15,8 +15,13 @@ CREATE TABLE IF NOT EXISTS mb_images (
 	failed_count INTEGER NOT NULL DEFAULT 0,
 	failed_reason TEXT NULL,
 	headers mb_headers[] DEFAULT '{}',
+	slices mb_image_slice[] DEFAULT '{}',
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	deleted_at TIMESTAMP NULL,
 	CONSTRAINT mb_images_unique UNIQUE NULLS NOT DISTINCT (chapter_id, manga_id, ordinal)
 );
+
+ALTER TABLE mb_images
+ADD COLUMN IF NOT EXISTS 
+	slices mb_image_slice[] DEFAULT '{}';

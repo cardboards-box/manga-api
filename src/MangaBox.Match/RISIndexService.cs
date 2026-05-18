@@ -106,7 +106,7 @@ internal class RISIndexService(
 	{
 		if (image.Entity.Indexed && !force) return Boxed.Conflict("Image is already indexed");
 
-		var result = await _image.Get(image, token);
+		using var result = await _image.Get(image, token);
 		if (!string.IsNullOrEmpty(result.Error) || result.Stream is null)
 		{
 			_logger.LogError("Failed to get image stream for image {Id}: {Error}", image.Entity.Id, result.Error);

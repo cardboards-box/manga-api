@@ -1,5 +1,6 @@
 namespace MangaBox.Database.Services;
 
+using MangaBox.Models.Composites.Filters;
 using Models;
 using Models.Composites;
 
@@ -63,10 +64,17 @@ public interface IMbImageDbService
 	Task<MangaImageSet> FetchSet(params Guid[] ids);
 
     /// <summary>
-    /// Indicates that the image is indexed
+    /// Fetches a set of images by the slicer image
     /// </summary>
-    /// <param name="id">The ID of the image</param>
-    Task Indexed(Guid id);
+    /// <param name="id">The ID of the slicer image</param>
+    /// <returns>The image set</returns>
+    Task<MangaImageSet> FetchSlicerSet(Guid id);
+
+	/// <summary>
+	/// Indicates that the image is indexed
+	/// </summary>
+	/// <param name="id">The ID of the image</param>
+	Task Indexed(Guid id);
 
 	/// <summary>
 	/// Fetches all of the non-indexed images
@@ -155,6 +163,61 @@ WHERE
 		var manga = (await rdr.ReadAsync<MbManga>()).ToArray();
         var sources = (await rdr.ReadAsync<MbSource>()).ToArray();
         return new(manga, sources, images);
+	}
+
+    public async Task<MangaImageSet> FetchSlicerSet(Guid id)
+    {
+        const string QUERY = """
+                        BEGIN;
+            DROP TABLE IF EXISTS tmp_images_{0};
+
+            CREATE TEMP TABLE tmp_images_{0} ON COMMIT DROP AS
+            WITH unnested_images AS (
+                SELECT
+                    (unnest(slices)).image as image_id
+                FROM mb_images
+                WHERE
+                    id = :id AND
+                    deleted_at IS NULL
+            )
+            SELECT
+                i.*
+            FROM unnested_images n
+            JOIN mb_images i ON i.id = n.image_id
+            WHERE i.deleted_at IS NULL;
+
+            SELECT DISTINCT * FROM tmp_images_{0};
+
+            SELECT DISTINCT p.*
+            FROM mb_manga p
+            JOIN tmp_images_{0} c ON p.id = c.manga_id
+            WHERE
+                c.deleted_at IS NULL AND
+                p.deleted_at IS NULL;
+
+            SELECT DISTINCT s.*
+            FROM mb_sources s
+            JOIN mb_manga p ON s.id = p.source_id
+            JOIN tmp_images_{0} c ON p.id = c.manga_id
+            WHERE
+                c.deleted_at IS NULL AND
+                p.deleted_at IS NULL AND
+                s.deleted_at IS NULL;
+
+            DROP TABLE tmp_images_{0};
+            COMMIT;
+            """;
+
+        var suffix = MangaSearchFilter.TableSuffix();
+        var query = string.Format(QUERY, suffix);
+
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(query, new { id });
+
+		var images = (await rdr.ReadAsync<MbImage>()).ToArray();
+		var manga = (await rdr.ReadAsync<MbManga>()).ToArray();
+		var sources = (await rdr.ReadAsync<MbSource>()).ToArray();
+		return new(manga, sources, images);
 	}
 
     public Task Indexed(Guid id)

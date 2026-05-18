@@ -37,6 +37,7 @@ public static class DiExtensions
 
 			.AddType<MbAttribute>()
 			.AddType<MbHeader>()
+			.AddType<MbImageSlice>()
 
 			.Add<IMbLogDbService, MbLogDbService, MbLog>()
 			.Add<IMbTagDbService, MbTagDbService, MbTag>()
