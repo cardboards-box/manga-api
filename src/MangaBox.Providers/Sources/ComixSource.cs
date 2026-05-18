@@ -162,6 +162,8 @@ internal class ComixSource(
 			requestedId;
 
 		var homePage = Text(detail?["url"]) ?? baseUrl;
+		if (!homePage.StartsWith("http", StringComparison.InvariantCultureIgnoreCase))
+			homePage = AbsoluteUrl(homePage, HomeUrl) ?? baseUrl;
 		var cover = Text(detail?["poster"]?["large"]) ??
 			Text(detail?["poster"]?["medium"]) ??
 			root.SelectSingleNode("//div[contains(@class,'poster')]//img")?.GetAttributeValue("src", string.Empty) ??
