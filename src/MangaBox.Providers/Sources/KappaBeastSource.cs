@@ -342,10 +342,10 @@ internal class KappaBeastSource(
 
 		url = WebUtility.HtmlDecode(url.Trim());
 
-		if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+		if (!HasHttpScheme(url))
 			return false;
 
-		var path = uri.AbsolutePath;
+		var path = GetUrlPath(url);
 
 		return path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
 			   path.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
@@ -353,6 +353,29 @@ internal class KappaBeastSource(
 			   path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) ||
 			   path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) ||
 			   path.EndsWith(".avif", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool HasHttpScheme(string url)
+	{
+		return url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+			   url.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static string GetUrlPath(string url)
+	{
+		var schemeIndex = url.IndexOf("://", StringComparison.Ordinal);
+		if (schemeIndex < 0)
+			return url;
+
+		var pathStart = url.IndexOf('/', schemeIndex + 3);
+		if (pathStart < 0)
+			return string.Empty;
+
+		var queryStart = url.IndexOfAny(['?', '#'], pathStart);
+		if (queryStart < 0)
+			return url[pathStart..];
+
+		return url[pathStart..queryStart];
 	}
 
 	#endregion
@@ -990,7 +1013,7 @@ public static class KappaBeast
 				if (string.IsNullOrWhiteSpace(url))
 					return null;
 
-				if (Uri.TryCreate(url, UriKind.Absolute, out _))
+				if (url.StartsWithIc("http"))
 					return url;
 
 				var baseUrl = api ? BaseUrl : CdnUrl;
