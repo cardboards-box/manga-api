@@ -74,9 +74,9 @@ public class ProgressController(
 	/// </summary>
 	/// <param name="ids">The IDs of the manga</param>
 	/// <returns>The manga progress or an error if not found</returns>
-	[HttpGet, Route("progress")]
+	[HttpPost, Route("progress")]
 	[ProducesArray<MangaBoxType<MbMangaProgress>>, ProducesError(401)]
-	public Task<IActionResult> Get([FromQuery] string[] ids) => Box(async () =>
+	public Task<IActionResult> Get([FromBody] string[] ids) => Box(async () =>
 	{
 		var pid = this.GetProfileId();
 		if (!pid.HasValue)
