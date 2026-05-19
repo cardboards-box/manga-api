@@ -20,6 +20,7 @@ internal class TestVerb(
 	IComixSource _comix,
 	IImageService _image,
 	IHyakuroSource _hyakuro,
+	IKappaBeastSource _kappa,
 	IFlareImageService _flare,
 	IMangaLoaderService _loader,
 	IRestitcherService _restitch,
@@ -341,6 +342,12 @@ internal class TestVerb(
 		await io.FlushAsync(token);
 
 		_logger.LogInformation("Successfully downloaded image with ID: {ID} >> restitcher-test.zip", id);
+	}
+
+	public Task TestKappaBeast(CancellationToken token)
+	{
+		const string URL = "https://kappabeast.com/series/jimoto-no-ijimekko-tachi-ni-shikaeshi-shiyou-to-shitara-betsu-no-tatakai-ga-hajimatta";
+		return TestSource(_kappa, URL, true, token);
 	}
 
 	public override async Task<bool> Execute(TestOption options, CancellationToken token)

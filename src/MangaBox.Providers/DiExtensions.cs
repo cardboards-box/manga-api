@@ -32,7 +32,7 @@ public static class DiExtensions
 			.AddSource<IMangakakalotComAltSource, MangakakalotComAltSource>()
 			.AddSource<IMangaClashSource, MangaClashSource>()
 			.AddSource<INhentaiSource, NhentaiSource>()
-			//.AddSource<IBattwoSource, BattwoSource>()
+			.AddSource<IKappaBeastSource, KappaBeastSource>()
 			.AddSource<IMangaKatanaSource, MangaKatanaSource>()
 			.AddSource<IDarkScansSource, DarkScansSource>()
 			.AddSource<IChapmanganatoSource, ChapmanganatoSource>()
