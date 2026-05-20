@@ -236,7 +236,7 @@ internal class ComixSource(
 		return queries.TryGetPropertyValue(key, out var value) ? value : null;
 	}
 
-	private static List<ImportChapter> ParseChapters(HtmlNode root)
+	private List<ImportChapter> ParseChapters(HtmlNode root)
 	{
 		return root
 			.SelectNodes("//li[contains(@class,'mchap-item')]")
@@ -249,7 +249,7 @@ internal class ComixSource(
 			.ToList() ?? [];
 	}
 
-	private static ImportChapter? ParseChapter(HtmlNode node, int index)
+	private ImportChapter? ParseChapter(HtmlNode node, int index)
 	{
 		var primary = node.SelectSingleNode(".//a[contains(@class,'mchap-row__primary')]");
 		var href = primary?.GetAttributeValue("href", null!);
@@ -257,13 +257,13 @@ internal class ComixSource(
 		if (string.IsNullOrWhiteSpace(href))
 			return null;
 
-		var url = AbsoluteUrl(href, "https://comix.to")!;
+		var url = AbsoluteUrl(href, HomeUrl)!;
 		var primaryText = Clean(primary?.InnerText) ?? string.Empty;
 		var chapterId = ParseChapterId(url);
 		var number = ParseChapterNumber(primaryText, url) ?? 0d;
 		var groupNode = node.SelectSingleNode(".//a[contains(@class,'mchap-row__group')]");
 		var group = Clean(groupNode?.InnerText);
-		var groupUrl = AbsoluteUrl(groupNode?.GetAttributeValue("href", null!), "https://comix.to");
+		var groupUrl = AbsoluteUrl(groupNode?.GetAttributeValue("href", null!), HomeUrl);
 		var likes = Clean(node.SelectSingleNode(".//*[contains(@class,'mchap-row__likes')]")?.InnerText);
 		var time = Clean(node.SelectSingleNode(".//*[contains(@class,'mchap-row__time')]")?.InnerText);
 
@@ -502,13 +502,10 @@ internal class ComixSource(
 		if (string.IsNullOrWhiteSpace(url))
 			return null;
 
-		if (Uri.TryCreate(url, UriKind.Absolute, out var absolute))
-			return absolute.ToString();
-
-		if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
+		if (url.StartsWithIc("http"))
 			return url;
 
-		return new Uri(baseUri, url).ToString();
+		return $"{baseUrl.TrimEnd('/')}/{url.TrimStart('/')}";
 	}
 
 	private sealed record ComixChapterPagination(
@@ -607,7 +604,7 @@ internal class ComixSource(
 
 		var knownImageUrls = root
 			.SelectNodes("//*[contains(concat(' ', normalize-space(@class), ' '), ' rpage-page ')][@data-page]//img[@src]")
-			?.Select(x => x.GetAttributeValue("src", null))
+			?.Select(x => x.GetAttributeValue("src", null!))
 			.Where(x => !string.IsNullOrWhiteSpace(x))
 			.Select(x => AbsoluteUrl(x, chapterUrl))
 			.Where(x => !string.IsNullOrWhiteSpace(x))
@@ -706,7 +703,7 @@ internal class ComixSource(
 		if (node is null)
 			return null;
 
-		var value = node.GetAttributeValue(attribute, null);
+		var value = node.GetAttributeValue(attribute, null!);
 
 		return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result)
 			? result
