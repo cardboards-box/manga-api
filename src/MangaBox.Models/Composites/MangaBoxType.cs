@@ -32,10 +32,10 @@ public class MangaBoxType<T>
 	/// </summary>
 	/// <param name="entity">The data of the type</param>
 	/// <param name="related">All of the related entities</param>
-	public MangaBoxType(T entity, MangaBoxRelationship[] related)
+	public MangaBoxType(T entity, params MangaBoxRelationship?[] related)
 	{
 		Entity = entity;
-		Related = related;
+		Related = [.. related.Where(r => r is not null)!];
 	}
 
 	/// <summary>

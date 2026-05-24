@@ -29,6 +29,7 @@
         "Tables/mb_notification_devices.sql",
         "Tables/mb_notification_subscriptions.sql",
         "indices.sql",
-        "Views/mb_vw_chapter_numbers.sql"
+        "Views/mb_vw_chapter_numbers.sql",
+        "Views/mb_tag_ext.sql"
     ]
 }

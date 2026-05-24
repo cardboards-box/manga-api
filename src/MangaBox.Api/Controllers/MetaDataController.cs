@@ -110,10 +110,10 @@ public class MetaDataController(
 	/// </summary>
 	/// <returns>The manga tags</returns>
 	[HttpGet, Route("metadata/manga-tag")]
-	[ProducesArray<MbTag>]
+	[ProducesArray<MangaBoxType<MbTag>>]
 	public Task<IActionResult> GetTags() => Box(async () =>
 	{
-		var tags = await _db.Tag.Get();
+		var tags = await _db.Tag.GetWithRelationships();
 		return Boxed.Ok(tags);
 	});
 

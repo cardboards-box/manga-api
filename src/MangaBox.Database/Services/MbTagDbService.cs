@@ -1,6 +1,8 @@
 namespace MangaBox.Database.Services;
 
 using Models;
+using Models.Composites;
+using Models.Types;
 
 /// <summary>
 /// The service for interacting with the mb_tags table
@@ -40,10 +42,30 @@ public interface IMbTagDbService
     /// </summary>
     /// <returns>All of the records</returns>
     Task<MbTag[]> Get();
+
+	/// <summary>
+	/// Gets all of the records from the mb_tags table with their relationships
+	/// </summary>
+	/// <returns>All of the records with their relationships</returns>
+	Task<MangaBoxType<MbTag>[]> GetWithRelationships(); 
 }
 
 internal class MbTagDbService(
-    IOrmService orm) : Orm<MbTag>(orm), IMbTagDbService
+	IOrmService orm) : Orm<MbTag>(orm), IMbTagDbService
 {
-
+	public async Task<MangaBoxType<MbTag>[]> GetWithRelationships()
+	{
+        const string QUERY = """
+            SELECT 
+                t.*, 
+                '' as split, 
+                e.*
+            FROM mb_tags t
+            JOIN mb_tag_ext e ON e.tag_id = t.id
+            WHERE t.deleted_at IS NULL
+            ORDER BY t.slug;
+            """;
+        return [..(await _sql.QueryTupleAsync<MbTag, MbTagExt>(QUERY))
+            .Select(t => new MangaBoxType<MbTag>(t.item1, MangaBoxRelationship.FromEntity(t.item2)))];
+	}
 }
