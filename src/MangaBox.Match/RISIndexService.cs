@@ -4,6 +4,7 @@ namespace MangaBox.Match;
 
 using RIS;
 using Services.Imaging;
+using SixLabors.ImageSharp.Processing;
 
 /// <summary>
 /// A service for indexing images in the RIS database
@@ -36,6 +37,11 @@ internal class RISIndexService(
 	IImageService _image,
 	ILogger<RISIndexService> _logger) : IRISIndexService
 {
+	/// <summary>
+	/// The max image size that the reverse image search database allows (minus a buffer)
+	/// </summary>
+	private const int MAX_PIXELS = 178_956_970 - 50;
+
 	/// <summary>
 	/// Generate the metadata for the given image
 	/// </summary>
@@ -89,6 +95,18 @@ internal class RISIndexService(
 		try
 		{
 			using var image = await Image.LoadAsync(stream, token);
+			var totalPixels = (long)image.Width * image.Height;
+			if (totalPixels > MAX_PIXELS)
+			{
+				var scale = Math.Sqrt((double)MAX_PIXELS / totalPixels);
+				var newWidth = (int)(image.Width * scale);
+				var newHeight = (int)(image.Height * scale);
+				image.Mutate(x => x.Resize(new ResizeOptions
+				{
+					Mode = ResizeMode.Max,
+					Size = new Size(newWidth, newHeight)
+				}));
+			}
 			var output = new MemoryStream();
 			await image.SaveAsJpegAsync(output, token);
 			output.Position = 0;
