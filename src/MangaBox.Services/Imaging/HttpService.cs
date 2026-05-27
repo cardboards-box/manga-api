@@ -58,8 +58,8 @@ public interface IHttpService
 	/// Determine the size of the images in pixels
 	/// </summary>
 	/// <param name="path">The path to the image file</param>
-	/// <returns>A tuple containing the width and height of the image, or null if it cannot be determined</returns>
-	Task<(int? width, int? height)> DetermineImageSize(string path);
+	/// <returns>A tuple containing the width and height of the image and the image itself, or null if it cannot be determined</returns>
+	Task<(int? width, int? height, Image? image)> DetermineImageSize(string path);
 
 	/// <summary>
 	/// Copys the input stream to the output stream, tracking the number of bytes
@@ -158,17 +158,17 @@ internal class HttpService(
 	}
 
 	/// <inheritdoc />
-	public async Task<(int? width, int? height)> DetermineImageSize(string path)
+	public async Task<(int? width, int? height, Image? image)> DetermineImageSize(string path)
 	{
 		try
 		{
-			using var image = await Image.LoadAsync(path);
-			return (image.Width, image.Height);
+			var image = await Image.LoadAsync(path);
+			return (image.Width, image.Height, image);
 		}
 		catch (Exception ex)
 		{
 			_logger.LogError(ex, "Failed to determine image size for >> {Path}", path);
-			return (null, null);
+			return (null, null, null);
 		}
 	}
 

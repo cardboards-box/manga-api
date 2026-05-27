@@ -116,7 +116,8 @@ internal class ZipService(
 
 		if (image.ImageWidth is null || image.ImageHeight is null)
 		{
-			var (width, height) = await _http.DetermineImageSize(path);
+			var (width, height, img) = await _http.DetermineImageSize(path);
+			using var _ = img;
 			image.ImageWidth = width ?? image.ImageWidth;
 			image.ImageHeight = height ?? image.ImageHeight;
 		}

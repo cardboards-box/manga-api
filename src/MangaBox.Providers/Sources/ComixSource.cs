@@ -1,12 +1,15 @@
-﻿using System.Threading.RateLimiting;
+﻿using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using System.Text.Json.Nodes;
+using System.Threading.RateLimiting;
 
 namespace MangaBox.Providers.Sources;
 
 using Models.Types;
+using Services.Imaging;
 using Utilities.Flare;
 
-public interface IComixSource : IMangaSource, IFlareImageSource
+public interface IComixSource : IMangaSource, IFlareImageSource, IPostProcessingSource
 {
 
 }
@@ -145,6 +148,21 @@ internal class ComixSource(
 	}
 
 	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
+
+	public async Task<Image?> PostProcessing(DownloadResult result, Image image, CancellationToken token)
+	{
+		const string SCRAMBLE_SEED_HEADER = "X-Scramble-Seed";
+		const string SCRAMBLE_GRID_HEADER = "X-Scramble-Grid";
+		if (result?.Response is null) return null;
+
+		var headers = result.Response.Headers;
+		var seed = headers.TryGetValues(SCRAMBLE_SEED_HEADER, out var seedValues) ? seedValues.FirstOrDefault() : null;
+		var grid = headers.TryGetValues(SCRAMBLE_GRID_HEADER, out var gridValues) ? gridValues.FirstOrDefault() : null;
+		if (string.IsNullOrWhiteSpace(seed) || string.IsNullOrWhiteSpace(grid))
+			return null;
+
+		return ImageUnscrambler.Unscramble((Image<Rgba32>) image, seed, grid);
+	}
 
 	#region Manga Page Parsing
 	private ImportManga ParseManga(HtmlDocument doc, string requestedId, string baseUrl)
@@ -733,4 +751,284 @@ internal class ComixSource(
 			.FirstOrDefault();
 	}
 	#endregion
+
+	/// <summary>
+	/// Unscrambles images that were scrambled using a seeded grid permutation.
+	/// </summary>
+	public static class ImageUnscrambler
+	{
+		public enum PermutationMode
+		{
+			/// <summary>
+			/// Scrambled tile position i contains the original tile permutation[i].
+			/// </summary>
+			ScrambledPositionContainsOriginalIndex,
+
+			/// <summary>
+			/// Original tile position i was moved to scrambled tile position permutation[i].
+			/// </summary>
+			OriginalIndexMovedToScrambledPosition
+		}
+
+		public static async Task UnscrambleFileAsync(
+			string inputPath,
+			string outputPath,
+			string scrambleSeedHeader,
+			string? scrambleGridHeader = null,
+			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex,
+			CancellationToken token = default)
+		{
+			var seed = ParseSeed(scrambleSeedHeader);
+			var (columns, rows) = ParseGrid(scrambleGridHeader);
+
+			using var image = await Image.LoadAsync<Rgba32>(inputPath, token);
+			using var output = Unscramble(image, seed, columns, rows, mode);
+
+			await output.SaveAsync(outputPath, token);
+		}
+
+		public static Image Unscramble(
+			Image<Rgba32> image, 
+			string scrambleSeedHeader,
+			string scrambleGridHeader,
+			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
+		{
+			var seed = ParseSeed(scrambleSeedHeader);
+			var (columns, rows) = ParseGrid(scrambleGridHeader);
+			return Unscramble(image, seed, columns, rows, mode);
+		}
+
+		public static Image Unscramble(
+			Image<Rgba32> scrambled,
+			int seed,
+			int columns,
+			int rows,
+			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
+		{
+			if (scrambled is null)
+				throw new ArgumentNullException(nameof(scrambled));
+
+			if (columns <= 0)
+				throw new ArgumentOutOfRangeException(nameof(columns));
+
+			if (rows <= 0)
+				throw new ArgumentOutOfRangeException(nameof(rows));
+
+			var tileWidth = scrambled.Width / columns;
+			var tileHeight = scrambled.Height / rows;
+
+			if (tileWidth <= 0 || tileHeight <= 0)
+				throw new InvalidOperationException("Image is too small for the requested scramble grid.");
+
+			var tileCount = columns * rows;
+			var permutation = ScrambleRandom.CreatePermutation(seed, tileCount);
+
+			// Clone instead of creating a blank image so any right/bottom remainder pixels
+			// that were not part of the fixed-size scramble grid are preserved.
+			var output = new Image<Rgba32>(scrambled.Width, scrambled.Height);
+			CopyPixels(
+				source: scrambled,
+				sourceRect: new Rectangle(0, 0, scrambled.Width, scrambled.Height),
+				destination: output,
+				destinationPoint: Point.Empty);
+
+			for (var scrambledIndex = 0; scrambledIndex < tileCount; scrambledIndex++)
+			{
+				var sourceIndex = mode switch
+				{
+					PermutationMode.ScrambledPositionContainsOriginalIndex => scrambledIndex,
+					PermutationMode.OriginalIndexMovedToScrambledPosition => permutation[scrambledIndex],
+					_ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
+				};
+
+				var destinationIndex = mode switch
+				{
+					PermutationMode.ScrambledPositionContainsOriginalIndex => permutation[scrambledIndex],
+					PermutationMode.OriginalIndexMovedToScrambledPosition => scrambledIndex,
+					_ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
+				};
+
+				var sourceRect = GetFixedTileRectangle(sourceIndex, tileWidth, tileHeight, columns);
+				var destinationPoint = GetFixedTilePoint(destinationIndex, tileWidth, tileHeight, columns);
+
+				CopyPixels(scrambled, sourceRect, output, destinationPoint);
+			}
+
+			return output;
+		}
+
+		private static Rectangle GetFixedTileRectangle(
+			int index,
+			int tileWidth,
+			int tileHeight,
+			int columns)
+		{
+			var column = index % columns;
+			var row = index / columns;
+
+			return new Rectangle(
+				column * tileWidth,
+				row * tileHeight,
+				tileWidth,
+				tileHeight);
+		}
+
+		private static Point GetFixedTilePoint(
+			int index,
+			int tileWidth,
+			int tileHeight,
+			int columns)
+		{
+			var column = index % columns;
+			var row = index / columns;
+
+			return new Point(
+				column * tileWidth,
+				row * tileHeight);
+		}
+
+		private static void CopyPixels(
+			Image<Rgba32> source,
+			Rectangle sourceRect,
+			Image<Rgba32> destination,
+			Point destinationPoint)
+		{
+			source.ProcessPixelRows(destination, (sourceAccessor, destinationAccessor) =>
+			{
+				for (var y = 0; y < sourceRect.Height; y++)
+				{
+					var sourceY = sourceRect.Y + y;
+					var destinationY = destinationPoint.Y + y;
+
+					if ((uint)sourceY >= (uint)source.Height)
+						continue;
+
+					if ((uint)destinationY >= (uint)destination.Height)
+						continue;
+
+					var sourceRow = sourceAccessor.GetRowSpan(sourceY);
+					var destinationRow = destinationAccessor.GetRowSpan(destinationY);
+
+					var sourceX = sourceRect.X;
+					var destinationX = destinationPoint.X;
+					var width = sourceRect.Width;
+
+					if (sourceX < 0)
+					{
+						var offset = -sourceX;
+						sourceX = 0;
+						destinationX += offset;
+						width -= offset;
+					}
+
+					if (destinationX < 0)
+					{
+						var offset = -destinationX;
+						destinationX = 0;
+						sourceX += offset;
+						width -= offset;
+					}
+
+					width = Math.Min(width, source.Width - sourceX);
+					width = Math.Min(width, destination.Width - destinationX);
+
+					if (width <= 0)
+						continue;
+
+					sourceRow.Slice(sourceX, width).CopyTo(destinationRow.Slice(destinationX, width));
+				}
+			});
+		}
+
+		public static int ParseSeed(string? value)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				throw new ArgumentException("Missing X-Scramble-Seed header.", nameof(value));
+
+			if (!int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var seed))
+				throw new FormatException($"Invalid X-Scramble-Seed value: {value}");
+
+			return seed;
+		}
+
+		public static (int Columns, int Rows) ParseGrid(string? value)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				return (5, 5);
+
+			value = value.Trim();
+
+			if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var single))
+				return (single, single);
+
+			var match = Regex.Match(value, @"^\s*(\d+)\s*[xX,\s]\s*(\d+)\s*$");
+			if (!match.Success)
+				throw new FormatException($"Invalid X-Scramble-Grid value: {value}");
+
+			var columns = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+			var rows = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+
+			if (columns <= 0 || rows <= 0)
+				throw new FormatException($"Invalid X-Scramble-Grid value: {value}");
+
+			return (columns, rows);
+		}
+	}
+
+	/// <summary>
+	/// Seeded pseudo-random generator extracted from the JavaScript.
+	/// </summary>
+	public sealed class ScrambleRandom
+	{
+		private uint _state;
+
+		/// <summary>
+		/// Creates a seeded random generator.
+		/// </summary>
+		public ScrambleRandom(int seed)
+		{
+			_state = unchecked((uint)seed);
+		}
+
+		/// <summary>
+		/// Equivalent to JavaScript:
+		/// state = Math.imul(state, 1664525) + 1013904223
+		/// </summary>
+		public uint NextUInt32()
+		{
+			_state = unchecked((_state * 1664525u) + 1013904223u);
+			return _state;
+		}
+
+		/// <summary>
+		/// Returns a deterministic value in the range [0, maxExclusive).
+		/// </summary>
+		public int NextInt32(int maxExclusive)
+		{
+			if (maxExclusive <= 0)
+				throw new ArgumentOutOfRangeException(nameof(maxExclusive), "Value must be greater than zero.");
+
+			return (int)(NextUInt32() % (uint)maxExclusive);
+		}
+
+		/// <summary>
+		/// Recreates the seeded Fisher-Yates permutation from the JavaScript.
+		/// </summary>
+		public static int[] CreatePermutation(int seed, int count)
+		{
+			if (count < 0)
+				throw new ArgumentOutOfRangeException(nameof(count), "Value cannot be negative.");
+
+			var rng = new ScrambleRandom(seed);
+			var values = Enumerable.Range(0, count).ToArray();
+
+			for (var i = values.Length - 1; i > 0; i--)
+			{
+				var j = rng.NextInt32(i + 1);
+				(values[i], values[j]) = (values[j], values[i]);
+			}
+
+			return values;
+		}
+	}
 }

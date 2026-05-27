@@ -207,6 +207,43 @@ internal class ImageService(
 	}
 
 	/// <summary>
+	/// Handles the post processing for the image if the source provider supports it
+	/// </summary>
+	/// <param name="source">The source provider</param>
+	/// <param name="result">The download result</param>
+	/// <param name="image">The image to process</param>
+	/// <param name="path">The path to the image</param>
+	/// <param name="token">The cancellation token for the request</param>
+	public async Task HandlePostProcessing(IMangaSource source, DownloadResult result, Image? image, string path, CancellationToken token)
+	{
+		try
+		{
+			if (source is not IPostProcessingSource pps ||
+				image is null ||
+				result?.Response is null)
+				return;
+
+			var ext = Path.GetExtension(path)?.TrimStart('.');
+			var scramPath = Path.ChangeExtension(path, $".pp.{ext}");
+			using var _ = image;
+			using var ppi = await pps.PostProcessing(result, image, token);
+			if (ppi is null)
+				return;
+
+			using var io = File.Create(scramPath);
+			await ppi.SaveAsync(io, image.Metadata.DecodedImageFormat!, token);
+			await io.FlushAsync(token);
+			io.Dispose();
+			image.Dispose();
+			File.Move(scramPath, path, true);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Error occurred while handling image post processing");
+		}
+	}
+
+	/// <summary>
 	/// Fetches the image result
 	/// </summary>
 	/// <param name="source">The source of the manga</param>
@@ -323,11 +360,15 @@ internal class ImageService(
 
 			//Get more image properties
 			image.ImageSize = written;
-			if (image.ImageWidth is null || image.ImageHeight is null)
+			if (image.ImageWidth is null || image.ImageHeight is null ||
+				loader.Service is IPostProcessingSource)
 			{
-				var (width, height) = await _http.DetermineImageSize(path);
+				var (width, height, img) = await _http.DetermineImageSize(path);
+				using var _ = img;
 				image.ImageWidth = width ?? image.ImageWidth;
 				image.ImageHeight = height ?? image.ImageHeight;
+
+				await HandlePostProcessing(loader.Service, download, img, path, token);
 			}
 
 			//Update the image's metadata in the database

@@ -344,6 +344,19 @@ internal class TestVerb(
 		_logger.LogInformation("Successfully downloaded image with ID: {ID} >> restitcher-test.zip", id);
 	}
 
+	public async Task TestComixImage(CancellationToken token)
+	{
+		var path = Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+			"06.webp");
+		var outp = Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+			"06-unscrambled.webp");
+		await ComixSource.ImageUnscrambler.UnscrambleFileAsync(
+			path, outp, "1247611205", "5x5", token: token);
+		_logger.LogInformation("Image unscrambling complete: {Output}", outp);
+	}
+
 	public Task TestKappaBeast(CancellationToken token)
 	{
 		const string URL = "https://kappabeast.com/series/jimoto-no-ijimekko-tachi-ni-shikaeshi-shiyou-to-shitara-betsu-no-tatakai-ga-hajimatta";

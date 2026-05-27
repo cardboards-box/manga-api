@@ -2,8 +2,10 @@
 
 namespace MangaBox.Services;
 
+using MangaBox.Services.Imaging;
 using Models.Composites.Import;
 using Models.Types;
+using SixLabors.ImageSharp;
 
 /// <summary>
 /// Represents a service that provides access to a third party manga source
@@ -98,6 +100,21 @@ public interface IIndexableMangaSource : IMangaSource
 	/// <param name="token">The token for when to stop processing</param>
 	/// <returns>The updated manga</returns>
 	IAsyncEnumerable<ImportManga> Index(LoaderSource source, CancellationToken token);
+}
+
+/// <summary>
+/// Represents a manga source that has image post processing
+/// </summary>
+public interface IPostProcessingSource : IMangaSource
+{
+	/// <summary>
+	/// The post processing to do on the image
+	/// </summary>
+	/// <param name="result">The download result for the image</param>
+	/// <param name="image">The image to process</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The processed image or null if something went wrong</returns>
+	Task<Image?> PostProcessing(DownloadResult result, Image image, CancellationToken token);
 }
 
 /// <summary>
