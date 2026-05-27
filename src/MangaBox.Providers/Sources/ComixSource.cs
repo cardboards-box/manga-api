@@ -800,7 +800,7 @@ internal class ComixSource(
 
 		public static Image Unscramble(
 			Image<Rgba32> scrambled,
-			int seed,
+			uint seed,
 			int columns,
 			int rows,
 			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
@@ -940,12 +940,12 @@ internal class ComixSource(
 			});
 		}
 
-		public static int ParseSeed(string? value)
+		public static uint ParseSeed(string? value)
 		{
 			if (string.IsNullOrWhiteSpace(value))
 				throw new ArgumentException("Missing X-Scramble-Seed header.", nameof(value));
 
-			if (!int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var seed))
+			if (!uint.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var seed))
 				throw new FormatException($"Invalid X-Scramble-Seed value: {value}");
 
 			return seed;
@@ -985,9 +985,9 @@ internal class ComixSource(
 		/// <summary>
 		/// Creates a seeded random generator.
 		/// </summary>
-		public ScrambleRandom(int seed)
+		public ScrambleRandom(uint seed)
 		{
-			_state = unchecked((uint)seed);
+			_state = seed;
 		}
 
 		/// <summary>
@@ -1014,7 +1014,7 @@ internal class ComixSource(
 		/// <summary>
 		/// Recreates the seeded Fisher-Yates permutation from the JavaScript.
 		/// </summary>
-		public static int[] CreatePermutation(int seed, int count)
+		public static int[] CreatePermutation(uint seed, int count)
 		{
 			if (count < 0)
 				throw new ArgumentOutOfRangeException(nameof(count), "Value cannot be negative.");

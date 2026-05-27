@@ -346,15 +346,19 @@ internal class TestVerb(
 
 	public async Task TestComixImage(CancellationToken token)
 	{
-		var path = Path.Combine(
-			Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-			"06.webp");
-		var outp = Path.Combine(
-			Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-			"06-unscrambled.webp");
-		await ComixSource.ImageUnscrambler.UnscrambleFileAsync(
-			path, outp, "1247611205", "5x5", token: token);
-		_logger.LogInformation("Image unscrambling complete: {Output}", outp);
+		const string ID = "65236dba-c532-44a2-88b0-2205c555fae0";
+		using var image = await _image.Get(Guid.Parse(ID), token);
+		if (!string.IsNullOrEmpty(image.Error) || image.Stream is null)
+		{
+			_logger.LogError("Error occurred while fetching image: {Error} >> {ID}", image.Error, ID);
+			return;
+		}
+
+		var name = image.FileName ?? (ID + ".jpg");
+		using var io = File.Create(name);
+		await image.Stream.CopyToAsync(io, token); 
+		await io.FlushAsync(token);
+		_logger.LogInformation("Successfully downloaded image with ID: {ID} >> {Name}", ID, name);
 	}
 
 	public Task TestKappaBeast(CancellationToken token)
