@@ -59,7 +59,7 @@ public abstract class MangakakalotComBase(
 				Id = id,
 				Provider = Provider,
 				HomePage = url,
-				Cover = cover,
+				Cover = [cover],
 			};
 
 			var desc = doc.DocumentNode.SelectSingleNode("//div[@id='noidungm']");

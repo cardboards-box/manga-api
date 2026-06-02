@@ -25,6 +25,7 @@
         "Tables/mb_manga_relationships.sql",
         "Tables/mb_list_items.sql",
         "Tables/mb_images.sql",
+        "Functions/mb_upsert_manga_covers.sql",
         "Tables/mb_list_ext.sql",
         "Tables/mb_notification_devices.sql",
         "Tables/mb_notification_subscriptions.sql",

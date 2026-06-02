@@ -19,7 +19,12 @@ WITH input AS (
             ELSE NULL
         END AS source_created,
         COALESCE((j->>'ordinalVolumeReset')::boolean, false) AS ordinal_volume_reset,
-        NULLIF(j->>'cover','') AS cover_url,
+        CASE
+            WHEN jsonb_typeof(j->'covers') = 'array' THEN j->'covers'
+            WHEN jsonb_typeof(j->'cover') = 'array' THEN j->'cover'
+            WHEN NULLIF(j->>'cover','') IS NOT NULL THEN jsonb_build_array(j->>'cover')
+            ELSE '[]'::jsonb
+        END AS covers_json,
         j->'attributes' AS attributes_json,
         j->'chapters'   AS chapters_json,
         COALESCE(ARRAY(SELECT jsonb_array_elements_text(j->'authors')), '{}'::text[])   AS author_names,
@@ -213,47 +218,10 @@ WITH input AS (
     WHERE c.manga_id IN (
         SELECT id FROM upsert_manga
     )
-), cover_existing AS (
-    SELECT
-        img.id,
-        img.ordinal
-    FROM mb_images img
-    JOIN upsert_manga um ON um.id = img.manga_id
+), covers_upsert AS (
+    SELECT mb_upsert_manga_covers(um.id, mi.covers_json)
+    FROM upsert_manga um
     JOIN manga_in mi ON TRUE
-    WHERE
-        img.chapter_id IS NULL AND
-        img.manga_id = um.id AND
-        img.url = mi.cover_url AND
-        img.deleted_at IS NULL
-    LIMIT 1
-), cover_insert AS (
-    INSERT INTO mb_images (
-        url,
-        chapter_id,
-        manga_id,
-        ordinal,
-        updated_at
-    )
-    SELECT
-        mi.cover_url,
-        NULL::uuid,
-        um.id,
-        COALESCE((
-            SELECT MAX(i2.ordinal) + 1
-            FROM mb_images i2
-            WHERE i2.manga_id = um.id
-                AND i2.chapter_id IS NULL
-                AND i2.deleted_at IS NULL
-        ), 1) AS next_ordinal,
-        CURRENT_TIMESTAMP
-    FROM manga_in mi
-    JOIN upsert_manga um ON TRUE
-    WHERE
-        mi.cover_url IS NOT NULL AND
-        NOT EXISTS (SELECT 1 FROM cover_existing)
-    ON CONFLICT ON CONSTRAINT mb_images_unique
-    DO NOTHING
-    RETURNING id, ordinal
 ), profile_person AS (
     SELECT
         p.username AS name,
@@ -432,6 +400,7 @@ manga_tags_upsert AS (
     ) AS j,
     um.is_new AS is_new
     FROM upsert_manga um
+    WHERE (SELECT COUNT(*) FROM covers_upsert) >= 0
 ), chapters_json AS (
     SELECT
         cu.is_new,

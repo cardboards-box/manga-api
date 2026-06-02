@@ -34,10 +34,10 @@ public class ImportManga
     public string HomePage { get; set; } = string.Empty;
 
     /// <summary>
-    /// The URL of the manga cover image
+    /// The URLs of the manga cover images
     /// </summary>
     [JsonPropertyName("cover")]
-    public string Cover { get; set; } = string.Empty;
+    public string[] Cover { get; set; } = [];
 
     /// <summary>
     /// The description of the manga

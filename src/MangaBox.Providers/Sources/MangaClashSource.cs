@@ -58,7 +58,7 @@ public class MangaClashSource(
 			Id = id,
 			Provider = Provider,
 			HomePage = url,
-			Cover = doc.Attribute("//meta[@property='og:image']", "content") ?? ""
+			Cover = [doc.Attribute("//meta[@property='og:image']", "content") ?? ""]
 		};
 
 		var postContent = doc.DocumentNode.SelectNodes("//div[@class='post-content_item']");

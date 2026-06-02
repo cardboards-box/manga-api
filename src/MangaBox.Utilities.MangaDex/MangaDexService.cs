@@ -88,6 +88,25 @@ public interface IMangaDexService
 	/// <param name="id">The ID of the custom list</param>
 	/// <returns>The custom list data</returns>
 	Task<MangaDexRoot<CustomList>> List(string id);
+
+	/// <summary>
+	/// Fetches all of the covers for the given manga IDs
+	/// </summary>
+	/// <param name="ids">The IDs of the manga</param>
+	/// <param name="token">The cancellation token</param>
+	/// <returns>An asynchronous stream of cover art relationships</returns>
+	IAsyncEnumerable<CoverArtRelationship> Covers(string[] ids, CancellationToken token = default);
+
+	/// <summary>
+	/// Fetch all of the items in the collection
+	/// </summary>
+	/// <typeparam name="T">The type of base request result</typeparam>
+	/// <typeparam name="TOut">The type of items in the collection</typeparam>
+	/// <param name="func">The function to fetch the items</param>
+	/// <param name="token">The cancellation token</param>
+	/// <returns>An asynchronous stream of items</returns>
+	IAsyncEnumerable<TOut> All<T, TOut>(Func<IMangaDexService, int, Task<T>> func, CancellationToken token)
+		where T : MangaDexCollection<TOut>;
 }
 
 internal class MangaDexService(
@@ -223,4 +242,34 @@ internal class MangaDexService(
 		return Limit(md => md.Lists.Get(id, true), $"List Fetch: {id}", CancellationToken.None);
 	}
 
+	public Task<CoverArtList> Covers(string[] ids, int offset) => Limit(md => md.Cover.List(new() 
+	{ 
+		Offset = offset,
+		Limit = 100,
+		MangaIds = ids,
+		Order = new() { [CoverArtFilter.OrderKey.volume] = OrderValue.asc }
+	}), $"Covers Fetch: {string.Join(", ", ids)}", CancellationToken.None);
+
+	public IAsyncEnumerable<CoverArtRelationship> Covers(string[] ids, CancellationToken token = default)
+	{
+		return All<CoverArtList, CoverArtRelationship>((service, offset) => ((MangaDexService)service).Covers(ids, offset), token);
+	}
+
+	public async IAsyncEnumerable<TOut> All<T, TOut>(Func<IMangaDexService, int, Task<T>> func, [EnumeratorCancellation] CancellationToken token)
+		where T : MangaDexCollection<TOut>
+	{
+		int offset = 0;
+		while(!token.IsCancellationRequested)
+		{
+			var result = await func(this, offset);
+			if (result.IsError() || result.Data.Count == 0) yield break;
+
+			foreach(var item in result.Data)
+				yield return item;
+
+			offset += result.Data.Count;
+			if (result.Data.Count <= result.Limit)
+				yield break;
+		}
+	}
 }

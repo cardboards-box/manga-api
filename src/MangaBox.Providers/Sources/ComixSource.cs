@@ -209,7 +209,7 @@ internal class ComixSource(
 			Id = sourceId,
 			Provider = Provider,
 			HomePage = homePage,
-			Cover = AbsoluteUrl(cover, HomeUrl) ?? string.Empty,
+			Cover = [AbsoluteUrl(cover, HomeUrl) ?? string.Empty],
 			Description = description,
 			AltDescriptions = [],
 			AltTitles = Strings(detail?["altTitles"])

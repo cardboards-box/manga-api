@@ -57,7 +57,7 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 			Id = id,
 			Provider = Provider,
 			HomePage = url,
-			Cover = HomeUrl + doc.DocumentNode.SelectSingleNode("//div[@class=\"manga-info-pic\"]/img").GetAttributeValue("src", "").TrimStart('/')
+			Cover = [HomeUrl + doc.DocumentNode.SelectSingleNode("//div[@class=\"manga-info-pic\"]/img").GetAttributeValue("src", "").TrimStart('/')]
 		};
 
 		var desc = doc.DocumentNode.SelectSingleNode("//div[@id='noidungm']");

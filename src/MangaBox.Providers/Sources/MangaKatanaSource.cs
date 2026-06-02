@@ -64,7 +64,7 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 			Id = id,
 			Provider = Provider,
 			HomePage = url,
-			Cover = doc.Attribute("//div[@class='d-cell-medium media']/div[@class='cover']/img", "src") ?? string.Empty,
+			Cover = [doc.Attribute("//div[@class='d-cell-medium media']/div[@class='cover']/img", "src") ?? string.Empty],
 			Description = doc.InnerHtml("//div[@class='summary']/p") ?? string.Empty
 		};
 

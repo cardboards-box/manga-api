@@ -78,7 +78,7 @@ internal class LikeMangaSource(
 			Id = id,
 			Provider = Provider,
 			HomePage = url,
-			Cover = imageUrl ?? string.Empty,
+			Cover = [imageUrl ?? string.Empty],
 			Description = summary,
 			Tags = genres,
 		};

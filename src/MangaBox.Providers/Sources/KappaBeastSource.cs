@@ -74,7 +74,7 @@ internal class KappaBeastSource(
 			Title = manga.Title?.Trim() ?? string.Empty,
 			Provider = Provider,
 			HomePage = $"{MangaBaseUri}{id}",
-			Cover = KappaBeast.Url.AbsoluteCdn(cover) ?? string.Empty,
+			Cover = [KappaBeast.Url.AbsoluteCdn(cover) ?? string.Empty],
 			Description = manga.Description,
 			AltTitles = ParseAltTitles(manga.AltTitle),
 			Authors = SplitName(manga.Author),

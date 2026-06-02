@@ -58,7 +58,7 @@ public class BattwoSource : IBattwoSource
 			Id = id,
 			Provider = Provider,
 			HomePage = url,
-			Cover = doc.Attribute("//div[@class='row detail-set']/div[@class='col-24 col-sm-8 col-md-6 attr-cover']/img", "src") ?? "",
+			Cover = [doc.Attribute("//div[@class='row detail-set']/div[@class='col-24 col-sm-8 col-md-6 attr-cover']/img", "src") ?? ""],
 			Description = doc.InnerHtml("//div[@id='limit-height-body-summary']/div[@class='limit-html']") ?? "",
 			AltTitles = (doc.InnerText("//div[@class='pb-2 alias-set line-b-f']") ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToArray(),
 		};

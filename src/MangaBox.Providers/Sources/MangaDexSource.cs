@@ -42,8 +42,16 @@ public class MangaDexSource(
 	public async Task<ImportManga> Convert(MManga manga, CancellationToken token, List<ImportChapter>? chapters = null)
 	{
 		var id = manga.Id;
-		var coverFile = (manga.Relationships.FirstOrDefault(t => t is CoverArtRelationship) as CoverArtRelationship)?.Attributes?.FileName;
-		var coverUrl = $"{HomeUrl}/covers/{id}/{coverFile}";
+		var covers = manga.Relationships
+			.Where(t => t is CoverArtRelationship)
+			.Select(t => t as CoverArtRelationship!)
+			.OrderBy(t => double.TryParse(t?.Attributes?.Volume, out var v) ? v : 0)
+			.Select(c => string.IsNullOrEmpty(c?.Attributes?.FileName)
+				? null!
+				: $"{HomeUrl}/covers/{id}/{c.Attributes.FileName}")
+			.Where(t => !string.IsNullOrEmpty(t))
+			.Distinct()
+			.ToArray();
 
 		chapters ??= await GetChapters(id, token, DEFAULT_LANG)
 			.OrderBy(t => t.Number)
@@ -72,7 +80,7 @@ public class MangaDexSource(
 			Id = id,
 			Provider = Provider,
 			HomePage = $"{HomeUrl}/title/{id}",
-			Cover = coverUrl,
+			Cover = covers,
 			Authors = [..authors.Distinct()],
 			Artists = [..artists.Distinct()],
 			Description = manga.Attributes?.Description?.PreferredOrFirst(t => t.Key == DEFAULT_LANG).Value ?? string.Empty,
@@ -100,6 +108,9 @@ public class MangaDexSource(
 	{
 		var manga = await _mangadex.Manga(id);
 		if (manga == null || manga.Data == null || manga.Data.Attributes is null) return null;
+
+		var covers = await _mangadex.Covers([id], token).ToArrayAsync(token);
+		manga.Data.Relationships = [..manga.Data.Relationships, ..covers];
 
 		return await Convert(manga.Data, token);
 	}
@@ -264,7 +275,7 @@ public class MangaDexSource(
 
 	public async Task PolyfillCoverArt(ChapterList data)
 	{
-		var ids = new List<string>();
+		var ids = new HashSet<string>();
 		foreach (var chapter in data.Data)
 		{
 			var m = GetMangaRel(chapter);
@@ -273,9 +284,16 @@ public class MangaDexSource(
 			ids.Add(m.Id);
 		}
 
-		var manga = await _mangadex.AllManga([..ids.Distinct()]);
+		var dids = ids.Distinct().ToArray();
+
+		var manga = await _mangadex.AllManga(dids);
 		if (manga == null || manga.Data.Count == 0)
 			return;
+
+		var covers = await _mangadex.Covers(dids)
+			.GroupBy(t => t.Relationships.FirstOrDefault(r => r is RelatedDataRelationship)?.Id)
+			.Where(t => t.Key is not null)
+			.ToDictionaryAsync(t => t.Key!, t => t.ToArray());
 
 		foreach (var chapter in data.Data)
 		{
@@ -286,8 +304,9 @@ public class MangaDexSource(
 				var existing = manga.Data.FirstOrDefault(t => t.Id == mr.Id);
 				if (existing == null) continue;
 
+				var mcovers = covers.GetValueOrDefault(mr.Id, []);
 				mr.Attributes = existing.Attributes;
-				mr.Relationships = existing.Relationships;
+				mr.Relationships = [..existing.Relationships, ..mcovers];
 			}
 		}
 	}

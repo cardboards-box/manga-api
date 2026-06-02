@@ -86,7 +86,7 @@ internal class HyakuroSource(
 			AltTitles = data.Props.PageProps.AlternativeTitles,
 			Provider = Provider,
 			HomePage = url,
-			Cover = data.Props.PageProps.CoverUrl,
+			Cover = [data.Props.PageProps.CoverUrl],
 			Description = data.Props.PageProps.Info.Synopsis,
 			AltDescriptions = [],
 			Tags = [..tags],

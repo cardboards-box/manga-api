@@ -174,6 +174,11 @@ internal class MangaLoaderService(
 			.Where(t => !string.IsNullOrEmpty(t))
 			.Distinct()
 			.ToArray()!;
+		manga.Cover = manga.Cover
+			.Select(t => Decode(t.Trim()))
+			.Where(t => !string.IsNullOrEmpty(t))
+			.Distinct()
+			.ToArray()!;
 		manga.Artists = manga.Artists
 			.Select(d => Decode(d.Trim()))
 			.Where(d => !string.IsNullOrEmpty(d))

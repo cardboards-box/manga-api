@@ -18,7 +18,9 @@ internal class TestOption
 internal class TestVerb(
 	IDbService _db,
 	IComixSource _comix,
+	IMangaDexSource _md,
 	IImageService _image,
+	ISourceService _sources,
 	IHyakuroSource _hyakuro,
 	IKappaBeastSource _kappa,
 	IFlareImageService _flare,
@@ -149,18 +151,19 @@ internal class TestVerb(
 
 	public async Task LoadManga(CancellationToken token)
 	{
-		bool force = false, doLogger = false;
+		bool force = true, doLogger = false;
 		string[] urls = 
 		[
-			"https://mangadex.org/title/129c90ca-b997-4789-a748-e8765bc67a65/ichinichi-goto-ni-tsun-ga-hetteku-tsuntsuntsuntsuntsuntsuntsuntsuntsuntsuntsundere-joshi",
-			"https://mangadex.org/title/fc0a7b86-992e-4126-b30f-ca04811979bf/the-unrivaled-mememori-kun",
-			"https://weebdex.org/title/b1e1fv77hs",
-			"https://comix.to/title/772k0-tensei-shitara-ponkotsu-maid-to-yobarete-imashita-zense-no-arekore-wo-mochikomi-wo-yashiki-kaikaku-shimasu",
-			"https://mangaclash.com/manga/last-boss-yametemita-shujinkou-ni-taosareta-furi-shite-jiyuu-ni-ikitemita",
-			"https://mangakatana.com/manga/the-great-saints-carefree-journey-to-another-world.27345",
-			"https://www.natomanga.com/manga/the-great-saint-s-carefree-journey-to-another-world",
-			"https://likemanga.in/manga/i-got-my-wish-and-reincarnated-as-the-villainess-last-boss",
-			"https://mangadex.org/title/b3a9c1f8-93d2-49ba-96e2-84727c1031a6/isekai-ni-otosareta-jouka-wa-kihon"
+			"https://mangadex.org/title/85b3504c-62e8-49e7-9a81-fb64a3f51def",
+			//"https://mangadex.org/title/129c90ca-b997-4789-a748-e8765bc67a65/ichinichi-goto-ni-tsun-ga-hetteku-tsuntsuntsuntsuntsuntsuntsuntsuntsuntsuntsundere-joshi",
+			//"https://mangadex.org/title/fc0a7b86-992e-4126-b30f-ca04811979bf/the-unrivaled-mememori-kun",
+			//"https://weebdex.org/title/b1e1fv77hs",
+			//"https://comix.to/title/772k0-tensei-shitara-ponkotsu-maid-to-yobarete-imashita-zense-no-arekore-wo-mochikomi-wo-yashiki-kaikaku-shimasu",
+			//"https://mangaclash.com/manga/last-boss-yametemita-shujinkou-ni-taosareta-furi-shite-jiyuu-ni-ikitemita",
+			//"https://mangakatana.com/manga/the-great-saints-carefree-journey-to-another-world.27345",
+			//"https://www.natomanga.com/manga/the-great-saint-s-carefree-journey-to-another-world",
+			//"https://likemanga.in/manga/i-got-my-wish-and-reincarnated-as-the-villainess-last-boss",
+			//"https://mangadex.org/title/b3a9c1f8-93d2-49ba-96e2-84727c1031a6/isekai-ni-otosareta-jouka-wa-kihon"
 		];
 
 		var profileId = (await _db.Profile.Admins()).FirstOrDefault()?.Id;
@@ -346,7 +349,7 @@ internal class TestVerb(
 
 	public async Task TestComixImage(CancellationToken token)
 	{
-		const string ID = "65236dba-c532-44a2-88b0-2205c555fae0";
+		const string ID = "3e8e4430-76e3-4de5-8f90-37d7fa5fcadd";
 		using var image = await _image.Get(Guid.Parse(ID), token);
 		if (!string.IsNullOrEmpty(image.Error) || image.Stream is null)
 		{
@@ -365,6 +368,22 @@ internal class TestVerb(
 	{
 		const string URL = "https://kappabeast.com/series/jimoto-no-ijimekko-tachi-ni-shikaeshi-shiyou-to-shitara-betsu-no-tatakai-ga-hajimatta";
 		return TestSource(_kappa, URL, true, token);
+	}
+
+	public async Task TestMdIndexing(CancellationToken token)
+	{
+		var source = await _sources.FindBySlug("mangadex", token);
+		if (source is null)
+		{
+			_logger.LogError("MangaDex source not found");
+			return;
+		}
+
+		var results = await _md.Index(source, token).ToArrayAsync(token);
+		foreach (var result in results)
+		{
+			_logger.LogInformation("Indexed manga: {Manga}", Serialize(result));
+		}
 	}
 
 	public override async Task<bool> Execute(TestOption options, CancellationToken token)

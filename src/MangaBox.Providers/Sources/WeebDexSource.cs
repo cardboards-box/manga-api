@@ -86,7 +86,7 @@ internal class WeebDexSource(
 			Id = id,
 			Provider = Provider,
 			HomePage = $"{HomeUrl}/title/{id}",
-			Cover = cover,
+			Cover = [cover],
 			Description = manga.Description ?? string.Empty,
 			AltTitles = [.. manga.AltTitles.SelectMany(t => t.Value).Distinct()],
 			Tags = [.. manga.Relationships.Tags.Select(t => t.Name)],

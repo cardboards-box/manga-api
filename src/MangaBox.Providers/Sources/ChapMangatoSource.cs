@@ -91,7 +91,7 @@ public class ChapmanganatoSource(
 			Id = id,
 			Provider = Provider,
 			HomePage = url,
-			Cover = doc.DocumentNode.SelectSingleNode("//div[@class=\"manga-info-pic\"]/img")?.GetAttributeValue("src", "") ?? "",
+			Cover = [doc.DocumentNode.SelectSingleNode("//div[@class=\"manga-info-pic\"]/img")?.GetAttributeValue("src", "") ?? ""],
 		};
 
 		FillDetails(manga, doc);

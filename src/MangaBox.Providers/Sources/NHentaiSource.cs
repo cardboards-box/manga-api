@@ -72,7 +72,7 @@ public class NhentaiSource : INhentaiSource, IRatedSource
 			Id = id,
 			Provider = Provider,
 			HomePage = url,
-			Cover = doc.Attribute("//div[@id='cover']/a/img", "src") ?? "",
+			Cover = [doc.Attribute("//div[@id='cover']/a/img", "src") ?? ""],
 			Tags = doc.DocumentNode
 					  .SelectNodes("//span[@class='tags']/a[contains(@href, '/tag')]/span[@class='name']")
 					  .Select(t => t.InnerText.Trim())
