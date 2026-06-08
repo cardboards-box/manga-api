@@ -40,10 +40,44 @@ public interface IMbPersonDbService
     /// </summary>
     /// <returns>All of the records</returns>
     Task<MbPerson[]> Get();
+
+	/// <summary>
+	/// Searches the mb_people table for records matching the search query, and returns a paginated result
+	/// </summary>
+	/// <param name="search">The search query</param>
+	/// <param name="page">The page number</param>
+	/// <param name="size">The number of records per page</param>
+	/// <param name="asc">Whether to sort in ascending order</param>
+	/// <returns>A paginated result of matching records</returns>
+	Task<PaginatedResult<MbPerson>> Search(string? search, int page, int size, bool asc);
 }
 
 internal class MbPersonDbService(
     IOrmService orm) : Orm<MbPerson>(orm), IMbPersonDbService
 {
+    public Task<PaginatedResult<MbPerson>> Search(string? search, int page, int size, bool asc)
+    {
+        const string QUERY = """
+            SELECT *
+            FROM mb_people
+            WHERE (
+                :search IS NULL OR
+                :search = '' OR
+                fts @@ plainto_tsquery('english', :search)
+            ) AND deleted_at IS NULL
+            ORDER BY name {0}
+            LIMIT :limit OFFSET :offset;
 
+            SELECT COUNT(*) 
+            FROM mb_people
+            WHERE (
+                :search IS NULL OR
+                :search = '' OR
+                fts @@ plainto_tsquery('english', :search)
+            ) AND deleted_at IS NULL;
+            """;
+
+        var query = string.Format(QUERY, asc ? "ASC" : "DESC");
+        return Paginate(query, new { search }, page, size);
+	}
 }

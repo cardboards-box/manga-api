@@ -10,3 +10,12 @@ CREATE TABLE IF NOT EXISTS mb_people (
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	deleted_at TIMESTAMP NULL
 );
+
+ALTER TABLE mb_people
+ADD COLUMN IF NOT EXISTS
+	fts tsvector GENERATED ALWAYS AS (
+		to_tsvector('english',
+			name || ' ' ||
+			CAST(id AS TEXT)
+		)
+	) STORED;

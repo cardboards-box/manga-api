@@ -24,7 +24,19 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 	/// </summary>
 	[JsonPropertyName("tagsEx")]
 	public Guid[] TagsEx { get; set; } = [];
-	
+
+	/// <summary>
+	/// Whether to match all tags (AND - <see langword="true"/>) or any tag (OR - <see langword="false"/>)
+	/// </summary>
+	[JsonPropertyName("tagsAnd")]
+	public bool TagsAnd { get; set; } = true;
+
+	/// <summary>
+	/// Whether to match all exclusion tags (AND - <see langword="true"/>) or any exclusion tag (OR - <see langword="false"/>) 
+	/// </summary>
+	[JsonPropertyName("tagsExAnd")]
+	public bool TagsExAnd { get; set; } = false;
+
 	/// <summary>
 	/// All of the sources to fetch manga from
 	/// </summary>
@@ -38,16 +50,28 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 	public Guid[] Lists { get; set; } = [];
 
 	/// <summary>
-	/// Whether to match all tags (AND - <see langword="true"/>) or any tag (OR - <see langword="false"/>)
+	/// All of the people to filter by (author, artist, etc.)
 	/// </summary>
-	[JsonPropertyName("tagsAnd")]
-	public bool TagsAnd { get; set; } = true;
+	[JsonPropertyName("people")]
+	public Guid[] People { get; set; } = [];
 
 	/// <summary>
-	/// Whether to match all exclusion tags (AND - <see langword="true"/>) or any exclusion tag (OR - <see langword="false"/>) 
+	/// All of the people to exclude from the search (author, artist, etc.)
 	/// </summary>
-	[JsonPropertyName("tagsExAnd")]
-	public bool TagsExAnd { get; set; } = false;
+	[JsonPropertyName("peopleEx")]
+	public Guid[] PeopleEx { get; set; } = [];
+
+	/// <summary>
+	/// Whether to match all people (AND - <see langword="true"/>) or any person (OR - <see langword="false"/>)
+	/// </summary>
+	[JsonPropertyName("peopleAnd")]
+	public bool PeopleAnd { get; set; } = true;
+
+	/// <summary>
+	/// Whether to match all exclusion people (AND - <see langword="true"/>) or any exclusion person (OR - <see langword="false"/>)
+	/// </summary>
+	[JsonPropertyName("peopleExAnd")]
+	public bool PeopleExAnd { get; set; } = false;
 
 	/// <summary>
 	/// The state of the manga in the user's library
@@ -157,8 +181,12 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 	AND EXISTS (
 		SELECT 1
 		FROM mb_manga_tags mt
-		WHERE mt.manga_id = m.id
-		  AND mt.tag_id = ANY( :tags )
+		JOIN mb_tags t ON t.id = mt.tag_id
+		WHERE 
+			mt.manga_id = m.id AND 
+			mt.tag_id = ANY( :tags ) AND
+			mt.deleted_at IS NULL AND 
+			t.deleted_at IS NULL
 	)
 """);
 				return;
@@ -170,7 +198,11 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 	AND m.id IN (
 		SELECT mt.manga_id
 		FROM mb_manga_tags mt
-		WHERE mt.tag_id = ANY( :tags )
+		JOIN mb_tags t ON t.id = mt.tag_id
+		WHERE 
+			mt.tag_id = ANY( :tags ) AND
+			mt.deleted_at IS NULL AND
+			t.deleted_at IS NULL
 		GROUP BY mt.manga_id
 		HAVING COUNT(DISTINCT mt.tag_id) = :tagCount
 	)
@@ -207,6 +239,84 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 """);
 		}
 
+		void HandlePeople(StringBuilder bob, DynamicParameters parameters)
+		{
+			if (People is not { Length: > 0 }) return;
+
+			parameters.Add("people", People.Distinct().ToArray());
+			if (!PeopleAnd)
+			{
+				bob.AppendLine("""
+				AND EXISTS (
+					SELECT 1
+					FROM mb_manga_relationships mr
+					JOIN mb_people pl ON pl.id = mr.person_id
+					WHERE 
+						mr.manga_id = m.id AND 
+						mr.person_id = ANY( :people ) AND 
+						mr.deleted_at IS NULL AND
+						pl.deleted_at IS NULL
+				)
+				""");
+				return;
+			}
+
+			parameters.Add("peopleCount", People.Length);
+			bob.AppendLine("""
+				AND m.id IN (
+					SELECT mr.manga_id
+					FROM mb_manga_relationships mr
+					JOIN mb_people pl ON pl.id = mr.person_id
+					WHERE 
+						mr.manga_id = m.id AND
+						mr.person_id = ANY( :people ) AND 
+						mr.deleted_at IS NULL AND
+						pl.deleted_at IS NULL
+					GROUP BY mr.manga_id
+					HAVING COUNT(DISTINCT mr.person_id) = :peopleCount
+				)
+				""");
+		}
+
+		void HandlePeopleEx(StringBuilder bob, DynamicParameters parameters)
+		{
+			if (PeopleEx is not { Length: > 0 }) return;
+
+			parameters.Add("peopleEx", PeopleEx.Distinct().ToArray());
+			if (!PeopleExAnd)
+			{
+				bob.AppendLine("""
+				AND NOT EXISTS (
+					SELECT 1
+					FROM mb_manga_relationships mr
+					JOIN mb_people pl ON pl.id = mr.person_id
+					WHERE 
+						mr.manga_id = m.id AND 
+						mr.person_id = ANY( :peopleEx ) AND 
+						mr.deleted_at IS NULL AND
+						pl.deleted_at IS NULL
+				)
+				""");
+				return;
+			}
+
+			parameters.Add("peopleCountEx", PeopleEx.Length);
+			bob.AppendLine("""
+				AND m.id NOT IN (
+					SELECT mr.manga_id
+					FROM mb_manga_relationships mr
+					JOIN mb_people pl ON pl.id = mr.person_id
+					WHERE 
+						mr.manga_id = m.id AND
+						mr.person_id = ANY( :peopleEx ) AND 
+						mr.deleted_at IS NULL AND
+						pl.deleted_at IS NULL
+					GROUP BY mr.manga_id
+					HAVING COUNT(DISTINCT mr.person_id) = :peopleCountEx
+				)
+				""");
+		}
+
 		void HandleStates(StringBuilder bob, DynamicParameters parameters)
 		{
 			if (States is not { Length: > 0 } || !ProfileId.HasValue)
@@ -235,7 +345,7 @@ public class MangaSearchFilter : SearchFilter<MangaOrderBy>
 			if (States.Contains(MangaState.Bookmarked))
 			{
 				conditions.Add($"""
-{(!StatesInclude ? "NOT " : "")}EXISTS (
+{ (!StatesInclude ? "NOT " : "")}EXISTS (
 			SELECT 1
 			FROM mb_chapter_progress cp
 			JOIN mb_chapters ch ON ch.id = cp.chapter_id
@@ -393,6 +503,8 @@ WHERE
 		HandleTags(bob, parameters);
 		HandleTagsEx(bob, parameters);
 		HandleStates(bob, parameters);
+		HandlePeople(bob, parameters);
+		HandlePeopleEx(bob, parameters);
 		bob.AppendLine($"""
 ;
 SELECT COUNT(*) FROM tmp_manga_results_{suffix};

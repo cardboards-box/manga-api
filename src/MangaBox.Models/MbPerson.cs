@@ -5,6 +5,7 @@
 /// </summary>
 [Table("mb_people")]
 [InterfaceOption(nameof(MbPerson))]
+[Searchable(nameof(Name), nameof(Id))]
 public class MbPerson : MbPersonBase { }
 
 /// <summary>
