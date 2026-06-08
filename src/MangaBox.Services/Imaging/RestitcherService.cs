@@ -83,6 +83,7 @@ internal class RestitcherService(
 			{
 				var imageSlices = slices.Slices
 					.OrderBy(t => t.Ordinal)
+					.Where(t => t.EndY - t.StartY > 0)
 					.Select((t, i) => new MbImageSlice
 					{
 						Image = t.ImageId,
@@ -130,6 +131,8 @@ internal class RestitcherService(
 		var path = GetTempPath(slice.Id);
 		try
 		{
+			slice.Slices = [..slice.Slices.Where(t => t.Stop - t.Start > 0)];
+
 			if (slice.Slices.Length == 0)
 				throw new Exception($"No slices found for slice {slice.Id}");
 
@@ -172,7 +175,7 @@ internal class RestitcherService(
 		catch (Exception ex)
 		{
 			_logger.LogError(ex, "Error occurred while processing restitch request for slice {SliceId}", slice.Id);
-			return new ImageResult($"Error occurred while processing restitch request for slice {slice.Id}", slice);
+			return new ImageResult($"Error occurred while processing restitch request for slice {slice.Id}: {ex.Message}", slice);
 		}
 		finally
 		{
