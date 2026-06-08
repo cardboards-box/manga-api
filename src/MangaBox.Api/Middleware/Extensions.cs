@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Diagnostics;
+﻿using Google.Api;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.OpenApi;
 using OpenTelemetry.Metrics;
 using System.Security.Claims;
@@ -126,13 +127,17 @@ internal static class Extensions
 
 		app.Use(async (ctx, next) =>
 		{
-			await next();
-
-			if (ctx.Response.StatusCode == StatusCodes.Status401Unauthorized && !ctx.Response.HasStarted)
+			ctx.Response.OnStarting(async () =>
 			{
-				ctx.Response.ContentType = Application.Json;
-				await ctx.Response.WriteAsJsonAsync(Boxed.Unauthorized());
-			}
+				//Remove response caching headers for non-successful responses to prevent caching of errors
+				if (ctx.Response.StatusCode != StatusCodes.Status200OK)
+				{
+					ctx.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+					ctx.Response.Headers.Pragma = "no-cache";
+				}
+			});
+
+			await next();
 		});
 
 		return app;
