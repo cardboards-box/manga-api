@@ -42,6 +42,13 @@ public interface IMbPersonDbService
     Task<MbPerson[]> Get();
 
 	/// <summary>
+	/// Gets all of the records from the mb_people table
+	/// </summary>
+	/// <param name="ids">The IDs of the records</param>
+	/// <returns>The records</returns>
+	Task<MbPerson[]> Get(Guid[] ids);
+
+	/// <summary>
 	/// Searches the mb_people table for records matching the search query, and returns a paginated result
 	/// </summary>
 	/// <param name="search">The search query</param>
@@ -55,7 +62,12 @@ public interface IMbPersonDbService
 internal class MbPersonDbService(
     IOrmService orm) : Orm<MbPerson>(orm), IMbPersonDbService
 {
-    public Task<PaginatedResult<MbPerson>> Search(string? search, int page, int size, bool asc)
+	public Task<MbPerson[]> Get(Guid[] ids)
+	{
+		return Get("SELECT * FROM mb_people WHERE id = ANY( :ids ) AND deleted_at IS NULL;", new { ids });
+	}
+
+	public Task<PaginatedResult<MbPerson>> Search(string? search, int page, int size, bool asc)
     {
         const string QUERY = """
             SELECT *
