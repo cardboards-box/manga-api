@@ -276,14 +276,14 @@ internal class ComixSource(
 			return null;
 
 		var url = AbsoluteUrl(href, HomeUrl)!;
-		var primaryText = Clean(primary?.InnerText) ?? string.Empty;
+		var primaryText = NodeText(primary) ?? string.Empty;
 		var chapterId = ParseChapterId(url);
 		var number = ParseChapterNumber(primaryText, url) ?? 0d;
 		var groupNode = node.SelectSingleNode(".//a[contains(@class,'mchap-row__group')]");
-		var group = Clean(groupNode?.InnerText);
+		var group = NodeText(groupNode);
 		var groupUrl = AbsoluteUrl(groupNode?.GetAttributeValue("href", null!), HomeUrl);
-		var likes = Clean(node.SelectSingleNode(".//*[contains(@class,'mchap-row__likes')]")?.InnerText);
-		var time = Clean(node.SelectSingleNode(".//*[contains(@class,'mchap-row__time')]")?.InnerText);
+		var likes = NodeText(node.SelectSingleNode(".//*[contains(@class,'mchap-row__likes')]"));
+		var time = NodeText(node.SelectSingleNode(".//*[contains(@class,'mchap-row__time')]"));
 
 		var attributes = new List<ImportAttribute>
 		{
@@ -505,6 +505,20 @@ internal class ComixSource(
 			return null;
 
 		return HtmlEntity.DeEntitize(value).Trim();
+	}
+
+	private static string? NodeText(HtmlNode? node)
+	{
+		if (node is null)
+			return null;
+
+		var parts = node
+			.Descendants()
+			.Where(x => x.NodeType == HtmlNodeType.Text)
+			.Select(x => HtmlEntity.DeEntitize(x.InnerText).Trim())
+			.Where(x => !string.IsNullOrWhiteSpace(x));
+
+		return Clean(string.Join(" ", parts));
 	}
 
 	private static void Add(List<ImportAttribute> attributes, string name, string? value)
