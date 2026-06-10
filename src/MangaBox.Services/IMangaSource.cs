@@ -108,13 +108,21 @@ public interface IIndexableMangaSource : IMangaSource
 public interface IPostProcessingSource : IMangaSource
 {
 	/// <summary>
+	/// The post processing to do on the downloaded file before it is decoded as an image.
+	/// </summary>
+	/// <param name="result">The download result for the image</param>
+	/// <param name="path">The path to the downloaded image file</param>
+	/// <param name="token">The cancellation token for the request</param>
+	Task PostProcessDownload(DownloadResult result, string path, CancellationToken token) => Task.CompletedTask;
+
+	/// <summary>
 	/// The post processing to do on the image
 	/// </summary>
 	/// <param name="result">The download result for the image</param>
 	/// <param name="image">The image to process</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The processed image or null if something went wrong</returns>
-	Task<Image?> PostProcessing(DownloadResult result, Image image, CancellationToken token);
+	Task<Image?> PostProcessing(DownloadResult result, Image? image, CancellationToken token);
 }
 
 /// <summary>

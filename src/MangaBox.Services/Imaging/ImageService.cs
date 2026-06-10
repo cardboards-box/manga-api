@@ -358,6 +358,9 @@ internal class ImageService(
 			if (!string.IsNullOrEmpty(error))
 				return await HandleError(error);
 
+			if (loader.Service is IPostProcessingSource pps)
+				await pps.PostProcessDownload(download, path, token);
+
 			//Get more image properties
 			image.ImageSize = written;
 			if (image.ImageWidth is null || image.ImageHeight is null ||

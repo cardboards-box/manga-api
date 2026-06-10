@@ -149,19 +149,46 @@ internal class ComixSource(
 
 	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 
-	public async Task<Image?> PostProcessing(DownloadResult result, Image image, CancellationToken token)
+	public async Task PostProcessDownload(DownloadResult result, string path, CancellationToken token)
 	{
+		if (result?.Response is null)
+			return;
+
+		var seed = HeaderValue(result.Response, ComixImageDecryptor.ENC_SEED_HEADER);
+		var length = HeaderValue(result.Response, ComixImageDecryptor.ENC_LEN_HEADER);
+
+		if (string.IsNullOrWhiteSpace(seed) || string.IsNullOrWhiteSpace(length))
+			return;
+
+		await ComixImageDecryptor.DecryptFilePrefixAsync(path, seed, length, token);
+	}
+
+	public async Task<Image?> PostProcessing(DownloadResult result, Image? image, CancellationToken token)
+	{
+		if (image is null) return image;
+
 		const string SCRAMBLE_SEED_HEADER = "X-Scramble-Seed";
 		const string SCRAMBLE_GRID_HEADER = "X-Scramble-Grid";
 		if (result?.Response is null) return null;
 
 		var headers = result.Response.Headers;
+		var encrypted = HeaderValue(result.Response, ComixImageDecryptor.ENC_SEED_HEADER) is not null &&
+			HeaderValue(result.Response, ComixImageDecryptor.ENC_LEN_HEADER) is not null;
 		var seed = headers.TryGetValues(SCRAMBLE_SEED_HEADER, out var seedValues) ? seedValues.FirstOrDefault() : null;
 		var grid = headers.TryGetValues(SCRAMBLE_GRID_HEADER, out var gridValues) ? gridValues.FirstOrDefault() : null;
 		if (string.IsNullOrWhiteSpace(seed) || string.IsNullOrWhiteSpace(grid))
-			return null;
+			return encrypted ? image : null;
 
 		return ImageUnscrambler.Unscramble((Image<Rgba32>) image, seed, grid);
+	}
+
+	private static string? HeaderValue(HttpResponseMessage response, string name)
+	{
+		return response.Headers.TryGetValues(name, out var values)
+			? values.FirstOrDefault()
+			: response.Content.Headers.TryGetValues(name, out values)
+				? values.FirstOrDefault()
+				: null;
 	}
 
 	#region Manga Page Parsing
@@ -765,6 +792,116 @@ internal class ComixSource(
 			.FirstOrDefault();
 	}
 	#endregion
+
+	/// <summary>
+	/// Decrypts Comix image responses that have an encoded byte prefix.
+	/// </summary>
+	public static class ComixImageDecryptor
+	{
+		public const string ENC_LEN_HEADER = "X-Enc-Len";
+		public const string ENC_SEED_HEADER = "X-Enc-Seed";
+
+		private const uint ENC_MULTIPLIER = 1000005u;
+		private const uint ENC_INCREMENT = 1234567891u;
+
+		public static async Task DecryptFilePrefixAsync(
+			string inputPath,
+			string outputPath,
+			string seedHeader,
+			string lengthHeader,
+			CancellationToken token = default)
+		{
+			var bytes = await File.ReadAllBytesAsync(inputPath, token);
+			DecryptPrefix(bytes, seedHeader, lengthHeader);
+			await File.WriteAllBytesAsync(outputPath, bytes, token);
+		}
+
+		public static async Task DecryptFilePrefixAsync(
+			string path,
+			string seedHeader,
+			string lengthHeader,
+			CancellationToken token = default)
+		{
+			var seed = ParseSeed(seedHeader);
+			var length = ParseLength(lengthHeader);
+
+			if (seed == 0 || length <= 0)
+				return;
+
+			await using var stream = new FileStream(
+				path,
+				FileMode.Open,
+				FileAccess.ReadWrite,
+				FileShare.None,
+				bufferSize: 8192,
+				options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+			var limit = (int)Math.Min(length, stream.Length);
+			if (limit <= 0)
+				return;
+
+			var bytes = new byte[limit];
+			var read = 0;
+			while (read < limit)
+			{
+				var count = await stream.ReadAsync(bytes.AsMemory(read, limit - read), token);
+				if (count <= 0)
+					break;
+
+				read += count;
+			}
+
+			DecryptPrefix(bytes.AsSpan(0, read), seed, read);
+
+			stream.Position = 0;
+			await stream.WriteAsync(bytes.AsMemory(0, read), token);
+			await stream.FlushAsync(token);
+		}
+
+		public static void DecryptPrefix(byte[] bytes, string seedHeader, string lengthHeader)
+		{
+			var seed = ParseSeed(seedHeader);
+			var length = ParseLength(lengthHeader);
+			DecryptPrefix(bytes, seed, length);
+		}
+
+		public static void DecryptPrefix(Span<byte> bytes, uint seed, int length)
+		{
+			var limit = Math.Min(bytes.Length, length);
+			var state = seed;
+
+			for (var i = 0; i < limit; i++)
+			{
+				state = unchecked((state * ENC_MULTIPLIER) + ENC_INCREMENT);
+				bytes[i] = (byte)(bytes[i] ^ (state >> 24));
+			}
+		}
+
+		public static uint ParseSeed(string? value)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				throw new ArgumentException("Missing X-Enc-Seed header.", nameof(value));
+
+			if (!uint.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var seed))
+				throw new FormatException($"Invalid X-Enc-Seed value: {value}");
+
+			return seed;
+		}
+
+		public static int ParseLength(string? value)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				throw new ArgumentException("Missing X-Enc-Len header.", nameof(value));
+
+			if (!int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var length))
+				throw new FormatException($"Invalid X-Enc-Len value: {value}");
+
+			if (length < 0)
+				throw new FormatException($"Invalid X-Enc-Len value: {value}");
+
+			return length;
+		}
+	}
 
 	/// <summary>
 	/// Unscrambles images that were scrambled using a seeded grid permutation.

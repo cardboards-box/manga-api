@@ -349,7 +349,7 @@ internal class TestVerb(
 
 	public async Task TestComixImage(CancellationToken token)
 	{
-		const string ID = "3e8e4430-76e3-4de5-8f90-37d7fa5fcadd";
+		const string ID = "5154fd49-4243-40e6-841a-ada41906c4ce";
 		using var image = await _image.Get(Guid.Parse(ID), token);
 		if (!string.IsNullOrEmpty(image.Error) || image.Stream is null)
 		{
