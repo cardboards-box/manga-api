@@ -609,15 +609,29 @@ internal class ComixSource(
 	#region Chapter Page Parsing
 	private ImportPage[] ParseChapterPages(HtmlDocument doc, string chapterUrl)
 	{
-		var pages = doc.DocumentNode
+		var domPages = doc.DocumentNode
 			.SelectNodes("//*[contains(concat(' ', normalize-space(@class), ' '), ' rpage-page ')][@data-page]")
 			?.Select(x => ParseReaderPage(x, chapterUrl))
 			.Where(x => x is not null)
-			.Cast<ImportPage>()
-			.OrderBy(GetOrdinal)
-			.ToArray() ?? [];
+			.Cast<ImportPage>() ?? [];
 
-		return pages;
+		var dataPages = ParseInitialDataPages(doc, chapterUrl);
+		var embeddedPages = ParseEmbeddedImagePages(doc, chapterUrl);
+
+		var pages = domPages
+			.Concat(dataPages)
+			.Concat(embeddedPages)
+			.Where(x => !string.IsNullOrWhiteSpace(x.Page))
+			.GroupBy(x => x.Page, StringComparer.OrdinalIgnoreCase)
+			.Select(x => x
+				.OrderBy(GetOrdinal)
+				.ThenByDescending(p => p.Width.HasValue && p.Height.HasValue)
+				.First())
+			.OrderBy(GetOrdinal)
+			.ThenBy(GetPageNumber)
+			.ToArray();
+
+		return ExpandLazyNumericPages(doc, pages);
 	}
 
 	private ImportPage? ParseReaderPage(HtmlNode pageNode, string chapterUrl)
@@ -654,7 +668,327 @@ internal class ComixSource(
 		if (string.IsNullOrWhiteSpace(pageUrl))
 			return null;
 
-		return new ImportPage(pageUrl, width, height);
+		var page = new ImportPage(pageUrl, width, height);
+		page.Headers.Add(new("ordinal", ordinal.Value.ToString(CultureInfo.InvariantCulture)));
+		return page;
+	}
+
+	private ImportPage[] ParseInitialDataPages(HtmlDocument doc, string chapterUrl)
+	{
+		var initialData = GetInitialData(doc.DocumentNode);
+		if (initialData is null)
+			return [];
+
+		return EnumerateArrays(initialData)
+			.Select(x => ParseJsonPageArray(x, chapterUrl))
+			.Where(x => x.Length > 0)
+			.OrderByDescending(x => x.Length)
+			.FirstOrDefault() ?? [];
+	}
+
+	private static IEnumerable<JsonArray> EnumerateArrays(JsonNode node)
+	{
+		if (node is JsonArray array)
+			yield return array;
+
+		if (node is JsonObject obj)
+		{
+			foreach (var item in obj)
+			{
+				if (item.Value is null)
+					continue;
+
+				foreach (var childArray in EnumerateArrays(item.Value))
+					yield return childArray;
+			}
+		}
+		else if (node is JsonArray children)
+		{
+			foreach (var item in children)
+			{
+				if (item is null)
+					continue;
+
+				foreach (var childArray in EnumerateArrays(item))
+					yield return childArray;
+			}
+		}
+	}
+
+	private static ImportPage[] ParseJsonPageArray(JsonArray array, string chapterUrl)
+	{
+		var pages = new List<ImportPage>();
+
+		for (var i = 0; i < array.Count; i++)
+		{
+			var page = ParseJsonPage(array[i], i + 1, chapterUrl);
+			if (page is not null)
+				pages.Add(page);
+		}
+
+		var distinct = pages
+			.GroupBy(x => x.Page, StringComparer.OrdinalIgnoreCase)
+			.Select(x => x.OrderBy(GetOrdinal).First())
+			.OrderBy(GetOrdinal)
+			.ToArray();
+
+		return distinct.Length >= 2
+			? distinct
+			: [];
+	}
+
+	private static ImportPage? ParseJsonPage(JsonNode? node, int fallbackOrdinal, string chapterUrl)
+	{
+		if (node is null)
+			return null;
+
+		var imageUrl = FindImageUrl(node);
+		if (string.IsNullOrWhiteSpace(imageUrl))
+			return null;
+
+		var pageUrl = AbsoluteUrl(UnescapeUrl(imageUrl), chapterUrl);
+		if (string.IsNullOrWhiteSpace(pageUrl) || !IsImageUrl(pageUrl))
+			return null;
+
+		var ordinal = FindIntValue(node, "page", "pageNumber", "number", "order", "ordinal", "index") ?? fallbackOrdinal;
+		var width = FindIntValue(node, "width", "w");
+		var height = FindIntValue(node, "height", "h");
+
+		var page = new ImportPage(pageUrl, width, height);
+		page.Headers.Add(new("ordinal", ordinal.ToString(CultureInfo.InvariantCulture)));
+		return page;
+	}
+
+	private static string? FindImageUrl(JsonNode node)
+	{
+		if (node is JsonValue)
+		{
+			var value = Text(node);
+			return IsImageUrl(value) ? value : null;
+		}
+
+		if (node is JsonObject obj)
+		{
+			foreach (var key in new[] { "url", "src", "source", "image", "imageUrl", "page", "file", "filename" })
+			{
+				if (obj.TryGetPropertyValue(key, out var value) && value is not null)
+				{
+					var image = FindImageUrl(value);
+					if (!string.IsNullOrWhiteSpace(image))
+						return image;
+				}
+			}
+
+			foreach (var item in obj)
+			{
+				if (item.Value is null)
+					continue;
+
+				var image = FindImageUrl(item.Value);
+				if (!string.IsNullOrWhiteSpace(image))
+					return image;
+			}
+		}
+		else if (node is JsonArray array)
+		{
+			foreach (var item in array)
+			{
+				if (item is null)
+					continue;
+
+				var image = FindImageUrl(item);
+				if (!string.IsNullOrWhiteSpace(image))
+					return image;
+			}
+		}
+
+		return null;
+	}
+
+	private static int? FindIntValue(JsonNode node, params string[] names)
+	{
+		if (node is JsonObject obj)
+		{
+			foreach (var name in names)
+			{
+				if (obj.TryGetPropertyValue(name, out var value))
+				{
+					var number = Int(value);
+					if (number is not null)
+						return number;
+				}
+			}
+
+			foreach (var item in obj)
+			{
+				if (item.Value is null)
+					continue;
+
+				var number = FindIntValue(item.Value, names);
+				if (number is not null)
+					return number;
+			}
+		}
+
+		return null;
+	}
+
+	private static ImportPage[] ParseEmbeddedImagePages(HtmlDocument doc, string chapterUrl)
+	{
+		var html = doc.DocumentNode.InnerHtml;
+		if (string.IsNullOrWhiteSpace(html))
+			return [];
+
+		var matches = Regex.Matches(
+			html,
+			@"(?<url>https?:\\?/\\?/(?:\\.|[^'""<>\s])+?\.(?:avif|webp|jpe?g|png)(?:\?(?:\\.|[^'""<>\s])*)?)",
+			RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+		var urls = matches
+			.Select(x => AbsoluteUrl(UnescapeUrl(x.Groups["url"].Value), chapterUrl))
+			.Where(x => !string.IsNullOrWhiteSpace(x) && IsImageUrl(x))
+			.Cast<string>()
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.GroupBy(ImageSeriesKey, StringComparer.OrdinalIgnoreCase)
+			.OrderByDescending(x => x.Count())
+			.FirstOrDefault();
+
+		if (urls is null || urls.Count() < 2)
+			return [];
+
+		var index = 1;
+		return [..urls
+			.Select(x =>
+			{
+				var page = new ImportPage(x);
+				page.Headers.Add(new("ordinal", (GetPageNumber(page) ?? index++).ToString(CultureInfo.InvariantCulture)));
+				return page;
+			})];
+	}
+
+	private static string UnescapeUrl(string url)
+	{
+		return url
+			.Replace("\\/", "/", StringComparison.Ordinal)
+			.Replace("\\u0026", "&", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool IsImageUrl(string? url)
+	{
+		if (string.IsNullOrWhiteSpace(url))
+			return false;
+
+		return Regex.IsMatch(
+			url,
+			@"\.(?:avif|webp|jpe?g|png)(?:[?#].*)?$",
+			RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+	}
+
+	private static string ImageSeriesKey(string url)
+	{
+		var numeric = TryParseNumericImageUrl(url);
+		if (numeric is not null)
+			return $"{numeric.Prefix}|{numeric.Extension}";
+
+		if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+		{
+			var path = uri.AbsolutePath;
+			var slash = path.LastIndexOf('/');
+			var directory = slash >= 0 ? path[..slash] : path;
+			var extension = Path.GetExtension(path);
+			return $"{uri.Host}|{directory}|{extension}";
+		}
+
+		var lastSlash = url.LastIndexOf('/');
+		return lastSlash >= 0 ? url[..lastSlash] : url;
+	}
+
+	private static ImportPage[] ExpandLazyNumericPages(HtmlDocument doc, ImportPage[] pages)
+	{
+		var pageCount = ParseReaderPageCount(doc);
+		if (pageCount is null || pageCount <= pages.Length)
+			return pages;
+
+		var known = pages
+			.Select(x => (Page: x, Numeric: TryParseNumericImageUrl(x.Page)))
+			.Where(x => x.Numeric is not null)
+			.Select(x => (x.Page, Numeric: x.Numeric!))
+			.GroupBy(x => $"{x.Numeric.Prefix}|{x.Numeric.Extension}|{x.Numeric.Query}", StringComparer.OrdinalIgnoreCase)
+			.OrderByDescending(x => x.Count())
+			.FirstOrDefault();
+
+		if (known is null || known.Count() == 0)
+			return pages;
+
+		var template = known
+			.OrderBy(x => x.Numeric.PageNumber)
+			.First()
+			.Numeric;
+
+		var output = pages
+			.GroupBy(x => GetOrdinal(x))
+			.ToDictionary(x => x.Key, x => x.First());
+
+		for (var pageNumber = 1; pageNumber <= pageCount; pageNumber++)
+		{
+			if (output.ContainsKey(pageNumber))
+				continue;
+
+			var padded = template.Padding > 0
+				? pageNumber.ToString($"D{template.Padding}", CultureInfo.InvariantCulture)
+				: pageNumber.ToString(CultureInfo.InvariantCulture);
+
+			var page = new ImportPage($"{template.Prefix}{padded}{template.Extension}{template.Query}");
+			page.Headers.Add(new("ordinal", pageNumber.ToString(CultureInfo.InvariantCulture)));
+			output[pageNumber] = page;
+		}
+
+		return [..output
+			.OrderBy(x => x.Key)
+			.Select(x => x.Value)];
+	}
+
+	private static int? ParseReaderPageCount(HtmlDocument doc)
+	{
+		var progressCount = doc.DocumentNode
+			.SelectNodes("//*[contains(concat(' ', normalize-space(@class), ' '), ' rpage-progress__seg ')]")
+			?.Select(x =>
+				ParsePageNumber(x.GetAttributeValue("title", null!)) ??
+				ParsePageNumber(x.GetAttributeValue("aria-label", null!)))
+			.Where(x => x is not null)
+			.Cast<int>()
+			.DefaultIfEmpty(0)
+			.Max();
+
+		var slideCount = doc.DocumentNode
+			.SelectNodes("//*[contains(concat(' ', normalize-space(@class), ' '), ' rpage-slide ')]")
+			?.Count;
+
+		var count = progressCount is > 0
+			? progressCount.Value
+			: slideCount ?? 0;
+
+		return count switch
+		{
+			> 0 => count,
+			_ => null
+		};
+	}
+
+	private static int? ParsePageNumber(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+			return null;
+
+		var match = Regex.Match(
+			value,
+			@"\bpage\s+(?<page>\d+)\b",
+			RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+		return match.Success &&
+			int.TryParse(match.Groups["page"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var page)
+				? page
+				: null;
 	}
 
 	private static string? GuessLazyPageUrl(HtmlNode pageNode, int pageNumber, string chapterUrl)
@@ -720,6 +1054,11 @@ internal class ComixSource(
 			Padding: padding,
 			Extension: match.Groups["ext"].Value,
 			Query: match.Groups["query"].Success ? match.Groups["query"].Value : string.Empty);
+	}
+
+	private static int? GetPageNumber(ImportPage page)
+	{
+		return TryParseNumericImageUrl(page.Page)?.PageNumber;
 	}
 
 	private static (int? width, int? height) ParseAspectRatio(string? style)
