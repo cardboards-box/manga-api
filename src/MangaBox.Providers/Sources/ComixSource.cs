@@ -642,11 +642,14 @@ internal class ComixSource(
 
 		var imageNode = pageNode.SelectSingleNode(".//img[contains(concat(' ', normalize-space(@class), ' '), ' rpage-page__img ')]");
 
-		var src =
-			imageNode?.GetAttributeValue("src", null!) ??
-			imageNode?.GetAttributeValue("data-src", null!) ??
-			BestSrcSetUrl(imageNode?.GetAttributeValue("srcset", null!)) ??
-			BestSrcSetUrl(imageNode?.GetAttributeValue("data-srcset", null!));
+		var pageUrl = BestImageUrl(
+			[
+				imageNode?.GetAttributeValue("src", null!),
+				imageNode?.GetAttributeValue("data-src", null!),
+				BestSrcSetUrl(imageNode?.GetAttributeValue("srcset", null!)),
+				BestSrcSetUrl(imageNode?.GetAttributeValue("data-srcset", null!))
+			],
+			chapterUrl);
 
 		var width = IntAttr(imageNode, "width");
 		var height = IntAttr(imageNode, "height");
@@ -657,8 +660,6 @@ internal class ComixSource(
 			width ??= dimensions.width;
 			height ??= dimensions.height;
 		}
-
-		var pageUrl = AbsoluteUrl(src, chapterUrl);
 
 		if (string.IsNullOrWhiteSpace(pageUrl))
 		{
@@ -871,6 +872,30 @@ internal class ComixSource(
 		return url
 			.Replace("\\/", "/", StringComparison.Ordinal)
 			.Replace("\\u0026", "&", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static string? BestImageUrl(IEnumerable<string?> urls, string baseUrl)
+	{
+		foreach (var url in urls)
+		{
+			if (IsUnsupportedImageSource(url))
+				continue;
+
+			var absoluteUrl = AbsoluteUrl(UnescapeUrl(url!), baseUrl);
+			if (IsImageUrl(absoluteUrl))
+				return absoluteUrl;
+		}
+
+		return null;
+	}
+
+	private static bool IsUnsupportedImageSource(string? url)
+	{
+		if (string.IsNullOrWhiteSpace(url))
+			return true;
+
+		return url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase) ||
+			url.StartsWith("data:", StringComparison.OrdinalIgnoreCase);
 	}
 
 	private static bool IsImageUrl(string? url)
