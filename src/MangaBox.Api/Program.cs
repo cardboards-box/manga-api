@@ -46,7 +46,7 @@ await pub.Init();
 logger.LogInformation("Finished starting publish queues. Starting web server...");
 
 app.RegisterBoxing();
-app.AddScheduledTasks();
+await app.AddScheduledTasks();
 
 if (app.Environment.IsDevelopment() ||
 	builder.Configuration[Constants.APPLICATION_NAME + ":EnableSwagger"]?.ToLower() == "true")

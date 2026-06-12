@@ -56,6 +56,21 @@ public interface IMangaLoaderService
 	/// </summary>
 	/// <param name="token">The cancellation token for the request</param>
 	Task RunIndex(CancellationToken token);
+
+	/// <summary>
+	/// Runs the <see cref="IIndexableMangaSource.Index(LoaderSource, CancellationToken)"/> function for a specific source
+	/// </summary>
+	/// <param name="source">The source to run the indexer for</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>A task representing the asynchronous operation</returns>
+	Task RunIndexer(LoaderSource source, CancellationToken token);
+
+	/// <summary>
+	/// Gets all of the indexable sources and their index frequencies
+	/// </summary>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>An array of tuples containing the indexable source, its index frequency, and its name</returns>
+	Task<(LoaderSource, TimeSpan, string)[]> GetIndexableSources(CancellationToken token);
 }
 
 internal class MangaLoaderService(
@@ -278,11 +293,27 @@ internal class MangaLoaderService(
 			if (source.Service is not IIndexableMangaSource indexable)
 				return;
 
-			await foreach (var manga in indexable.Index(source, ct))
-			{
-				ApplySourceChanges(source.Service, manga);
-				await Load(manga, source.Info.Id, null, null);
-			}
+			await RunIndexer(source, ct);
 		});
+	}
+
+	public async Task RunIndexer(LoaderSource source, CancellationToken token)
+	{
+		var indexable = source.Service as IIndexableMangaSource
+			?? throw new InvalidOperationException($"{source.GetType().Name} must be indexable to run this task.");
+
+		await foreach (var manga in indexable.Index(source, token))
+		{
+			ApplySourceChanges(source.Service, manga);
+			await Load(manga, source.Info.Id, null, null);
+		}
+	}
+
+	public async Task<(LoaderSource, TimeSpan, string)[]> GetIndexableSources(CancellationToken token)
+	{
+		return await _sources.All(token)
+			.Where(t => t.Service is IIndexableMangaSource srv && srv.IndexEnabled)
+			.Select(t => (t, (t.Service as IIndexableMangaSource)!.IndexFrequency, t.Service.GetType().Name))
+			.ToArrayAsync(token);
 	}
 }

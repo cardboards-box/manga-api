@@ -18,13 +18,13 @@ public static class PolyfillExtensions
 		{"Sec-Fetch-User", "?1"}
 	};
 
-	public static RateLimiter DefaultRateLimiter()  => new TokenBucketRateLimiter(new()
+	public static RateLimiter DefaultRateLimiter(int limit = 15, int seconds = 5)  => new TokenBucketRateLimiter(new()
 	{
-		TokenLimit = 15,
-		TokensPerPeriod = 15,
+		TokenLimit = limit,
+		TokensPerPeriod = limit,
 		QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
 		QueueLimit = int.MaxValue,
-		ReplenishmentPeriod = TimeSpan.FromSeconds(5),
+		ReplenishmentPeriod = TimeSpan.FromSeconds(seconds),
 		AutoReplenishment = true
 	});
 

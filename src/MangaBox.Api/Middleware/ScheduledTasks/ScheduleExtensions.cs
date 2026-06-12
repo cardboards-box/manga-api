@@ -15,7 +15,6 @@ public static class ScheduleExtensions
 		return services
 			.AddScheduler()
 			.AddTransient<LogCleanup>()
-			.AddTransient<IndexManga>()
 			.AddTransient<MangaRefresh>()
 			.AddTransient<BadChapterDelete>()
 			.AddTransient<FetchMissingPages>()
@@ -28,8 +27,11 @@ public static class ScheduleExtensions
 	/// </summary>
 	/// <param name="app">The web applciation to add the scheduled tasks to</param>
 	/// <returns>The updated web application</returns>
-	public static WebApplication AddScheduledTasks(this WebApplication app)
+	public static async Task AddScheduledTasks(this WebApplication app)
 	{
+		var loader = app.Services.GetRequiredService<IMangaLoaderService>();
+		var indexables = await loader.GetIndexableSources(default);
+
 		app.Services.UseScheduler(schedule =>
 		{
 			schedule.Schedule<BadChapterDelete>()
@@ -63,13 +65,16 @@ public static class ScheduleExtensions
 				.EveryThirtySeconds()
 				.PreventOverlapping(nameof(IndexMissingImages));
 
-			schedule.OnWorker(nameof(IndexManga))
-				.Schedule<IndexManga>()
-				.EveryThirtySeconds()
-				.PreventOverlapping(nameof(IndexManga));
-		}).LogScheduledTaskProgress();
+			foreach (var (source, frequency, name) in indexables)
+			{
+				var fullName = $"{nameof(IndexManga)}-{name}";
+				schedule.OnWorker(fullName)
+					.ScheduleWithParams<IndexManga>(source)
+					.EverySeconds((int)frequency.TotalSeconds)
+					.PreventOverlapping(fullName);
+			}
 
-		return app;
+		}).LogScheduledTaskProgress();
 	}
 
 }

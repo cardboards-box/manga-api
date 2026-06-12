@@ -94,6 +94,16 @@ public interface IMangaUrlSource : IMangaSource
 public interface IIndexableMangaSource : IMangaSource
 {
 	/// <summary>
+	/// The frequency at which to run the indexer (minimum is 5 seconds)
+	/// </summary>
+	TimeSpan IndexFrequency { get; }
+
+	/// <summary>
+	/// Whether or not the indexer is enabled.
+	/// </summary>
+	bool IndexEnabled { get; }
+
+	/// <summary>
 	/// Triggers the indexing process for the source
 	/// </summary>
 	/// <param name="source">The source being indexed</param>

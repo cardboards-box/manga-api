@@ -31,6 +31,9 @@ public class MangaDexSource(
 	public Dictionary<string, string>? Headers => null;
 	public string? UserAgent => "manga-box";
 
+	public TimeSpan IndexFrequency => TimeSpan.FromSeconds(30);
+	public bool IndexEnabled => true;
+
 	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var pages = await _mangadex.Pages(chapterId);

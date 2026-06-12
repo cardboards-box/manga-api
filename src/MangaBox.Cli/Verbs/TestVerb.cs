@@ -129,8 +129,24 @@ internal class TestVerb(
 
 	public Task TestNhentaiNet(CancellationToken token)
 	{
-		const string URL = "https://nhentai.net/g/655847/";
-		return TestSource(_nhentaiNet, URL, false, token);
+		const string URL = "https://nhentai.net/g/655800/";
+		return TestSource(_nhentaiNet, URL, true, token);
+	}
+
+	public async Task TestNhentaiNetSearch(CancellationToken token)
+	{
+		NhentaiNetQuery[] query =
+		[
+			new("artist", "yokoya manjirou"),
+			new("tag", "yaoi", true),
+			new("language", "english")
+		];
+		var str = string.Join(" ", query.Select(t => t.ToString()));
+		var results = await _nhentaiNet.Search(query, 1, token);
+		_logger.LogInformation("NHentai.net search results for {Query}: {Results}", str, Serialize(results));
+
+		if (results.Length == 0)
+			_logger.LogWarning("No NHentai.net search results found for query: {Query}", str);
 	}
 
 	public Task TestComix(CancellationToken token)

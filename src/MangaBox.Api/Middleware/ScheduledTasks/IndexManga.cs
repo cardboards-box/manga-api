@@ -5,7 +5,8 @@
 /// </summary>
 public class IndexManga(
 	IMangaLoaderService _loader,
-	ILogger<IndexManga> _logger) : ICancellableInvocable, IInvocable
+	ILogger<IndexManga> _logger,
+	LoaderSource _source) : ICancellableInvocable, IInvocable
 {
 	/// <inheritdoc />
 	public CancellationToken CancellationToken { get; set; } = CancellationToken.None;
@@ -13,13 +14,16 @@ public class IndexManga(
 	/// <inheritdoc />
 	public async Task Invoke()
 	{
+		var name = _source.Service.GetType().Name;
 		try
 		{
-			await _loader.RunIndex(CancellationToken);
+			_logger.LogDebug("[Index Manga] Starting manga indexing for {Source}", name);
+			await _loader.RunIndexer(_source, CancellationToken);
+			_logger.LogDebug("[Index Manga] Finished manga indexing for {Source}", name);
 		}
 		catch (Exception ex)
 		{
-			_logger.LogError(ex, "[Index Manga] Error while indexing manga");
+			_logger.LogError(ex, "[Index Manga] Error while indexing for {Source}", name);
 		}
 	}
 }
