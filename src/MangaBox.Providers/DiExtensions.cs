@@ -31,12 +31,16 @@ public static class DiExtensions
 			.AddSource<IMangakakalotComSource, MangakakalotComSource>()
 			.AddSource<IMangakakalotComAltSource, MangakakalotComAltSource>()
 			.AddSource<IMangaClashSource, MangaClashSource>()
+			.AddSource<IMangaFireSource, MangaFireSource>()
+			.AddSource<IMangaReadSource, MangaReadSource>()
 			.AddSource<INhentaiSource, NhentaiSource>()
+			.AddSource<INhentaiNetSource, NhentaiNetSource>()
 			.AddSource<IKappaBeastSource, KappaBeastSource>()
 			.AddSource<IMangaKatanaSource, MangaKatanaSource>()
 			.AddSource<IDarkScansSource, DarkScansSource>()
 			.AddSource<IChapmanganatoSource, ChapmanganatoSource>()
 			.AddSource<ILikeMangaSource, LikeMangaSource>()
+			.AddSource<ILilyMangaSource, LilyMangaSource>()
 			.AddSource<IHyakuroSource, HyakuroSource>();
 	}
 }

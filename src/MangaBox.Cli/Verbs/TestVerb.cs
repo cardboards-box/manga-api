@@ -23,6 +23,10 @@ internal class TestVerb(
 	ISourceService _sources,
 	IHyakuroSource _hyakuro,
 	IKappaBeastSource _kappa,
+	ILilyMangaSource _lily,
+	IMangaFireSource _mangaFire,
+	IMangaReadSource _mangaRead,
+	INhentaiNetSource _nhentaiNet,
 	IFlareImageService _flare,
 	IMangaLoaderService _loader,
 	IRestitcherService _restitch,
@@ -103,6 +107,30 @@ internal class TestVerb(
 	{
 		const string URL = "https://hyakuro.net/manga/boku-wa-kimitachi-wo-shihai-suru";
 		return TestSource(_hyakuro, URL, false, token);
+	}
+
+	public Task TestLilyManga(CancellationToken token)
+	{
+		const string URL = "https://lilymanga.net/gl/shino-to-ren/";
+		return TestSource(_lily, URL, false, token);
+	}
+
+	public Task TestMangaRead(CancellationToken token)
+	{
+		const string URL = "https://www.mangaread.org/manga/martial-peak/";
+		return TestSource(_mangaRead, URL, false, token);
+	}
+
+	public Task TestMangaFire(CancellationToken token)
+	{
+		const string URL = "https://mangafire.to/manga/koushaku-ke-no-aisare-nise-youjo.82nov";
+		return TestSource(_mangaFire, URL, false, token);
+	}
+
+	public Task TestNhentaiNet(CancellationToken token)
+	{
+		const string URL = "https://nhentai.net/g/655847/";
+		return TestSource(_nhentaiNet, URL, false, token);
 	}
 
 	public Task TestComix(CancellationToken token)
