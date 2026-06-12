@@ -45,7 +45,7 @@ public class NhentaiNetSource : INhentaiNetSource, IRatedSource
 		_api.DisableMedia = true;
 	}
 
-	public bool UseFlareImages => true;
+	public bool UseFlareImages => false;
 
 	public string HomeUrl => "https://nhentai.net/";
 
@@ -61,7 +61,7 @@ public class NhentaiNetSource : INhentaiNetSource, IRatedSource
 
 	public TimeSpan IndexFrequency => TimeSpan.FromMinutes(5);
 
-	public bool IndexEnabled => true;
+	public bool IndexEnabled => false;
 
 	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
 
