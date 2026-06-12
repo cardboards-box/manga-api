@@ -122,4 +122,58 @@ public class ImageController(
 		
 		return await _indexer.Index(guid, true, token);
 	});
+
+	/// <summary>
+	/// Cache busts an image by its ID
+	/// </summary>
+	/// <param name="id">The ID of the image</param>
+	/// <param name="token">The cancellation token</param>
+	/// <returns>The result of the request</returns>
+	[HttpGet, Route("image/{id}/bust")]
+	[ProducesBox, ProducesError(400), ProducesError(404), ProducesError(401)]
+	public Task<IActionResult> Bust([FromRoute] string id, CancellationToken token) => Box(async () =>
+	{
+		if (!this.IsAdmin())
+			return Boxed.Unauthorized("User is not authenticated.");
+		if (!Guid.TryParse(id, out var guid))
+			return Boxed.Bad($"Invalid image ID: {id}");
+
+		return await _image.Bust(guid, token);
+	});
+
+	/// <summary>
+	/// Cache busts multiple images by their IDs
+	/// </summary>
+	/// <param name="ids">The IDs of the images</param>
+	/// <param name="token">The cancellation token</param>
+	/// <returns>The result of the request</returns>
+	[HttpPost, Route("image/bust")]
+	[ProducesBox, ProducesError(400), ProducesError(404), ProducesError(401)]
+	public Task<IActionResult> Bust([FromBody] string[] ids, CancellationToken token) => Box(async () =>
+	{
+		var guids = ids
+			.Select(t => Guid.TryParse(t, out var id) ? (Guid?)id : null)
+			.Where(t => t.HasValue)
+			.Select(t => t!.Value)
+			.Distinct();
+
+		var opts = new ParallelOptions
+		{
+			CancellationToken = token,
+			MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 5)
+		};
+		var failed = 0;
+		await Parallel.ForEachAsync(guids, opts, async (id, ct) =>
+		{
+			var result = await _image.Bust(id, ct);
+			if (result.Success) return;
+
+			Interlocked.Increment(ref failed);
+		});
+
+		if (failed > 0)
+			return Boxed.Exception($"{failed} images failed to bust cache.");
+
+		return Boxed.Ok();
+	});
 }

@@ -21,6 +21,22 @@ public interface IImageService
 	TimeSpan ErrorWaitPeriod { get; }
 
 	/// <summary>
+	/// Clears the cache for the given image
+	/// </summary>
+	/// <param name="id">The ID of the image to clear from the cache</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The result of the cache clear operation</returns>
+	Task<Boxed> Bust(Guid id, CancellationToken token);
+
+	/// <summary>
+	/// Clears the cache for the given image
+	/// </summary>
+	/// <param name="image">The image to clear from the cache</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The result of the cache clear operation</returns>
+	Task<Boxed> Bust(MangaBoxType<MbImage> image, CancellationToken token);
+
+	/// <summary>
 	/// Get the image by it's ID
 	/// </summary>
 	/// <param name="id">The ID of the image</param>
@@ -446,6 +462,30 @@ internal class ImageService(
 
 			return result;
 		}, null, token).OrderBy(t => t.Ordinal);
+	}
+
+	/// <inheritdoc />
+	public async Task<Boxed> Bust(Guid id, CancellationToken token)
+	{
+		var image = await _db.Image.FetchWithRelationships(id);
+		if (image is null) return Boxed.NotFound(nameof(MbImage), "Could not find that image");
+
+		return await Bust(image, token);
+	}
+
+	/// <inheritdoc />
+	public async Task<Boxed> Bust(MangaBoxType<MbImage> image, CancellationToken token)
+	{
+		//Check to see if the image exists and get it's various properties
+		var exists = ImageExists(image.Entity, out var path, out var zipPath, out var zipped, out var hash);
+		//If the image doesn't exist, ignore the bust request
+		if (!exists) return Boxed.Ok();
+		//Lock the cache so we aren't double writing to it
+		using var cacheLock = await _cacheLocks.LockAsync(path, token);
+		//Delete the cached files
+		TryDelete(path);
+		TryDelete(zipPath);
+		return Boxed.Ok();
 	}
 
 	/// <inheritdoc />
