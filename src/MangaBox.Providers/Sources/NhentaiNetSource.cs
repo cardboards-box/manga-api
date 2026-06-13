@@ -28,6 +28,7 @@ public sealed record NhentaiNetQuery(
 public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSource
 {
 	private const string DEFAULT_CHAPTER_TITLE = "Chapter 1";
+	private static readonly ConcurrentDictionary<string, RateLimiter> _limiters = new(StringComparer.InvariantCultureIgnoreCase);
 
 	private readonly FlareSolverInstance _api;
 	private readonly IConfiguration _config;
@@ -54,7 +55,7 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 
 	public override TimeSpan IndexFrequency => TimeSpan.FromMinutes(5);
 
-	public override bool IndexEnabled => false;
+	public override bool IndexEnabled => true;
 
 	public override bool UseProxiedImages => true;
 
@@ -125,11 +126,26 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 			: (true, id);
 	}
 
-	public override RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter(10, 20);
+	public override RateLimiter GetRateLimiter(string url)
+	{
+		var uri = new Uri(url).Host;
+		if (_limiters.TryGetValue(uri, out var limiter))
+			return limiter;
+
+		return _limiters[uri] = new TokenBucketRateLimiter(new()
+		{
+			TokenLimit = 10,
+			TokensPerPeriod = 10,
+			QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+			QueueLimit = int.MaxValue,
+			ReplenishmentPeriod = TimeSpan.FromSeconds(30),
+			AutoReplenishment = true
+		});
+	}
 
 	public override async IAsyncEnumerable<ImportManga> Index(LoaderSource source, [EnumeratorCancellation] CancellationToken token)
 	{
-		var searchLimiter = GetRateLimiter("search");
+		var searchLimiter = GetRateLimiter(SearchUrl("", 1));
 		var queries = IndexQueries();
 		if (queries.Length == 0)
 		{
@@ -140,36 +156,33 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var query in queries)
 		{
-			var page = 1;
-			while (!token.IsCancellationRequested)
+			if (token.IsCancellationRequested)
+				yield break;
+
+			var lease = await searchLimiter.AcquireAsync(1, token);
+			var results = await Search(query, 1, token);
+			lease.Dispose();
+			if (results.Length == 0)
+				break;
+
+			foreach (var result in results)
 			{
-				var lease = await searchLimiter.AcquireAsync(1, token);
-				var results = await Search(query, page, token);
+				token.ThrowIfCancellationRequested();
+
+				var id = IdFromValue(result.Url);
+				if (string.IsNullOrWhiteSpace(id) || !seen.Add(id))
+					continue;
+
+				lease = await GetRateLimiter(result.Url).AcquireAsync(1, token);
+				var manga = await Manga(id, token);
 				lease.Dispose();
-				if (results.Length == 0)
-					break;
-
-				foreach (var result in results)
+				if (manga is null)
 				{
-					token.ThrowIfCancellationRequested();
-
-					var id = IdFromValue(result.Url);
-					if (string.IsNullOrWhiteSpace(id) || !seen.Add(id))
-						continue;
-
-					lease = await GetRateLimiter(result.Url).AcquireAsync(1, token);
-					var manga = await Manga(id, token);
-					lease.Dispose();
-					if (manga is null)
-					{
-						_logger.LogWarning("Failed to fetch NHentai.net indexed manga: {Url}", result.Url);
-						continue;
-					}
-
-					yield return manga;
+					_logger.LogWarning("Failed to fetch NHentai.net indexed manga: {Url}", result.Url);
+					continue;
 				}
 
-				page++;
+				yield return manga;
 			}
 		}
 	}
@@ -677,7 +690,7 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 	private static string SearchUrl(string query, int page)
 	{
 		var encoded = Uri.EscapeDataString(query.Trim()).Replace("%20", "+", StringComparison.Ordinal);
-		return $"https://nhentai.net/search/?q={encoded}&page={page.ToString(CultureInfo.InvariantCulture)}";
+		return $"https://nhentai.net/search/?q={encoded}&page={page}&sort=date";
 	}
 
 	private static string? CleanTitle(string? value)

@@ -392,21 +392,40 @@ internal class TestVerb(
 		_logger.LogInformation("Successfully downloaded image with ID: {ID} >> restitcher-test.zip", id);
 	}
 
-	public async Task TestComixImage(CancellationToken token)
+	public async Task TestImages(CancellationToken token)
 	{
-		const string ID = "5154fd49-4243-40e6-841a-ada41906c4ce";
-		using var image = await _image.Get(Guid.Parse(ID), token);
-		if (!string.IsNullOrEmpty(image.Error) || image.Stream is null)
-		{
-			_logger.LogError("Error occurred while fetching image: {Error} >> {ID}", image.Error, ID);
-			return;
-		}
+		const string DIR = "test-images";
+		string[] IMAGE_IDS =
+		[
+			"0267d40e-d3b7-400b-b397-7113f0f9900c",
+			"486846ab-9801-48c5-98b1-187c1631fc5f"
+		];
 
-		var name = image.FileName ?? (ID + ".jpg");
-		using var io = File.Create(name);
-		await image.Stream.CopyToAsync(io, token); 
-		await io.FlushAsync(token);
-		_logger.LogInformation("Successfully downloaded image with ID: {ID} >> {Name}", ID, name);
+		if (!Directory.Exists(DIR))
+			Directory.CreateDirectory(DIR);
+
+		var opt = new ParallelOptions
+		{
+			CancellationToken = token,
+			MaxDegreeOfParallelism = 4
+		};
+
+		await Parallel.ForEachAsync(IMAGE_IDS, opt, async (id, token) =>
+		{
+			using var image = await _image.Get(Guid.Parse(id), token);
+			if (!string.IsNullOrEmpty(image.Error) || image.Stream is null)
+			{
+				_logger.LogError("Error occurred while fetching image: {Error} >> {ID}", image.Error, id);
+				return;
+			}
+
+			var name = image.FileName ?? (id + ".jpg");
+			var path = Path.Combine(DIR, name);
+			using var io = File.Create(path);
+			await image.Stream.CopyToAsync(io, token);
+			await io.FlushAsync(token);
+			_logger.LogInformation("Successfully downloaded image with ID: {ID} >> {Path}", id, path);
+		});
 	}
 
 	public Task TestKappaBeast(CancellationToken token)
@@ -439,7 +458,7 @@ internal class TestVerb(
 		var opts = new ParallelOptions
 		{
 			CancellationToken = token,
-			MaxDegreeOfParallelism = Environment.ProcessorCount,
+			MaxDegreeOfParallelism = 1,
 		};
 
 		await Parallel.ForEachAsync(Enumerable.Range(0, REQUESTS), opts, async (i, token) =>

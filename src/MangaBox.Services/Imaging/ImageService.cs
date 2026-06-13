@@ -124,6 +124,11 @@ internal class ImageService(
 	public bool UseCompression => !bool.TryParse(_config["Imaging:UseCompression"], out var c) || c;
 
 	/// <summary>
+	/// Whether or not to ignore previously failed images and attempt to redownload the image
+	/// </summary>
+	public bool IgnoreFailures => bool.TryParse(_config["Imaging:IgnoreFailures"], out var i) && i;
+
+	/// <summary>
 	/// How long to wait between requesting failed images
 	/// </summary>
 	public TimeSpan ErrorWaitPeriod => _waitPeriod ??= TimeSpan.FromSeconds(ErrorWaitPeriodSeconds);
@@ -326,7 +331,7 @@ internal class ImageService(
 			}
 
 			//If the image failed to fetch recently, don't try it again yet
-			if (image.LastFailedAt is not null && image.LastFailedAt.Value + ErrorWaitPeriod > DateTime.UtcNow)
+			if (!IgnoreFailures && image.LastFailedAt is not null && image.LastFailedAt.Value + ErrorWaitPeriod > DateTime.UtcNow)
 			{
 				var waitTime = (image.LastFailedAt.Value + ErrorWaitPeriod) - DateTime.UtcNow;
 				return new($"Image is in cooldown period. Retry after {waitTime.TotalSeconds:F0} seconds", image, OverrideOrdinal: overrideOrdinal);
