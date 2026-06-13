@@ -453,7 +453,7 @@ internal class TestVerb(
 	public async Task TestProxies(CancellationToken token)
 	{
 		const string URL = "https://t2.nhentai.net/galleries/3975529/cover.webp.webp";
-		const int REQUESTS = 1;
+		const int REQUESTS = 10;
 		const string DIR = "proxy-tests";
 
 		if (!Directory.Exists(DIR))
@@ -467,19 +467,26 @@ internal class TestVerb(
 
 		await Parallel.ForEachAsync(Enumerable.Range(0, REQUESTS), opts, async (i, token) =>
 		{
-			using var result = await _proxied.Download(URL, null, token);
-			if (!string.IsNullOrEmpty(result.Error) || result.Stream is null)
+			try
 			{
-				_logger.LogError("Error occurred while fetching URL: {Error} >> {URL}", result.Error, URL);
-				return;
-			}
+				using var result = await _proxied.Download(URL, null, token);
+				if (!string.IsNullOrEmpty(result.Error) || result.Stream is null)
+				{
+					_logger.LogError("Error occurred while fetching URL: {Error} >> {URL}", result.Error, URL);
+					return;
+				}
 
-			var name = $"proxy-test-{i + 1}.{Path.GetExtension(URL)?.TrimStart('.') ?? "dat"}";
-			var path = Path.Combine(DIR, name);
-			using var io = File.Create(path);
-			await result.Stream.CopyToAsync(io, token);
-			await io.FlushAsync(token);
-			_logger.LogInformation("Response for request {RequestNumber}: {Path}", i + 1, path);
+				var name = $"proxy-test-{i + 1}.{Path.GetExtension(URL)?.TrimStart('.') ?? "dat"}";
+				var path = Path.Combine(DIR, name);
+				using var io = File.Create(path);
+				await result.Stream.CopyToAsync(io, token);
+				await io.FlushAsync(token);
+				_logger.LogInformation("Response for request {RequestNumber}: {Path}", i + 1, path);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error occurred during proxy test request {RequestNumber} for URL: {URL}", i + 1, URL);
+			}
 		});
 	}
 

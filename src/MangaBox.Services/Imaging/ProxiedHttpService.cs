@@ -138,6 +138,7 @@ internal class ProxiedHttpService(
 
 			await using var stream = await response.Content.ReadAsStreamAsync(token);
 			using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: token);
+			config.Normalize();
 			var hosts = NordVpnProxyHosts(doc.RootElement, config);
 			var endpoints = hosts
 				.Take(Math.Max(1, config.MaxServers))
@@ -154,8 +155,11 @@ internal class ProxiedHttpService(
 				.ToArray();
 
 			_logger.LogInformation(
-				"Loaded {Count} NordVPN HTTP proxy endpoints. Credential diagnostics: userLength={UserLength}, passwordLength={PasswordLength}, fingerprint={Fingerprint}",
+				"Loaded {Count} NordVPN HTTP proxy endpoints using {HostSource} hosts on {Scheme}:{Port}. Credential diagnostics: userLength={UserLength}, passwordLength={PasswordLength}, fingerprint={Fingerprint}",
 				endpoints.Length,
+				config.UseProxySslHosts ? "proxy_ssl" : "server",
+				config.Scheme,
+				config.Port,
 				config.Username?.Length ?? 0,
 				config.Password?.Length ?? 0,
 				CredentialFingerprint(config.Username, config.Password));
@@ -302,6 +306,12 @@ internal class ProxiedHttpService(
 		public double PeriodSeconds { get; set; } = 20;
 		public int TimeoutSeconds { get; set; } = 30;
 		public int MaxServers { get; set; } = 100;
+
+		public void Normalize()
+		{
+			if (Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) && Port == 89)
+				UseProxySslHosts = true;
+		}
 	}
 
 	/// <summary>
