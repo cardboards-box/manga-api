@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 
 namespace MangaBox.Providers.Sources;
 
+using Database;
 using Models.Types;
 using Utilities.Flare;
 
@@ -33,12 +34,15 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 	private readonly FlareSolverInstance _api;
 	private readonly IConfiguration _config;
 	private readonly ILogger<NhentaiNetSource> _logger;
+	private readonly IDbService _db;
 
 	public NhentaiNetSource(
+		IDbService db,
 		IFlareSolverService flare,
 		IConfiguration config,
 		ILogger<NhentaiNetSource> logger)
 	{
+		_db = db;
 		_logger = logger;
 		_config = config;
 		_api = flare.Limiter();
@@ -154,6 +158,7 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 		}
 
 		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		seen.UnionWith(await _db.Manga.Last30DaysOfIds(Provider));
 		foreach (var query in queries)
 		{
 			if (token.IsCancellationRequested)

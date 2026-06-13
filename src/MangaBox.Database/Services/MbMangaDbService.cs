@@ -131,6 +131,13 @@ public interface IMbMangaDbService
 	/// <param name="filter">The filter to apply</param>
 	/// <returns>The recommended manga</returns>
 	Task<MangaBoxType<MbManga>[]> RecommendedByProfile(Guid profileId, RecommendedFilter filter);
+
+    /// <summary>
+    /// Gets the IDs of the manga from the last 30 days for a given source
+    /// </summary>
+    /// <param name="slug">The slug of the mb_source</param>
+    /// <returns>The IDs of the manga from the last 30 days</returns>
+    Task<string[]> Last30DaysOfIds(string slug);
 }
 
 internal class MbMangaDbService(
@@ -664,5 +671,22 @@ WHERE
     id = ANY(:ids) AND 
     deleted_at IS NULL;";
         return Get(QUERY, new { ids });
+	}
+
+	public Task<string[]> Last30DaysOfIds(string slug)
+	{
+        const string QUERY = """
+            SELECT
+                DISTINCT
+                original_source_id
+            FROM mb_manga m
+            JOIN mb_sources s ON s.id = m.source_id
+            WHERE
+                m.deleted_at IS NULL AND
+                s.deleted_at IS NULL AND
+                s.slug = :slug AND
+                m.created_at >= NOW() - INTERVAL '30 days';
+            """;
+        return _sql.Get<string>(QUERY, new { slug });
 	}
 }
