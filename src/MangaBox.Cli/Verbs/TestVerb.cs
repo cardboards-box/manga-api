@@ -453,7 +453,7 @@ internal class TestVerb(
 	public async Task TestProxies(CancellationToken token)
 	{
 		const string URL = "https://t2.nhentai.net/galleries/3975529/cover.webp.webp";
-		const int REQUESTS = 10;
+		const int REQUESTS = 1;
 		const string DIR = "proxy-tests";
 
 		if (!Directory.Exists(DIR))
