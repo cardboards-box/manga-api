@@ -57,6 +57,9 @@ internal class ProxiedHttpService(
 				url,
 				endpoint.Url,
 				result.Error);
+
+			if (IsProxyAuthenticationError(result.Error))
+				return result;
 		}
 
 		return last ?? new([], url, headers, "All proxy downloads failed");
@@ -115,9 +118,16 @@ internal class ProxiedHttpService(
 			 error.Contains("response ended prematurely", StringComparison.OrdinalIgnoreCase));
 	}
 
+	private static bool IsProxyAuthenticationError(string? error)
+	{
+		return !string.IsNullOrWhiteSpace(error) &&
+			(error.Contains("407", StringComparison.OrdinalIgnoreCase) ||
+			 error.Contains("Proxy Authentication", StringComparison.OrdinalIgnoreCase));
+	}
+
 	private async Task<ProxyEndpoint[]> NordVpnEndpoints(CancellationToken token)
 	{
-		var config = _config.GetSection("Proxies:NordVPN").Get<NordVpnProxyConfig>();
+		var config = NordVpnConfig();
 		if (config is null || !config.Enabled)
 			return [];
 
@@ -170,6 +180,79 @@ internal class ProxiedHttpService(
 			_logger.LogWarning(ex, "Failed to load NordVPN HTTP proxy endpoints from {Url}", config.ServersUrl);
 			return [];
 		}
+	}
+
+	private NordVpnProxyConfig? NordVpnConfig()
+	{
+		var config = _config.GetSection("Proxies:NordVPN").Get<NordVpnProxyConfig>();
+		var source = "Proxies:NordVPN";
+
+		if (config is null)
+		{
+			config = new();
+			source = "defaults";
+		}
+
+		var username = FirstConfigValue(
+			"Proxies:NordVPN:Username",
+			"Proxies:Username",
+			"NordVPN:Username",
+			"NordVPN__Username",
+			"NORDVPN_USERNAME",
+			"NORDVPN_USER",
+			"NORD_USER");
+		var password = FirstConfigValue(
+			"Proxies:NordVPN:Password",
+			"Proxies:Password",
+			"NordVPN:Password",
+			"NordVPN__Password",
+			"NORDVPN_PASSWORD",
+			"NORDVPN_PASS",
+			"NORD_PASS");
+
+		if (username is not null || password is not null)
+		{
+			config.Username = username ?? config.Username;
+			config.Password = password ?? config.Password;
+			source = "named keys";
+		}
+
+		var legacy = LegacyNordVpnConfig();
+		if ((string.IsNullOrEmpty(config.Username) || string.IsNullOrEmpty(config.Password)) && legacy is not null)
+		{
+			config.Username ??= legacy.Username;
+			config.Password ??= legacy.Password;
+			config.RateLimits = legacy.RateLimits;
+			config.PeriodSeconds = legacy.PeriodSeconds;
+			source = "legacy Proxies array";
+		}
+
+		_logger.LogInformation("NordVPN proxy configuration loaded from {Source}.", source);
+		return config;
+	}
+
+	private string? FirstConfigValue(params string[] keys)
+	{
+		foreach (var key in keys)
+		{
+			var value = _config[key];
+			if (value is not null)
+				return value;
+		}
+
+		return null;
+	}
+
+	private ProxyConfig? LegacyNordVpnConfig()
+	{
+		var children = _config.GetSection("Proxies").GetChildren().ToArray();
+		if (children.Length == 0 || children.Any(x => !int.TryParse(x.Key, out _)))
+			return null;
+
+		return _config
+			.GetSection("Proxies")
+			.Get<ProxyConfig[]>()
+			?.FirstOrDefault(x => x.Name.Contains("Nord", StringComparison.OrdinalIgnoreCase));
 	}
 
 	private static string[] NordVpnProxyHosts(JsonElement root, NordVpnProxyConfig config)
