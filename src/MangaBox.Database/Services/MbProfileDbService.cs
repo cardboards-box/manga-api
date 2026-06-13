@@ -174,13 +174,14 @@ WHERE
 	public async Task<string[]> Providers()
 	{
 		const string QUERY = """
-            SELECT DISTINCT LOWER(provider)
+            SELECT 
+                DISTINCT 
+                LOWER(provider) as provider
             FROM mb_profiles
             WHERE
                 provider IS NOT NULL AND
                 provider <> '' AND
-                deleted_at IS NULL
-            ORDER BY provider;
+                deleted_at IS NULL;
             """;
 
 		using var con = await _sql.CreateConnection();
