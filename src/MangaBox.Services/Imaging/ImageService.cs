@@ -149,7 +149,15 @@ internal class ImageService(
 		else image.FailedReason = reason;
 
 		image.FailedCount += 1;
-		await _db.Image.Update(image);
+		try
+		{
+			await _db.Image.Update(image);
+		}
+		catch(Npgsql.PostgresException)
+		{
+			image.FailedReason = Convert.ToBase64String(image.FailedReason.GetBytes());
+			await _db.Image.Update(image);
+		}
 
 		if (image.FailedCount > FailuresBeforeDelete)
 			await _db.Image.Delete(image.Id);
