@@ -130,7 +130,7 @@ internal class TestVerb(
 
 	public Task TestNhentaiNet(CancellationToken token)
 	{
-		const string URL = "https://nhentai.net/g/655800/";
+		const string URL = "https://nhentai.net/g/653374/";
 		return TestSource(_nhentaiNet, URL, true, token);
 	}
 
@@ -452,8 +452,8 @@ internal class TestVerb(
 
 	public async Task TestProxies(CancellationToken token)
 	{
-		const string URL = "https://api.ipify.org/?format=json";
-		const int REQUESTS = 20;
+		const string URL = "https://t2.nhentai.net/galleries/3975529/cover.webp.webp";
+		const int REQUESTS = 1;
 
 		var opts = new ParallelOptions
 		{
