@@ -1,5 +1,4 @@
 using System.Threading.RateLimiting;
-using System.Net.Sockets;
 
 namespace MangaBox.Services.Imaging;
 
@@ -15,17 +14,13 @@ internal class ProxiedHttpService(
 	IConfiguration _config,
 	ILogger<ProxiedHttpService> _logger) : IProxiedHttpService
 {
-	private ProxyConfig[]? _proxies;
 	private ProxyEndpoint[]? _endpoints;
+	private readonly SemaphoreSlim _endpointLock = new(1, 1);
 	private int _index = -1;
-
-	public ProxyConfig[] Proxies => _proxies ??= _config.GetSection("Proxies").Get<ProxyConfig[]>() ?? [];
-
-	public ProxyEndpoint[] Endpoints => _endpoints ??= BuildEndpoints(Proxies);
 
 	public async Task<DownloadResult> Download(string url, Headers? headers, CancellationToken token)
 	{
-		var endpoints = Endpoints;
+		var endpoints = await Endpoints(token);
 		if (endpoints.Length == 0)
 		{
 			_logger.LogWarning("No proxies configured, falling back to direct download");
@@ -40,6 +35,22 @@ internal class ProxiedHttpService(
 		{
 			request.ClientFactory(_ => endpoint.CreateClient());
 		}, token);
+	}
+
+	private async Task<ProxyEndpoint[]> Endpoints(CancellationToken token)
+	{
+		if (_endpoints is not null)
+			return _endpoints;
+
+		await _endpointLock.WaitAsync(token);
+		try
+		{
+			return _endpoints ??= await NordVpnEndpoints(token);
+		}
+		finally
+		{
+			_endpointLock.Release();
+		}
 	}
 
 	private async Task<(ProxyEndpoint endpoint, RateLimitLease lease)> Acquire(ProxyEndpoint[] endpoints, CancellationToken token)
@@ -70,15 +81,114 @@ internal class ProxiedHttpService(
 		return next % length;
 	}
 
-	private static ProxyEndpoint[] BuildEndpoints(ProxyConfig[] configs)
+	private async Task<ProxyEndpoint[]> NordVpnEndpoints(CancellationToken token)
 	{
-		return [..configs
-			.Where(c => c.Urls is { Length: > 0 })
-			.SelectMany(c => c.Urls
-				.Where(u => !string.IsNullOrWhiteSpace(u))
-				.Select(u => ProxyEndpoint.Create(c, u)))
-			.Where(p => p is not null)
-			.Cast<ProxyEndpoint>()];
+		var config = _config.GetSection("Proxies:NordVPN").Get<NordVpnProxyConfig>();
+		if (config is null || !config.Enabled)
+			return [];
+
+		if (string.IsNullOrWhiteSpace(config.Username) || string.IsNullOrWhiteSpace(config.Password))
+		{
+			_logger.LogWarning("NordVPN proxies are enabled but Proxies:NordVPN:Username or Proxies:NordVPN:Password is missing.");
+			return [];
+		}
+
+		try
+		{
+			using var client = new HttpClient
+			{
+				Timeout = TimeSpan.FromSeconds(Math.Max(1, config.TimeoutSeconds))
+			};
+			using var response = await client.GetAsync(config.ServersUrl, token);
+			response.EnsureSuccessStatusCode();
+
+			await using var stream = await response.Content.ReadAsStreamAsync(token);
+			using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: token);
+			var hosts = NordVpnProxyHosts(doc.RootElement);
+			var endpoints = hosts
+				.Take(Math.Max(1, config.MaxServers))
+				.Select(host => ProxyEndpoint.Create(
+					new(
+						config.Name,
+						config.Username,
+						config.Password,
+						config.RateLimits,
+						config.PeriodSeconds),
+					$"{config.Scheme}://{host}:{config.Port}"))
+				.Where(x => x is not null)
+				.Cast<ProxyEndpoint>()
+				.ToArray();
+
+			_logger.LogInformation("Loaded {Count} NordVPN HTTP proxy endpoints.", endpoints.Length);
+			return endpoints;
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to load NordVPN HTTP proxy endpoints from {Url}", config.ServersUrl);
+			return [];
+		}
+	}
+
+	private static string[] NordVpnProxyHosts(JsonElement root)
+	{
+		if (root.ValueKind != JsonValueKind.Array)
+			return [];
+
+		var hosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var server in root.EnumerateArray())
+		{
+			if (!JsonString(server, "status").Equals("online", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			if (!server.TryGetProperty("technologies", out var technologies) ||
+				technologies.ValueKind != JsonValueKind.Array)
+				continue;
+
+			foreach (var technology in technologies.EnumerateArray())
+			{
+				if (!JsonString(technology, "identifier").Equals("proxy_ssl", StringComparison.OrdinalIgnoreCase) ||
+					!PivotIsOnline(technology))
+					continue;
+
+				var host = ProxyHost(technology);
+				if (!string.IsNullOrWhiteSpace(host))
+					hosts.Add(host);
+			}
+		}
+
+		return [..hosts.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)];
+	}
+
+	private static bool PivotIsOnline(JsonElement technology)
+	{
+		if (!technology.TryGetProperty("pivot", out var pivot) ||
+			pivot.ValueKind != JsonValueKind.Object)
+			return true;
+
+		return JsonString(pivot, "status").Equals("online", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static string? ProxyHost(JsonElement technology)
+	{
+		if (!technology.TryGetProperty("metadata", out var metadata) ||
+			metadata.ValueKind != JsonValueKind.Array)
+			return null;
+
+		foreach (var item in metadata.EnumerateArray())
+		{
+			if (JsonString(item, "name").Equals("proxy_hostname", StringComparison.OrdinalIgnoreCase))
+				return JsonString(item, "value");
+		}
+
+		return null;
+	}
+
+	private static string JsonString(JsonElement element, string property)
+	{
+		return element.TryGetProperty(property, out var value) &&
+			value.ValueKind == JsonValueKind.String
+				? value.GetString() ?? string.Empty
+				: string.Empty;
 	}
 
 	/// <summary>
@@ -87,16 +197,29 @@ internal class ProxiedHttpService(
 	/// <param name="Name">The name of the proxy provider</param>
 	/// <param name="Username">The username for the proxy</param>
 	/// <param name="Password">The password for the proxy</param>
-	/// <param name="Urls">The URLs of the proxy servers</param>
 	/// <param name="RateLimits">The rate limits to apply to each URL</param>
 	/// <param name="PeriodSeconds">The period in seconds for the rate limits</param>
 	public record class ProxyConfig(
 		[property: JsonPropertyName("name")] string Name,
 		[property: JsonPropertyName("username")] string? Username,
 		[property: JsonPropertyName("password")] string? Password,
-		[property: JsonPropertyName("urls")] string[] Urls,
 		[property: JsonPropertyName("rateLimits")] int RateLimits,
 		[property: JsonPropertyName("periodSeconds")] double PeriodSeconds);
+
+	public sealed class NordVpnProxyConfig
+	{
+		public bool Enabled { get; set; } = true;
+		public string Name { get; set; } = "NordVPN";
+		public string ServersUrl { get; set; } = "https://api.nordvpn.com/v1/servers";
+		public string Scheme { get; set; } = "https";
+		public int Port { get; set; } = 89;
+		public string? Username { get; set; }
+		public string? Password { get; set; }
+		public int RateLimits { get; set; } = 10;
+		public double PeriodSeconds { get; set; } = 20;
+		public int TimeoutSeconds { get; set; } = 30;
+		public int MaxServers { get; set; } = 100;
+	}
 
 	/// <summary>
 	/// Represents a single configured proxy endpoint
@@ -128,192 +251,63 @@ internal class ProxiedHttpService(
 				AutoReplenishment = true
 			});
 
-			var handler = uri.Scheme.Equals("socks5", StringComparison.OrdinalIgnoreCase)
-				? Socks5Handler(uri, config.Username, config.Password)
-				: ProxyHandler(uri, config.Username, config.Password);
+			var handler = ProxyHandler(
+				WithoutUserInfo(uri),
+				Credentials(uri, config.Username, config.Password));
 
-			return new(config.Name, url, handler, limiter);
+			return new(config.Name, Redact(uri), handler, limiter);
 		}
 
 		public HttpClient CreateClient() => new(Handler, false);
 
-		private static SocketsHttpHandler ProxyHandler(Uri uri, string? username, string? password)
+		private static SocketsHttpHandler ProxyHandler(Uri uri, NetworkCredential? credentials)
 		{
 			var proxy = new WebProxy(uri);
-			if (!string.IsNullOrWhiteSpace(username))
-				proxy.Credentials = new NetworkCredential(username, password);
+			if (credentials is not null)
+				proxy.Credentials = credentials;
 
 			return new()
 			{
 				Proxy = proxy,
 				UseProxy = true,
-				AutomaticDecompression = DecompressionMethods.All
-			};
-		}
-
-		private static SocketsHttpHandler Socks5Handler(Uri uri, string? username, string? password)
-		{
-			(string Username, string Password)? credentials = string.IsNullOrWhiteSpace(username)
-				? null
-				: (username!, password ?? string.Empty);
-
-			return new()
-			{
-				UseProxy = false,
 				AutomaticDecompression = DecompressionMethods.All,
-				ConnectCallback = async (context, token) =>
-				{
-					var client = new TcpClient();
-					await client.ConnectAsync(uri.Host, uri.Port, token);
-					var stream = client.GetStream();
-
-					try
-					{
-						await EstablishSocks5Tunnel(stream, context.DnsEndPoint, credentials, token);
-						return new DisposingStream(stream, client);
-					}
-					catch
-					{
-						await stream.DisposeAsync();
-						client.Dispose();
-						throw;
-					}
-				}
 			};
 		}
 
-		private static async Task EstablishSocks5Tunnel(
-			Stream stream,
-			DnsEndPoint destination,
-			(string Username, string Password)? credentials,
-			CancellationToken token)
+		private static NetworkCredential? Credentials(Uri uri, string? username, string? password)
 		{
-			var methods = credentials is null
-				? new byte[] { 0x05, 0x01, 0x00 }
-				: [0x05, 0x02, 0x00, 0x02];
+			if (!string.IsNullOrWhiteSpace(username))
+				return new(username, password);
 
-			await stream.WriteAsync(methods, token);
-			var response = await ReadExactly(stream, 2, token);
-			if (response[0] != 0x05)
-				throw new HttpRequestException("Invalid SOCKS5 greeting response.");
+			if (string.IsNullOrWhiteSpace(uri.UserInfo))
+				return null;
 
-			switch (response[1])
+			var parts = uri.UserInfo.Split(':', 2);
+			var user = Uri.UnescapeDataString(parts[0]);
+			var pass = parts.Length > 1
+				? Uri.UnescapeDataString(parts[1])
+				: string.Empty;
+
+			return string.IsNullOrWhiteSpace(user) ? null : new(user, pass);
+		}
+
+		private static Uri WithoutUserInfo(Uri uri)
+		{
+			if (string.IsNullOrWhiteSpace(uri.UserInfo))
+				return uri;
+
+			return new UriBuilder(uri)
 			{
-				case 0x00:
-					break;
-				case 0x02:
-					if (credentials is null)
-						throw new HttpRequestException("SOCKS5 proxy requires username/password authentication.");
-					await AuthenticateSocks5(stream, credentials.Value, token);
-					break;
-				case 0xFF:
-					throw new HttpRequestException("SOCKS5 proxy did not accept any supported authentication method.");
-				default:
-					throw new HttpRequestException($"SOCKS5 proxy selected unsupported authentication method: {response[1]}.");
-			}
-
-			var host = Encoding.ASCII.GetBytes(destination.Host);
-			if (host.Length > byte.MaxValue)
-				throw new HttpRequestException("SOCKS5 destination host is too long.");
-
-			var request = new byte[7 + host.Length];
-			request[0] = 0x05;
-			request[1] = 0x01;
-			request[2] = 0x00;
-			request[3] = 0x03;
-			request[4] = (byte)host.Length;
-			host.CopyTo(request.AsSpan(5));
-			request[^2] = (byte)(destination.Port >> 8);
-			request[^1] = (byte)(destination.Port & 0xFF);
-			await stream.WriteAsync(request, token);
-
-			response = await ReadExactly(stream, 4, token);
-			if (response[0] != 0x05)
-				throw new HttpRequestException("Invalid SOCKS5 connect response.");
-			if (response[1] != 0x00)
-				throw new HttpRequestException($"SOCKS5 proxy failed to connect to destination. Reply code: {response[1]}.");
-
-			var addressLength = response[3] switch
-			{
-				0x01 => 4,
-				0x03 => (await ReadExactly(stream, 1, token))[0],
-				0x04 => 16,
-				_ => throw new HttpRequestException($"SOCKS5 proxy returned unsupported address type: {response[3]}.")
-			};
-
-			await ReadExactly(stream, addressLength + 2, token);
+				UserName = string.Empty,
+				Password = string.Empty
+			}.Uri;
 		}
 
-		private static async Task AuthenticateSocks5(
-			Stream stream,
-			(string Username, string Password) credentials,
-			CancellationToken token)
+		private static string Redact(Uri uri)
 		{
-			var username = Encoding.UTF8.GetBytes(credentials.Username);
-			var password = Encoding.UTF8.GetBytes(credentials.Password);
-			if (username.Length > byte.MaxValue || password.Length > byte.MaxValue)
-				throw new HttpRequestException("SOCKS5 username and password must each be 255 bytes or fewer.");
-
-			var request = new byte[3 + username.Length + password.Length];
-			request[0] = 0x01;
-			request[1] = (byte)username.Length;
-			username.CopyTo(request.AsSpan(2));
-			var passwordLengthIndex = 2 + username.Length;
-			request[passwordLengthIndex] = (byte)password.Length;
-			password.CopyTo(request.AsSpan(passwordLengthIndex + 1));
-			await stream.WriteAsync(request, token);
-
-			var response = await ReadExactly(stream, 2, token);
-			if (response[0] != 0x01 || response[1] != 0x00)
-				throw new HttpRequestException("SOCKS5 proxy rejected the configured username/password.");
-		}
-
-		private static async Task<byte[]> ReadExactly(Stream stream, int count, CancellationToken token)
-		{
-			var buffer = new byte[count];
-			await stream.ReadExactlyAsync(buffer, token);
-			return buffer;
-		}
-	}
-
-	private sealed class DisposingStream(Stream inner, IDisposable owner) : Stream
-	{
-		public override bool CanRead => inner.CanRead;
-		public override bool CanSeek => inner.CanSeek;
-		public override bool CanWrite => inner.CanWrite;
-		public override long Length => inner.Length;
-		public override long Position
-		{
-			get => inner.Position;
-			set => inner.Position = value;
-		}
-
-		public override void Flush() => inner.Flush();
-		public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
-		public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
-		public override void SetLength(long value) => inner.SetLength(value);
-		public override void Write(byte[] buffer, int offset, int count) => inner.Write(buffer, offset, count);
-		public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
-			inner.ReadAsync(buffer, cancellationToken);
-		public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
-			inner.WriteAsync(buffer, cancellationToken);
-
-		protected override void Dispose(bool disposing)
-		{
-			if (disposing)
-			{
-				inner.Dispose();
-				owner.Dispose();
-			}
-
-			base.Dispose(disposing);
-		}
-
-		public override async ValueTask DisposeAsync()
-		{
-			await inner.DisposeAsync();
-			owner.Dispose();
-			await base.DisposeAsync();
+			return string.IsNullOrWhiteSpace(uri.UserInfo)
+				? uri.ToString()
+				: WithoutUserInfo(uri).ToString();
 		}
 	}
 }

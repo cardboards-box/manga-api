@@ -453,12 +453,16 @@ internal class TestVerb(
 	public async Task TestProxies(CancellationToken token)
 	{
 		const string URL = "https://t2.nhentai.net/galleries/3975529/cover.webp.webp";
-		const int REQUESTS = 1;
+		const int REQUESTS = 10;
+		const string DIR = "proxy-tests";
+
+		if (!Directory.Exists(DIR))
+			Directory.CreateDirectory(DIR);
 
 		var opts = new ParallelOptions
 		{
 			CancellationToken = token,
-			MaxDegreeOfParallelism = 1,
+			MaxDegreeOfParallelism = Environment.ProcessorCount,
 		};
 
 		await Parallel.ForEachAsync(Enumerable.Range(0, REQUESTS), opts, async (i, token) =>
@@ -470,9 +474,12 @@ internal class TestVerb(
 				return;
 			}
 
-			using var reader = new StreamReader(result.Stream);
-			var response = await reader.ReadToEndAsync(token);
-			_logger.LogInformation("Response for request {RequestNumber}: {Response}", i + 1, response);
+			var name = $"proxy-test-{i + 1}.{Path.GetExtension(URL)?.TrimStart('.') ?? "dat"}";
+			var path = Path.Combine(DIR, name);
+			using var io = File.Create(path);
+			await result.Stream.CopyToAsync(io, token);
+			await io.FlushAsync(token);
+			_logger.LogInformation("Response for request {RequestNumber}: {Path}", i + 1, path);
 		});
 	}
 
