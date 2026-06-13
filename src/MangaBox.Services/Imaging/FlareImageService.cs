@@ -10,17 +10,7 @@ using Headers = Dictionary<string, string>;
 /// <summary>
 /// A service for fetching images with FlareSolverr
 /// </summary>
-public interface IFlareImageService
-{
-	/// <summary>
-	/// Attempts to download the image using FlareSolverr
-	/// </summary>
-	/// <param name="url">The URL to download</param>
-	/// <param name="headers">Any headers to use for the request</param>
-	/// <param name="token">The cancellation token for the request</param>
-	/// <returns>The result of the download attempt</returns>
-	Task<DownloadResult> Download(string url, Headers? headers, CancellationToken token);
-}
+public interface IFlareImageService : IDownloadService { }
 
 internal class FlareImageService(
 	IHttpService _http,

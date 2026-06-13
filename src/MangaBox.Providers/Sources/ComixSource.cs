@@ -1,7 +1,6 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using System.Text.Json.Nodes;
-using System.Threading.RateLimiting;
 
 namespace MangaBox.Providers.Sources;
 
@@ -9,40 +8,34 @@ using Models.Types;
 using Services.Imaging;
 using Utilities.Flare;
 
-public interface IComixSource : IMangaSource, IFlareImageSource, IPostProcessingSource
+public interface IComixSource : IMangaSource
 {
 
 }
 
 internal class ComixSource(
 	IFlareSolverService _flare,
-	ILogger<ComixSource> _logger) : IComixSource
+	ILogger<ComixSource> _logger) : BaseMangaSource<ComixSource>, IComixSource
 {
 #if DEBUG
-	private static JsonSerializerOptions _debugOptions = new JsonSerializerOptions
+	private static readonly JsonSerializerOptions _debugOptions = new()
 	{
 		WriteIndented = true,
 		AllowTrailingCommas = true,
 	};
 #endif
 
-	private static RateLimiter? _limiter;
+	public override string HomeUrl => "https://comix.to";
 
-	public string HomeUrl => "https://comix.to";
+	public override string Provider => "comix-to";
 
-	public string Provider => "comix-to";
+	public override string Name => "Comix.to";
 
-	public string? Referer => HomeUrl;
+	public override bool UseFlareImages => true;
 
-	public string Name => "Comix.to";
+	public override bool UseFlareImagesCover => true;
 
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
-
-	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
-
-	public bool UseFlareImages => true;
-
-	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{HomeUrl}/title/{mangaId}-mangatitle/{chapterId}-chapter-1";
 		var instance = new FlareSolverInstance(_flare, _logger)
@@ -80,7 +73,7 @@ internal class ComixSource(
 #endif
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		await using var session = await _flare.CreateSession(null, token);
 		var instance = new FlareSolverInstance(session, _logger)
@@ -134,7 +127,7 @@ internal class ComixSource(
 		return manga;
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		string URL = $"{HomeUrl}/title/";
 		if (!url.StartsWith(URL, StringComparison.InvariantCultureIgnoreCase))
@@ -147,9 +140,7 @@ internal class ComixSource(
 		return (true, parts.First());
 	}
 
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
-
-	public async Task PostProcessDownload(DownloadResult result, string path, CancellationToken token)
+	public override async Task PostProcessDownload(DownloadResult result, string path, CancellationToken token)
 	{
 		if (result?.Response is null)
 			return;
@@ -163,7 +154,7 @@ internal class ComixSource(
 		await ComixImageDecryptor.DecryptFilePrefixAsync(path, seed, length, token);
 	}
 
-	public async Task<Image?> PostProcessing(DownloadResult result, Image? image, CancellationToken token)
+	public override async Task<Image?> PostProcessing(DownloadResult result, Image? image, CancellationToken token)
 	{
 		if (image is null) return image;
 
@@ -942,7 +933,7 @@ internal class ComixSource(
 			.OrderByDescending(x => x.Count())
 			.FirstOrDefault();
 
-		if (known is null || known.Count() == 0)
+		if (known is null || !known.Any())
 			return pages;
 
 		var template = known
@@ -1320,14 +1311,9 @@ internal class ComixSource(
 			int rows,
 			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
 		{
-			if (scrambled is null)
-				throw new ArgumentNullException(nameof(scrambled));
-
-			if (columns <= 0)
-				throw new ArgumentOutOfRangeException(nameof(columns));
-
-			if (rows <= 0)
-				throw new ArgumentOutOfRangeException(nameof(rows));
+			ArgumentNullException.ThrowIfNull(scrambled);
+			ArgumentOutOfRangeException.ThrowIfNegativeOrZero(columns);
+			ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rows);
 
 			var tileWidth = scrambled.Width / columns;
 			var tileHeight = scrambled.Height / rows;
@@ -1493,17 +1479,9 @@ internal class ComixSource(
 	/// <summary>
 	/// Seeded pseudo-random generator extracted from the JavaScript.
 	/// </summary>
-	public sealed class ScrambleRandom
+	public sealed class ScrambleRandom(uint seed)
 	{
-		private uint _state;
-
-		/// <summary>
-		/// Creates a seeded random generator.
-		/// </summary>
-		public ScrambleRandom(uint seed)
-		{
-			_state = seed;
-		}
+		private uint _state = seed;
 
 		/// <summary>
 		/// Equivalent to JavaScript:

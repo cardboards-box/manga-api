@@ -92,6 +92,7 @@ internal class ImageService(
 	IDbService _db,
 	IZipService _zip,
 	IHttpService _http,
+	IProxiedHttpService _proxy,
 	ICacheService _cache,
 	IConfiguration _config,
 	ISourceService _sources,
@@ -234,15 +235,14 @@ internal class ImageService(
 	{
 		try
 		{
-			if (source is not IPostProcessingSource pps ||
-				image is null ||
+			if (image is null ||
 				result?.Response is null)
 				return;
 
 			var ext = Path.GetExtension(path)?.TrimStart('.');
 			var scramPath = Path.ChangeExtension(path, $".pp.{ext}");
 			using var _ = image;
-			using var ppi = await pps.PostProcessing(result, image, token);
+			using var ppi = await source.PostProcessing(result, image, token);
 			if (ppi is null)
 				return;
 
@@ -257,6 +257,25 @@ internal class ImageService(
 		{
 			_logger.LogError(ex, "Error occurred while handling image post processing");
 		}
+	}
+
+	/// <summary>
+	/// Determines which image download to use for the given source and image
+	/// </summary>
+	/// <param name="source">The source provider</param>
+	/// <param name="image">The image to download</param>
+	/// <returns>The appropriate download service</returns>
+	public IDownloadService DetermineDownloader(LoaderSource source, MbImage image)
+	{
+		//Check to see if we should use FlareSolverr to download images with headers
+		if ((source.Service.UseFlareImages && image.ChapterId is not null) ||
+			(source.Service.UseFlareImagesCover && image.ChapterId is null))
+			return _flare;
+		//Check to see if we should use the proxied http service to download the image
+		if (source.Service.UseProxiedImages)
+			return _proxy;
+		//Return the standard http service by default
+		return _http;
 	}
 
 	/// <summary>
@@ -348,15 +367,10 @@ internal class ImageService(
 				return await ForwardError(zipResult);
 			}
 
-			//Check to see if we should use FlareSolverr to download images with headers
-			var useFlare = (source.UseFlareImages && image.ChapterId is not null) ||
-				(source.UseFlareImagesCover && image.ChapterId is null);
 			//Determine the headers to use for the image request
 			var headers = _http.HeadersFrom(image.Url, source, manga, image);
 			//Download the image from the source
-			using var download = await (useFlare
-				? _flare.Download(image.Url, headers, token)
-				: _http.Download(image.Url, headers, token));
+			using var download = await DetermineDownloader(loader, image).Download(image.Url, headers, token);
 			//If the image failed, forward the error
 			if (!string.IsNullOrEmpty(download.Error) || download.Stream is null)
 				return await HandleError(download.Error ?? "Stream came back empty!");
@@ -374,19 +388,15 @@ internal class ImageService(
 			if (!string.IsNullOrEmpty(error))
 				return await HandleError(error);
 
-			if (loader.Service is IPostProcessingSource pps)
-				await pps.PostProcessDownload(download, path, token);
+			await loader.Service.PostProcessDownload(download, path, token);
 
 			//Get more image properties
 			image.ImageSize = written;
-			if (image.ImageWidth is null || image.ImageHeight is null ||
-				loader.Service is IPostProcessingSource)
+			var (width, height, img) = await _http.DetermineImageSize(path);
+			using (var _ = img)
 			{
-				var (width, height, img) = await _http.DetermineImageSize(path);
-				using var _ = img;
 				image.ImageWidth = width ?? image.ImageWidth;
 				image.ImageHeight = height ?? image.ImageHeight;
-
 				await HandlePostProcessing(loader.Service, download, img, path, token);
 			}
 
@@ -477,7 +487,7 @@ internal class ImageService(
 	public async Task<Boxed> Bust(MangaBoxType<MbImage> image, CancellationToken token)
 	{
 		//Check to see if the image exists and get it's various properties
-		var exists = ImageExists(image.Entity, out var path, out var zipPath, out var zipped, out var hash);
+		var exists = ImageExists(image.Entity, out var path, out var zipPath, out _, out _);
 		//If the image doesn't exist, ignore the bust request
 		if (!exists) return Boxed.Ok();
 		//Lock the cache so we aren't double writing to it

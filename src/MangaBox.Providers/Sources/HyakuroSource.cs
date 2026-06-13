@@ -1,6 +1,4 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Providers.Sources;
+﻿namespace MangaBox.Providers.Sources;
 
 using Models.Types;
 using Services.Imaging;
@@ -14,25 +12,21 @@ public interface IHyakuroSource : IMangaSource
 internal class HyakuroSource(
 	IZipService _zip,
 	IFlareSolverService _flare,
-	ILogger<HyakuroSource> _logger) : IHyakuroSource
+	ILogger<HyakuroSource> _logger) : BaseMangaSource<HyakuroSource>, IHyakuroSource
 {
-	private static RateLimiter? _limiter;
-
 	private readonly FlareSolverInstance _flareInstance = _flare.Limiter();
 
-	public string HomeUrl => "https://hyakuro.net";
+	public override string HomeUrl => "https://hyakuro.net";
 
-	public string Provider => "hyakuro";
+	public override string Provider => "hyakuro";
 
-	public string Name => "Hyakuro";
+	public override string Name => "Hyakuro";
 
-	public string? Referer => null;
+	public override string? Referer => null;
 
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+	public override Dictionary<string, string>? Headers => null;
 
-	public Dictionary<string, string>? Headers => null;
-
-	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		string zipUrl = $"{HomeUrl}/api/download/{mangaId}/{chapterId}";
 		var (error, _, files) = await _zip.DownloadZip(zipUrl, null, token);
@@ -56,12 +50,7 @@ internal class HyakuroSource(
 		}).OrderBy(t => t.number).Select(t => t.page)];
 	}
 
-	public RateLimiter GetRateLimiter(string url)
-	{
-		return _limiter ??= PolyfillExtensions.DefaultRateLimiter();
-	}
-
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.StartsWith("http", StringComparison.InvariantCultureIgnoreCase) ? id : $"{HomeUrl}/manga/{id}";
 		var doc = await _flareInstance.GetHtml(url, token);
@@ -116,7 +105,7 @@ internal class HyakuroSource(
 		};
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		if (!url.StartsWith(HomeUrl, StringComparison.InvariantCultureIgnoreCase))
 			return (false, null);

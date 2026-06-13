@@ -31,6 +31,7 @@ internal class TestVerb(
 	IMangaLoaderService _loader,
 	IRestitcherService _restitch,
 	IFlareSolverService _flareHtml,
+	IProxiedHttpService _proxied,
 	ILogger<TestVerb> logger) : BooleanVerb<TestOption>(logger)
 {
 	private static readonly JsonSerializerOptions _options = new()
@@ -428,6 +429,32 @@ internal class TestVerb(
 		{
 			_logger.LogInformation("Indexed manga: {Manga}", Serialize(result));
 		}
+	}
+
+	public async Task TestProxies(CancellationToken token)
+	{
+		const string URL = "https://api.ipify.org/?format=json";
+		const int REQUESTS = 20;
+
+		var opts = new ParallelOptions
+		{
+			CancellationToken = token,
+			MaxDegreeOfParallelism = Environment.ProcessorCount,
+		};
+
+		await Parallel.ForEachAsync(Enumerable.Range(0, REQUESTS), opts, async (i, token) =>
+		{
+			using var result = await _proxied.Download(URL, null, token);
+			if (!string.IsNullOrEmpty(result.Error) || result.Stream is null)
+			{
+				_logger.LogError("Error occurred while fetching URL: {Error} >> {URL}", result.Error, URL);
+				return;
+			}
+
+			using var reader = new StreamReader(result.Stream);
+			var response = await reader.ReadToEndAsync(token);
+			_logger.LogInformation("Response for request {RequestNumber}: {Response}", i + 1, response);
+		});
 	}
 
 	public override async Task<bool> Execute(TestOption options, CancellationToken token)

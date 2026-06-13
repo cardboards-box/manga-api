@@ -1,31 +1,22 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Providers.Sources;
+﻿namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
 
 public interface IDarkScansSource : IMangaSource { }
 
-public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
+public class DarkScansSource(IFlareSolverService _flare) : BaseMangaSource<DarkScansSource>, IDarkScansSource
 {
-	private static RateLimiter? _limiter;
-	public string HomeUrl => "https://dark-scan.com/";
+	private readonly FlareSolverInstance _api = _flare.Limiter();
+
+	public override string HomeUrl => "https://dark-scan.com/";
 
 	public string MangaBaseUri => $"{HomeUrl}manga/";
 
-	public string Provider => "dark-scans";
+	public override string Provider => "dark-scans";
 
-	public string Name => "Dark Scans (dark-scans.com)";
+	public override string Name => "Dark Scans (dark-scans.com)";
 
-	public string? Referer => HomeUrl;
-
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
-
-	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
-
-	private readonly FlareSolverInstance _api = _flare.Limiter();
-
-	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}/?style=list";
 		var doc = await _api.GetHtml(url, token);
@@ -37,9 +28,9 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 			.ToArray();
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
-		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
+		var url = id.StartsWithIc("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
 		if (doc == null) return null;
 
@@ -107,7 +98,7 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 		return [..output.OrderBy(t => t.Number)];
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		var matches = url.StartsWith(HomeUrl, StringComparison.CurrentCultureIgnoreCase);
 		if (!matches) return (false, null);
@@ -123,6 +114,4 @@ public class DarkScansSource(IFlareSolverService _flare) : IDarkScansSource
 
 		return (false, null);
 	}
-
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

@@ -1,6 +1,4 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Providers.Sources;
+﻿namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
 
@@ -8,25 +6,23 @@ public interface IChapmanganatoSource : IMangaUrlSource { }
 
 public class ChapmanganatoSource(
 	IFlareSolverService _flare,
-	ILogger<ChapmanganatoSource> _logger) : IChapmanganatoSource
+	ILogger<ChapmanganatoSource> _logger) : BaseMangaSource<ChapmanganatoSource>, IChapmanganatoSource
 {
-	private static RateLimiter? _limiter;
+	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public string HomeUrl => "https://www.natomanga.com";
+	public override string HomeUrl => "https://www.natomanga.com";
 
 	public string ChapterBaseUri => $"{HomeUrl}";
 
 	public string MangaBaseUri => $"{HomeUrl}/manga";
 
-	public string Provider => "chapmanganato";
+	public override string Provider => "chapmanganato";
 
-	public string Name => "NatoManga (Used to be: ChapMangaNato)";
+	public override string Name => "NatoManga (Used to be: ChapMangaNato)";
 
-	public string? Referer => HomeUrl + "/";
+	public override string? Referer => HomeUrl + "/";
 
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
-
-	public Dictionary<string, string>? Headers => new()
+	public override Dictionary<string, string>? Headers => new()
 	{
 		{"Sec-Fetch-Dest", "image"},
 		{"Sec-Fetch-Mode", "no-cors"},
@@ -35,8 +31,6 @@ public class ChapmanganatoSource(
 		{"Sec-Ch-Ua-Mobile", "?0"},
 		{"Sec-Ch-Ua", "\"Not A(Brand\";v=\"99\", \"Opera GX\";v=\"107\", \"Chromium\";v=\"121\""},
 	};
-
-	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public async Task<ImportPage[]> ChapterPages(string url, CancellationToken token)
 	{
@@ -49,7 +43,7 @@ public class ChapmanganatoSource(
 				.Select(t => new ImportPage(t.GetAttributeValue("src", "")))];
 	}
 
-	public Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{ChapterBaseUri}/manga/{mangaId}/{chapterId}";
 		return ChapterPages(url, token);
@@ -79,7 +73,7 @@ public class ChapmanganatoSource(
 		manga.Description = description?.InnerText.HTMLDecode().Trim() ?? string.Empty;
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.StartsWithIc("http") ? id : $"{MangaBaseUri}/{id}";
 		var doc = await _api.GetHtml(url, token);
@@ -124,7 +118,7 @@ public class ChapmanganatoSource(
 		return manga;
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		var matches = url.ToLower().StartsWith(MangaBaseUri, StringComparison.InvariantCultureIgnoreCase);
 		if (!matches) return (false, null);
@@ -136,6 +130,4 @@ public class ChapmanganatoSource(
 
 		return (false, null);
 	}
-
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

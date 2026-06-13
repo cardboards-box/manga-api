@@ -1,38 +1,23 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Providers.Sources;
+﻿namespace MangaBox.Providers.Sources;
 
 using Models.Types;
 using Utilities.Flare;
 
 public interface INhentaiSource : IMangaSource { }
 
-public class NhentaiSource : INhentaiSource, IRatedSource
+public class NhentaiSource(IFlareSolverService _flare) : BaseMangaSource<NhentaiSource>, INhentaiSource
 {
-	private static RateLimiter? _limiter;
+	private readonly FlareSolverInstance _api = _flare.Limiter();
 	private const string DEFAULT_CHAPTER_TITLE = "Chapter 1";
-	public string HomeUrl => "https://nhentai.to/";
+	public override string HomeUrl => "https://nhentai.to/";
 
 	public string MangaBaseUri => $"{HomeUrl}g/";
 
-	public string Provider => "nhentai";
+	public override string Provider => "nhentai";
 
-	public string Name => "NHentai.to";
+	public override string Name => "NHentai.to";
 
-	public string? Referer => HomeUrl;
-
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
-
-	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
-
-	public ContentRating DefaultRating => ContentRating.Pornographic;
-
-	private readonly FlareSolverInstance _api;
-
-	public NhentaiSource(IFlareSolverService _flare)
-	{
-		_api = _flare.Limiter();
-	}
+	public override ContentRating? DefaultRating => ContentRating.Pornographic;
 
 	public string FixPreview(string url)
 	{
@@ -47,7 +32,7 @@ public class NhentaiSource : INhentaiSource, IRatedSource
 		return string.Join('/', parts.SkipLast().Append($"{fwext}{ext}"));
 	}
 
-	public async Task<ImportPage[]> ChapterPages(string id, string _, CancellationToken token)
+	public override async Task<ImportPage[]> ChapterPages(string id, string _, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
@@ -60,7 +45,7 @@ public class NhentaiSource : INhentaiSource, IRatedSource
 				.ToArray();
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
@@ -91,7 +76,7 @@ public class NhentaiSource : INhentaiSource, IRatedSource
 		return manga;
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		var matches = url.ToLower().StartsWith(HomeUrl.ToLower());
 		if (!matches) return (false, null);
@@ -108,5 +93,4 @@ public class NhentaiSource : INhentaiSource, IRatedSource
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

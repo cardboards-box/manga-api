@@ -1,31 +1,22 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Providers.Sources;
+﻿namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
 
 public interface IMangaKatanaSource : IMangaSource { }
 
-public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
+public class MangaKatanaSource(IFlareSolverService _flare) : BaseMangaSource<MangaKatanaSource>, IMangaKatanaSource
 {
-	private static RateLimiter? _limiter;
-	public string HomeUrl => "https://mangakatana.com/";
+	public override string HomeUrl => "https://mangakatana.com/";
 
 	public string MangaBaseUri => "https://mangakatana.com/manga/";
 
-	public string Provider => "mangakatana";
+	public override string Provider => "mangakatana";
 
-	public string Name => "MangaKatana";
-
-	public string? Referer => HomeUrl;
-
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
-
-	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+	public override string Name => "MangaKatana";
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}";
 		var doc = await _api.GetHtml(url, token);
@@ -52,7 +43,7 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 			.ToArray();
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
@@ -110,7 +101,7 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 		return manga;
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		var matches = url.ToLower().StartsWith(HomeUrl.ToLower());
 		if (!matches) return (false, null);
@@ -127,5 +118,4 @@ public class MangaKatanaSource(IFlareSolverService _flare) : IMangaKatanaSource
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

@@ -1,29 +1,22 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Providers.Sources;
+﻿namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
 
 public interface IMangakakalotTvSource : IMangaUrlSource { }
 
-public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvSource
+public class MangakakalotTvSource(IFlareSolverService _flare) : BaseMangaSource<MangakakalotTvSource>, IMangakakalotTvSource
 {
-	private static RateLimiter? _limiter;
-	public string HomeUrl => "https://ww4.mangakakalot.tv/";
+	public override string HomeUrl => "https://ww4.mangakakalot.tv/";
 
 	public string ChapterBaseUri => $"{HomeUrl}chapter/";
 
 	public string MangaBaseUri => $"{HomeUrl}manga/";
 
-	public string Provider => "mangakakalot";
+	public override string Provider => "mangakakalot";
 
-	public string Name => "Mangakakalot.tv";
+	public override string Name => "Mangakakalot.tv";
 
-	public string? Referer => null;
-
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
-
-	public Dictionary<string, string>? Headers => null;
+	public override string? Referer => null;
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
@@ -39,13 +32,13 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 				.ToArray();
 	}
 
-	public Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{ChapterBaseUri}{mangaId}/{chapterId}";
 		return ChapterPages(url, token);
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
@@ -102,7 +95,7 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 		return manga;
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		var matches = url.StartsWith(HomeUrl, StringComparison.CurrentCultureIgnoreCase);
 		if (!matches) return (false, null);
@@ -120,5 +113,4 @@ public class MangakakalotTvSource(IFlareSolverService _flare) : IMangakakalotTvS
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

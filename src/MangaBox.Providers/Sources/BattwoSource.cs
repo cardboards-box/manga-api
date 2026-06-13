@@ -1,35 +1,21 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Providers.Sources;
+﻿namespace MangaBox.Providers.Sources;
 
 public interface IBattwoSource : IMangaUrlSource { }
 
-public class BattwoSource : IBattwoSource
+public class BattwoSource(
+	IApiService _api) : BaseMangaSource<BattwoSource>, IBattwoSource
 {
-	private static RateLimiter? _limiter;
-
-	public string HomeUrl => "https://battwo.com/";
+	public override string HomeUrl => "https://battwo.com/";
 
 	public string MangaBaseUri => $"{HomeUrl}series/";
 
 	public string ChapterUri => $"{HomeUrl}chapter/";
 
-	public string Provider => "battwo";
+	public override string Provider => "battwo";
 
-	public string Name => "Battwo";
+	public override string Name => "Battwo";
 
-	public string? Referer => HomeUrl;
-
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
-
-	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
-
-	private readonly IApiService _api;
-
-	public BattwoSource(IApiService api)
-	{
-		_api = api;
-	}
+	public override bool Enabled => false;
 
 	public async Task<ImportPage[]> ChapterPages(string url, CancellationToken token)
 	{
@@ -41,14 +27,14 @@ public class BattwoSource : IBattwoSource
 		throw new NotImplementedException();
 	}
 
-	public Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		return ChapterPages(ChapterUri + chapterId, token);
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
-		var url = id.ToLower().StartsWith("http") ? id : $"{MangaBaseUri}{id}";
+		var url = id.StartsWithIc("http") ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token: token);
 		if (doc == null) return null;
 
@@ -110,13 +96,11 @@ public class BattwoSource : IBattwoSource
 		return manga;
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
-		if (!url.ToLower().StartsWith(MangaBaseUri)) return (false, null);
+		if (!url.StartsWithIc(MangaBaseUri)) return (false, null);
 
 		var id = url.Split('/').Last();
 		return (true, id);
 	}
-
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

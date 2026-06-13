@@ -1,6 +1,4 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Providers.Sources;
+﻿namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
 
@@ -11,23 +9,17 @@ public interface ILikeMangaSource : IMangaUrlSource { }
 internal class LikeMangaSource(
 	IApiService _api,
 	IFlareSolverService _flare,
-	ILogger<LikeMangaSource> _logger) : ILikeMangaSource
+	ILogger<LikeMangaSource> _logger) : BaseMangaSource<LikeMangaSource>, ILikeMangaSource
 {
-	private static RateLimiter? _limiter;
+	public override string HomeUrl => "https://likemanga.in";
 
-	public string HomeUrl => "https://likemanga.in";
+	public override string Provider => "like-manga";
 
-	public string Provider => "like-manga";
-
-	public string Name => "LikeManga (likemanga.in)";
+	public override string Name => "LikeManga (likemanga.in)";
 
 	public string MangaBaseUri => $"{HomeUrl}/manga/";
 
-	public string? Referer => HomeUrl + "/";
-
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
-
-	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+	public override string? Referer => HomeUrl + "/";
 
 	private readonly FlareSolverInstance _flareInstance = _flare.Limiter();
 
@@ -39,13 +31,13 @@ internal class LikeMangaSource(
 		return Parse(doc, url);
 	}
 
-	public Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}";
 		return ChapterPages(url, token);
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		const string TitleXPath = "//div[contains(@class,'post-title')]/h1";
 		const string GenresXPath = "//div[contains(@class,'post-content_item')][.//h5[normalize-space()='Genre(s)']]//div[contains(@class,'genres-content')]//a";
@@ -122,7 +114,7 @@ internal class LikeMangaSource(
 		return [.. chapters.OrderBy(t => t.Number)];
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		if (!url.StartsWith(HomeUrl, StringComparison.InvariantCultureIgnoreCase))
 			return (false, null);
@@ -263,6 +255,4 @@ internal class LikeMangaSource(
 					CultureInfo.InvariantCulture, out var d)
 				? d : double.NaN;
 	}
-
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

@@ -1,32 +1,25 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Providers.Sources;
+﻿namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
 
 public interface IMangaClashSource : IMangaSource { }
 
 public class MangaClashSource(
-	IFlareSolverService _flare) : IMangaClashSource
+	IFlareSolverService _flare) : BaseMangaSource<MangaClashSource>, IMangaClashSource
 {
-	private static RateLimiter? _limiter;
-	public string HomeUrl => "https://mangaclash.com/";
+	public override string HomeUrl => "https://mangaclash.com/";
 
 	public string MangaBaseUri => "https://mangaclash.com/manga/";
 
-	public string Provider => "mangaclash";
+	public override string Provider => "mangaclash";
 
-	public string Name => "MangaClash";
+	public override string Name => "MangaClash";
 
-	public string? Referer => null;
-
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
-
-	public Dictionary<string, string>? Headers => null;
+	public override string? Referer => null;
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{MangaBaseUri}{mangaId}/{chapterId}/";
 		var doc = await _api.GetHtml(url, token);
@@ -46,7 +39,7 @@ public class MangaClashSource(
 			.Trim();
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.StartsWith("http", StringComparison.InvariantCultureIgnoreCase) ? id : $"{MangaBaseUri}{id}";
 		var doc = await _api.GetHtml(url, token);
@@ -107,7 +100,7 @@ public class MangaClashSource(
 		return manga;
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		var matches = url.StartsWith(HomeUrl, StringComparison.CurrentCultureIgnoreCase);
 		if (!matches) return (false, null);
@@ -124,5 +117,4 @@ public class MangaClashSource(
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

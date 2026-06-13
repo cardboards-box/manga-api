@@ -1,5 +1,3 @@
-using System.Threading.RateLimiting;
-
 namespace MangaBox.Providers.Sources;
 
 using Models.Types;
@@ -8,25 +6,17 @@ public interface IMangaReadSource : IMangaSource { }
 
 internal class MangaReadSource(
 	IApiService _api,
-	ILogger<MangaReadSource> _logger) : IMangaReadSource
+	ILogger<MangaReadSource> _logger) : BaseMangaSource<MangaReadSource>, IMangaReadSource
 {
-	private static RateLimiter? _limiter;
-
-	public string HomeUrl => "https://www.mangaread.org/";
+	public override string HomeUrl => "https://www.mangaread.org/";
 
 	public string MangaBaseUri => $"{HomeUrl}manga/";
 
-	public string Provider => "mangaread";
+	public override string Provider => "mangaread";
 
-	public string Name => "MangaRead (mangaread.org)";
+	public override string Name => "MangaRead (mangaread.org)";
 
-	public string? Referer => HomeUrl;
-
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
-
-	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
-
-	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = chapterId.StartsWithIc("http")
 			? chapterId
@@ -36,7 +26,7 @@ internal class MangaReadSource(
 		return doc is null ? [] : ParsePages(doc);
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var url = id.StartsWithIc("http")
 			? id
@@ -86,7 +76,7 @@ internal class MangaReadSource(
 		};
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		if (!url.StartsWith(HomeUrl, StringComparison.InvariantCultureIgnoreCase))
 			return (false, null);
@@ -96,8 +86,6 @@ internal class MangaReadSource(
 			? (false, null)
 			: (true, id);
 	}
-
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 
 	private async Task<HtmlDocument?> GetHtml(string url, CancellationToken token)
 	{

@@ -1,5 +1,4 @@
-﻿using System.Threading.RateLimiting;
-using WeebDexSharp;
+﻿using WeebDexSharp;
 using WeebDexSharp.Models;
 
 namespace MangaBox.Providers.Sources;
@@ -13,20 +12,19 @@ public interface IWeebDexSource : IMangaSource
 
 internal class WeebDexSource(
 	IWeebDex _api,
-	ILogger<WeebDexSource> _logger) : IWeebDexSource
+	ILogger<WeebDexSource> _logger) : BaseMangaSource<WeebDexSource>, IWeebDexSource
 {
-	private static RateLimiter? _limiter;
 	private const string DEFAULT_LANG = "en";
-	public string HomeUrl => "https://weebdex.org";
-	public string Provider => "weebdex";
-	public string Name => "WeebDex";
-	public string? Referer => null;
+	public override string HomeUrl => "https://weebdex.org";
+	public override string Provider => "weebdex";
+	public override string Name => "WeebDex";
+	public override string? Referer => null;
 
-	public string? UserAgent => "mangabox";
+	public override string? UserAgent => "mangabox";
 
-	public Dictionary<string, string>? Headers => null;
+	public override bool Enabled => false;
 
-	public async Task<ImportPage[]> ChapterPages(string _, string chapterId, CancellationToken token)
+	public override async Task<ImportPage[]> ChapterPages(string _, string chapterId, CancellationToken token)
 	{
 		var result = await _api.Chapters.Get(chapterId, token);
 		if (!result.Succeeded || result.Data is null)
@@ -39,7 +37,7 @@ internal class WeebDexSource(
 			.Select(t => new ImportPage(t.Name, t.Width, t.Height))];
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var manga = await _api.Manga.Get(id, token);
 		if (manga.Succeeded)
@@ -165,7 +163,7 @@ internal class WeebDexSource(
 		}
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		string URL = $"{HomeUrl}/title/";
 		if (!url.StartsWith(URL, StringComparison.InvariantCultureIgnoreCase))
@@ -178,5 +176,4 @@ internal class WeebDexSource(
 		return (true, parts.First());
 	}
 
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }

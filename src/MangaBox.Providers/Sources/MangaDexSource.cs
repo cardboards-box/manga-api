@@ -13,28 +13,26 @@ using MManga = MangaDexSharp.Manga;
 using Chapter = MangaDexSharp.Chapter;
 using RelatedDataRelationship = MangaDexSharp.RelatedDataRelationship;
 
-public interface IMangaDexSource : IIndexableMangaSource
+public interface IMangaDexSource : IMangaSource
 {
 
 }
 
 public class MangaDexSource(
-	IMangaDexService _mangadex) : IMangaDexSource
+	IMangaDexService _mangadex) : BaseMangaSource<MangaDexSource>, IMangaDexSource
 {
 	private static readonly ConcurrentDictionary<string, RateLimiter> _limiters = new(StringComparer.InvariantCultureIgnoreCase);
 
 	private const string DEFAULT_LANG = "en";
-	public string HomeUrl => "https://mangadex.org";
-	public string Provider => "mangadex";
-	public string Name => "MangaDex";
-	public string? Referer => null;
-	public Dictionary<string, string>? Headers => null;
-	public string? UserAgent => "manga-box";
+	public override string HomeUrl => "https://mangadex.org";
+	public override string Provider => "mangadex";
+	public override string Name => "MangaDex";
+	public override string? Referer => null;
+	public override string? UserAgent => "manga-box";
 
-	public TimeSpan IndexFrequency => TimeSpan.FromSeconds(30);
-	public bool IndexEnabled => true;
+	public override TimeSpan IndexFrequency => TimeSpan.FromSeconds(30);
 
-	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var pages = await _mangadex.Pages(chapterId);
 		if (pages == null) return [];
@@ -107,7 +105,7 @@ public class MangaDexSource(
 		};
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var manga = await _mangadex.Manga(id);
 		if (manga == null || manga.Data == null || manga.Data.Attributes is null) return null;
@@ -237,7 +235,7 @@ public class MangaDexSource(
 		}
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		string URL = $"{HomeUrl}/title/";
 		if (!url.StartsWith(URL, StringComparison.InvariantCultureIgnoreCase))
@@ -250,7 +248,7 @@ public class MangaDexSource(
 		return (true, parts.First());
 	}
 
-	public RateLimiter GetRateLimiter(string url)
+	public override RateLimiter GetRateLimiter(string url)
 	{
 		var uri = new Uri(url).Host;
 		if (_limiters.TryGetValue(uri, out var limiter))
@@ -314,7 +312,7 @@ public class MangaDexSource(
 		}
 	}
 
-	public async IAsyncEnumerable<ImportManga> Index(LoaderSource source, [EnumeratorCancellation] CancellationToken token)
+	public override async IAsyncEnumerable<ImportManga> Index(LoaderSource source, [EnumeratorCancellation] CancellationToken token)
 	{
 		var latest = await _mangadex.ChaptersLatest();
 		if (latest is null || latest.Data.Count == 0)

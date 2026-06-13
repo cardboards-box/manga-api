@@ -10,7 +10,7 @@ using Headers = Dictionary<string, string>;
 /// <summary>
 /// A service for HTTP request helpers
 /// </summary>
-public interface IHttpService
+public interface IHttpService : IDownloadService
 {
 	/// <summary>
 	/// Generates the headers from the given items
@@ -27,18 +27,20 @@ public interface IHttpService
 	/// </summary>
 	/// <param name="url">The URL to download</param>
 	/// <param name="headers">The headers to include in the request</param>
+	/// <param name="config">The configuration action for the HTTP request</param>
 	/// <param name="token">The cancellation token</param>
 	/// <returns>The HTTP response message</returns>
-	Task<HttpResponseMessage?> GetResponse(string url, Headers? headers, CancellationToken token);
+	Task<HttpResponseMessage?> GetResponse(string url, Headers? headers, Action<IHttpBuilder> config, CancellationToken token);
 
 	/// <summary>
-	/// Download a file 
+	/// Attempts to download the given file
 	/// </summary>
 	/// <param name="url">The URL to download</param>
-	/// <param name="headers">The headers of the request</param>
-	/// <param name="token">The cancellation token</param>
-	/// <returns>The result of the download</returns>
-	Task<DownloadResult> Download(string url, Headers? headers, CancellationToken token);
+	/// <param name="headers">Any headers to use for the request</param>
+	/// <param name="config">The configuration action for the HTTP request</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The result of the download attempt</returns>
+	Task<DownloadResult> Download(string url, Headers? headers, Action<IHttpBuilder> config, CancellationToken token);
 
 	/// <summary>
 	/// Determines the file extension for the given MIME type
@@ -104,7 +106,7 @@ internal class HttpService(
 	}
 
 	/// <inheritdoc />
-	public Task<HttpResponseMessage?> GetResponse(string url, Headers? headers, CancellationToken token)
+	public Task<HttpResponseMessage?> GetResponse(string url, Headers? headers, Action<IHttpBuilder> config, CancellationToken token)
 	{
 		headers ??= HeadersFrom(url, null, null, null);
 		var request = _api.Create(url, _json, "GET");
@@ -114,32 +116,46 @@ internal class HttpService(
 				c.Headers.TryAddWithoutValidation(header.Key, header.Value);
 		}).CancelWith(token);
 
+		config.Invoke(request);
+
 		return request.Result();
 	}
 
 	/// <inheritdoc />
-	public async Task<DownloadResult> Download(string url, Headers? headers, CancellationToken token)
+	public Task<DownloadResult> Download(string url, Headers? headers, CancellationToken token) => Download(url, headers, _ => { }, token);
+
+	/// <inheritdoc />
+	public async Task<DownloadResult> Download(string url, Headers? headers, Action<IHttpBuilder> config, CancellationToken token)
 	{
 		var disposables = new List<IDisposable>();
-		var response = await GetResponse(url, headers, token);
-		if (response is null) 
-			return new(disposables, url, headers, "Image came back empty");
-
-		if (!response.IsSuccessStatusCode)
+		try
 		{
-			var content = await response.Content.ReadAsStringAsync(token);
-			_logger.LogWarning("Failed to download external image >> {URL} >> {Status}: {Content}",
-				url, response.StatusCode, content);
-			return new(disposables, url, headers, "Failed to download image: " + content, response);
+			var response = await GetResponse(url, headers, config, token);
+			if (response is null)
+				return new(disposables, url, headers, "Stream came back empty");
+			disposables.Add(response);
+
+			if (!response.IsSuccessStatusCode)
+			{
+				var content = await response.Content.ReadAsStringAsync(token);
+				_logger.LogWarning("Failed to download external stream >> {URL} >> {Status}: {Content}",
+					url, response.StatusCode, content);
+				return new(disposables, url, headers, "Failed to download stream: " + content, response);
+			}
+
+			var mimeType = MimeType(response.Content.Headers);
+			var fileName = FileName(response.Content.Headers, url, mimeType);
+			var length = response.Content.Headers.ContentLength;
+			var stream = await response.Content.ReadAsStreamAsync(token);
+			disposables.Add(stream);
+
+			return new(disposables, url, headers, null, response, stream, fileName, mimeType, length);
 		}
-
-		var mimeType = MimeType(response.Content.Headers);
-		var fileName = FileName(response.Content.Headers, url, mimeType);
-		var length = response.Content.Headers.ContentLength;
-		var stream = await response.Content.ReadAsStreamAsync(token);
-		disposables.Add(stream);
-
-		return new(disposables, url, headers, null, response, stream, fileName, mimeType, length);
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Failed to download external stream >> {URL}", url);
+			return new(disposables, url, headers, ex.Message);
+		}
 	}
 
 	/// <inheritdoc />

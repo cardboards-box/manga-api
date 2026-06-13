@@ -97,9 +97,10 @@ internal class SourceService(
 						Slug = source.Provider,
 						Name = source.Name,
 						BaseUrl = source.HomeUrl,
-						Enabled = true,
-						IsHidden = false,
-						UseFlareImages = source is IFlareImageSource flare && flare.UseFlareImages,
+						Enabled = source.Enabled,
+						IsHidden = source.Hidden,
+						UseFlareImages = source.UseFlareImages,
+						UseFlareImagesCover = source.UseFlareImagesCover,
 						Referer = source.Referer,
 						UserAgent = source.UserAgent,
 						Headers = source.Headers?.Select(h => new MbHeader
@@ -107,7 +108,7 @@ internal class SourceService(
 							Key = h.Key,
 							Value = h.Value,
 						}).ToArray() ?? [],
-						DefaultRating = source is IRatedSource rated ? rated.DefaultRating : ContentRating.Safe,
+						DefaultRating = source.DefaultRating ?? ContentRating.Safe,
 					};
 					match.Id = await _db.Source.Upsert(match);
 				}

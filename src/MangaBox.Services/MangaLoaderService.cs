@@ -52,13 +52,13 @@ public interface IMangaLoaderService
 	Task<Boxed> Pages(Guid chapterId, bool force, CancellationToken token);
 
 	/// <summary>
-	/// Runs the <see cref="IIndexableMangaSource.Index(LoaderSource, CancellationToken)"/> function for all applicable sources
+	/// Runs the <see cref="IMangaSource.Index(LoaderSource, CancellationToken)"/> function for all applicable sources
 	/// </summary>
 	/// <param name="token">The cancellation token for the request</param>
 	Task RunIndex(CancellationToken token);
 
 	/// <summary>
-	/// Runs the <see cref="IIndexableMangaSource.Index(LoaderSource, CancellationToken)"/> function for a specific source
+	/// Runs the <see cref="IMangaSource.Index(LoaderSource, CancellationToken)"/> function for a specific source
 	/// </summary>
 	/// <param name="source">The source to run the indexer for</param>
 	/// <param name="token">The cancellation token for the request</param>
@@ -259,15 +259,9 @@ internal class MangaLoaderService(
 
 	public static void ApplySourceChanges(IMangaSource found, ImportManga manga)
 	{
-		static void ApplyRated(IRatedSource source, ImportManga manga)
-		{
-			if (manga.Rating is not null) return;
+		if (found.DefaultRating is null) return;
 
-			manga.Rating = source.DefaultRating;
-		}
-
-		if (found is IRatedSource src)
-			ApplyRated(src, manga);
+		manga.Rating ??= found.DefaultRating;
 	}
 
 	public async Task<Boxed> Load(IdedSource found, Guid? profileId, CancellationToken token)
@@ -290,8 +284,7 @@ internal class MangaLoaderService(
 		};
 		return Parallel.ForEachAsync(_sources.All(token), opts, async (source, ct) =>
 		{
-			if (source.Service is not IIndexableMangaSource indexable)
-				return;
+			if (!source.Service.IndexEnabled) return;
 
 			await RunIndexer(source, ct);
 		});
@@ -299,10 +292,7 @@ internal class MangaLoaderService(
 
 	public async Task RunIndexer(LoaderSource source, CancellationToken token)
 	{
-		var indexable = source.Service as IIndexableMangaSource
-			?? throw new InvalidOperationException($"{source.GetType().Name} must be indexable to run this task.");
-
-		await foreach (var manga in indexable.Index(source, token))
+		await foreach (var manga in source.Service.Index(source, token))
 		{
 			ApplySourceChanges(source.Service, manga);
 			await Load(manga, source.Info.Id, null, null);
@@ -312,8 +302,8 @@ internal class MangaLoaderService(
 	public async Task<(LoaderSource, TimeSpan, string)[]> GetIndexableSources(CancellationToken token)
 	{
 		return await _sources.All(token)
-			.Where(t => t.Service is IIndexableMangaSource srv && srv.IndexEnabled)
-			.Select(t => (t, (t.Service as IIndexableMangaSource)!.IndexFrequency, t.Service.GetType().Name))
+			.Where(t => t.Service.IndexEnabled)
+			.Select(t => (t, t.Service.IndexFrequency, t.Service.GetType().Name))
 			.ToArrayAsync(token);
 	}
 }

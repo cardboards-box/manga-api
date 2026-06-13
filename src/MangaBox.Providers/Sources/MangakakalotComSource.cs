@@ -1,31 +1,22 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Providers.Sources;
+﻿namespace MangaBox.Providers.Sources;
 
 using Utilities.Flare;
 
 public abstract class MangakakalotComBase(
 	IFlareSolverService _flare, 
-	ILogger<MangakakalotComBase> _logger) : IMangaUrlSource
+	ILogger<MangakakalotComBase> _logger) : BaseMangaSource<MangakakalotComBase>, IMangaUrlSource
 {
-	private static RateLimiter? _limiter;
-	public virtual string HomeUrl => "https://mangakakalot.com/";
+	public override string HomeUrl => "https://mangakakalot.com/";
 
 	public abstract string MangaBaseUri { get; }
 
-	public abstract string Provider { get; }
+	public override abstract string Provider { get; }
 
-	public abstract string Name { get; }
-
-	public string? Referer => HomeUrl;
-
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
-
-	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
+	public override abstract string Name { get; }
 
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
-	public Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		throw new NotImplementedException();
 	}
@@ -42,7 +33,7 @@ public abstract class MangakakalotComBase(
 			.ToArray();
 	}
 
-	public virtual async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		try
 		{
@@ -112,7 +103,7 @@ public abstract class MangakakalotComBase(
 		}
 	}
 
-	public virtual (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		url = url.Trim();
 		if (!url.StartsWith(MangaBaseUri, StringComparison.InvariantCultureIgnoreCase)) return (false, null);
@@ -121,7 +112,6 @@ public abstract class MangakakalotComBase(
 		return (true, domain);
 	}
 
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 }
 
 public interface IMangakakalotComSource : IMangaUrlSource { }

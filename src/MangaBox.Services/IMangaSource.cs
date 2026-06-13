@@ -1,11 +1,11 @@
 ﻿using System.Threading.RateLimiting;
+using SixLabors.ImageSharp;
 
 namespace MangaBox.Services;
 
-using MangaBox.Services.Imaging;
+using Imaging;
 using Models.Composites.Import;
 using Models.Types;
-using SixLabors.ImageSharp;
 
 /// <summary>
 /// Represents a service that provides access to a third party manga source
@@ -38,9 +38,57 @@ public interface IMangaSource
 	string? UserAgent { get; }
 
 	/// <summary>
+	/// Whether or not the source is enabled.
+	/// </summary>
+	bool Enabled { get; }
+
+	/// <summary>
+	/// Whether or not the source should be hidden from the UI
+	/// </summary>
+	bool Hidden { get; }
+
+	/// <summary>
 	/// The headers to add when making image requests
 	/// </summary>
-	public Dictionary<string, string>? Headers { get; }
+	Dictionary<string, string>? Headers { get; }
+
+	/// <summary>
+	/// Whether or not to use flare images for this source.
+	/// </summary>
+	bool UseFlareImages { get; }
+
+	/// <summary>
+	/// Whether or not to use flare images for the cover of manga from this source. Defaults to the value of UseFlareImages if not overridden.
+	/// </summary>
+	bool UseFlareImagesCover { get; }
+
+	/// <summary>
+	/// Whether or not to use the proxied HTTP service for fetching images.
+	/// </summary>
+	bool UseProxiedImages { get; }
+
+	/// <summary>
+	/// The rating to apply
+	/// </summary>
+	ContentRating? DefaultRating { get; }
+
+	/// <summary>
+	/// The frequency at which to run the indexer (minimum is 5 seconds)
+	/// </summary>
+	TimeSpan IndexFrequency { get; }
+
+	/// <summary>
+	/// Whether or not the indexer is enabled.
+	/// </summary>
+	bool IndexEnabled { get; }
+
+	/// <summary>
+	/// Triggers the indexing process for the source
+	/// </summary>
+	/// <param name="source">The source being indexed</param>
+	/// <param name="token">The token for when to stop processing</param>
+	/// <returns>The updated manga</returns>
+	IAsyncEnumerable<ImportManga> Index(LoaderSource source, CancellationToken token);
 
 	/// <summary>
 	/// Whether or not the URL matches the provider
@@ -72,51 +120,7 @@ public interface IMangaSource
 	/// <param name="url">The URL of the image being fetched</param>
 	/// <returns>The rate limiter to use for fetching images</returns>
 	RateLimiter GetRateLimiter(string url);
-}
 
-/// <summary>
-/// An alternative manga source interface that uses URLs instead of IDs
-/// </summary>
-public interface IMangaUrlSource : IMangaSource
-{
-	/// <summary>
-	/// Fetches the page for a specific chapter of a manga from the given source
-	/// </summary>
-	/// <param name="url">The URL of the page the chapters are on</param>
-	/// <param name="token">The cancellation token for the request</param>
-	/// <returns>The pages of the chapter or null if something went wrong</returns>
-	Task<ImportPage[]> ChapterPages(string url, CancellationToken token);
-}
-
-/// <summary>
-/// Represents a manga source that can be scanned for new manga to add to the database
-/// </summary>
-public interface IIndexableMangaSource : IMangaSource
-{
-	/// <summary>
-	/// The frequency at which to run the indexer (minimum is 5 seconds)
-	/// </summary>
-	TimeSpan IndexFrequency { get; }
-
-	/// <summary>
-	/// Whether or not the indexer is enabled.
-	/// </summary>
-	bool IndexEnabled { get; }
-
-	/// <summary>
-	/// Triggers the indexing process for the source
-	/// </summary>
-	/// <param name="source">The source being indexed</param>
-	/// <param name="token">The token for when to stop processing</param>
-	/// <returns>The updated manga</returns>
-	IAsyncEnumerable<ImportManga> Index(LoaderSource source, CancellationToken token);
-}
-
-/// <summary>
-/// Represents a manga source that has image post processing
-/// </summary>
-public interface IPostProcessingSource : IMangaSource
-{
 	/// <summary>
 	/// The post processing to do on the downloaded file before it is decoded as an image.
 	/// </summary>
@@ -136,25 +140,15 @@ public interface IPostProcessingSource : IMangaSource
 }
 
 /// <summary>
-/// Represents a manga source that has a default content rating
+/// An alternative manga source interface that uses URLs instead of IDs
 /// </summary>
-public interface IRatedSource
+public interface IMangaUrlSource : IMangaSource
 {
 	/// <summary>
-	/// The rating to apply
+	/// Fetches the page for a specific chapter of a manga from the given source
 	/// </summary>
-	ContentRating DefaultRating { get; }
+	/// <param name="url">The URL of the page the chapters are on</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The pages of the chapter or null if something went wrong</returns>
+	Task<ImportPage[]> ChapterPages(string url, CancellationToken token);
 }
-
-/// <summary>
-/// Represents a manga source that requires the use of FlareSolverr to fetch images
-/// </summary>
-public interface IFlareImageSource
-{
-	/// <summary>
-	/// Whether or not to use flare images for this source.
-	/// </summary>
-	bool UseFlareImages { get; }
-}
-
-

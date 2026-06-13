@@ -5,7 +5,7 @@ namespace MangaBox.Providers.Sources;
 using Models.Types;
 using Utilities.Flare;
 
-public interface INhentaiNetSource : IIndexableMangaSource, IFlareImageSource
+public interface INhentaiNetSource : IMangaSource
 {
 	Task<NhentaiNetSearchResult[]> Search(string query, int page, CancellationToken token);
 
@@ -25,9 +25,8 @@ public sealed record NhentaiNetQuery(
 	public override string ToString() => $"{(Negate ? "-" : "")}{Criteria}:{Value.Replace(' ', '-')}";
 }
 
-public class NhentaiNetSource : INhentaiNetSource, IRatedSource
+public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSource
 {
-	private static RateLimiter? _limiter;
 	private const string DEFAULT_CHAPTER_TITLE = "Chapter 1";
 
 	private readonly FlareSolverInstance _api;
@@ -45,29 +44,23 @@ public class NhentaiNetSource : INhentaiNetSource, IRatedSource
 		_api.DisableMedia = true;
 	}
 
-	public bool UseFlareImages => false;
-
-	public string HomeUrl => "https://nhentai.net/";
+	public override string HomeUrl => "https://nhentai.net/";
 
 	public string MangaBaseUri => $"{HomeUrl}g/";
 
-	public string Provider => "nhentai-net";
+	public override string Provider => "nhentai-net";
 
-	public string Name => "NHentai.net";
+	public override string Name => "NHentai.net";
 
-	public string? Referer => HomeUrl;
+	public override TimeSpan IndexFrequency => TimeSpan.FromMinutes(5);
 
-	public string? UserAgent => PolyfillExtensions.USER_AGENT;
+	public override bool IndexEnabled => false;
 
-	public TimeSpan IndexFrequency => TimeSpan.FromMinutes(5);
+	public override bool UseProxiedImages => true;
 
-	public bool IndexEnabled => false;
+	public override ContentRating? DefaultRating => ContentRating.Pornographic;
 
-	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
-
-	public ContentRating DefaultRating => ContentRating.Pornographic;
-
-	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var id = IdFromValue(mangaId) ?? IdFromValue(chapterId);
 		if (string.IsNullOrWhiteSpace(id))
@@ -77,7 +70,7 @@ public class NhentaiNetSource : INhentaiNetSource, IRatedSource
 		return gallery is null ? [] : gallery.Pages;
 	}
 
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		id = IdFromValue(id) ?? id;
 		var gallery = await FetchGallery(id, token);
@@ -121,7 +114,7 @@ public class NhentaiNetSource : INhentaiNetSource, IRatedSource
 		};
 	}
 
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		if (!url.StartsWith(HomeUrl, StringComparison.InvariantCultureIgnoreCase))
 			return (false, null);
@@ -132,9 +125,9 @@ public class NhentaiNetSource : INhentaiNetSource, IRatedSource
 			: (true, id);
 	}
 
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter(10, 20);
+	public override RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter(10, 20);
 
-	public async IAsyncEnumerable<ImportManga> Index(LoaderSource source, [EnumeratorCancellation] CancellationToken token)
+	public override async IAsyncEnumerable<ImportManga> Index(LoaderSource source, [EnumeratorCancellation] CancellationToken token)
 	{
 		var searchLimiter = GetRateLimiter("search");
 		var queries = IndexQueries();
@@ -660,10 +653,10 @@ public class NhentaiNetSource : INhentaiNetSource, IRatedSource
 		if (string.IsNullOrWhiteSpace(value))
 			return null;
 
-		if (value.StartsWith("//", StringComparison.Ordinal))
+		if (value.StartsWith("//"))
 			return $"https:{value}";
 
-		if (value.StartsWith("/", StringComparison.Ordinal))
+		if (value.StartsWith('/'))
 			return new Uri(new Uri("https://nhentai.net/"), value.TrimStart('/')).ToString();
 
 		return value;

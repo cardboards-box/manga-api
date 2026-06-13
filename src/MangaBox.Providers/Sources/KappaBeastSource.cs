@@ -1,6 +1,4 @@
-﻿using System.Threading.RateLimiting;
-
-namespace MangaBox.Providers.Sources;
+﻿namespace MangaBox.Providers.Sources;
 
 using Models.Types;
 
@@ -8,27 +6,22 @@ public interface IKappaBeastSource : IMangaSource { }
 
 internal class KappaBeastSource(
 	IApiService _api,
-	IConfiguration _config) : IKappaBeastSource
+	IConfiguration _config) : BaseMangaSource<KappaBeastSource>, IKappaBeastSource
 {
-	private static RateLimiter? _limiter;
-
 	public string ApiKey => field ??= _config["KappaBeast:ApiKey"] ?? "d3cb8e38cd5dab862cf772d7912a57281b9d99cdae297372e21376d95fc5b956";
 
-	public string HomeUrl => "https://kappabeast.com/";
+	public override string HomeUrl => "https://kappabeast.com/";
 
 	public string MangaBaseUri => $"{HomeUrl}series/";
 
-	public string Provider => "kappa-beast";
+	public override string Provider => "kappa-beast";
 
-	public string Name => "Kappa Beast (kappabeast.com)";
+	public override string Name => "Kappa Beast (kappabeast.com)";
 
-	public string? Referer => HomeUrl;
+	public override string? UserAgent => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 OPR/131.0.0.0";
+	
 
-	public string? UserAgent => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 OPR/131.0.0.0";
-
-	public Dictionary<string, string>? Headers => PolyfillExtensions.HEADERS_FOR_REFERS;
-
-	public (bool matches, string? part) MatchesProvider(string url)
+	public override (bool matches, string? part) MatchesProvider(string url)
 	{
 		var matches = url.StartsWith(HomeUrl, StringComparison.CurrentCultureIgnoreCase);
 		if (!matches) return (false, null);
@@ -45,10 +38,8 @@ internal class KappaBeastSource(
 		return (false, null);
 	}
 
-	public RateLimiter GetRateLimiter(string _) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
-
 	#region Manga Fetching
-	public async Task<ImportManga?> Manga(string id, CancellationToken token)
+	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
 		var resp = await FetchManga(id, token);
 		if (resp is null || resp.Data is null || resp.Data.Length == 0) return null;
@@ -173,7 +164,7 @@ internal class KappaBeastSource(
 	#endregion
 
 	#region Chapter Fetching
-	public async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
+	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var manga = await FetchManga(mangaId, token);
 		if (manga is null || manga.Data is null || manga.Data.Length == 0)
