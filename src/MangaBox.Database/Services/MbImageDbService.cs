@@ -230,9 +230,11 @@ WHERE
         const string QUERY = @"SELECT DISTINCT i.*
 FROM mb_images i
 JOIN mb_manga m ON i.manga_id = m.id
+JOIN mb_sources s ON m.source_id = s.id
 LEFT JOIN mb_chapters c ON i.chapter_id = c.id
 WHERE
     i.indexed = FALSE AND
+    s.enabled = TRUE AND
     i.deleted_at IS NULL AND
     m.deleted_at IS NULL AND
     c.deleted_at IS NULL AND (

@@ -124,6 +124,10 @@ internal class RISIndexService(
 	{
 		if (image.Entity.Indexed && !force) return Boxed.Conflict("Image is already indexed");
 
+		var source = image.GetItem<MbSource>();
+		if (source is null || !source.Enabled)
+			return Boxed.NotFound(nameof(MbSource), "The image's source was either not found or is not enabled");
+
 		using var result = await _image.Get(image, token);
 		if (!string.IsNullOrEmpty(result.Error) || result.Stream is null)
 		{
