@@ -2,6 +2,7 @@ namespace MangaBox.Database.Services;
 
 using Models;
 using Models.Composites;
+using Models.Composites.Filters;
 
 /// <summary>
 /// The service for interacting with the mb_profiles table
@@ -70,6 +71,35 @@ public interface IMbProfileDbService
 	/// <param name="settings">The notification settings</param>
 	/// <returns>The profile that was updated</returns>
 	Task<MbProfile?> Notifications(Guid profileId, MbProfile.ProfileNotifications settings);
+
+	/// <summary>
+	/// Searches profiles by the given filter
+	/// </summary>
+	/// <param name="filter">The search filter</param>
+	/// <returns>The profiles</returns>
+	Task<PaginatedResult<MbProfile>> Search(ProfileSearchFilter filter);
+
+	/// <summary>
+	/// Gets all distinct profile providers
+	/// </summary>
+	/// <returns>The providers</returns>
+	Task<string[]> Providers();
+
+	/// <summary>
+	/// Updates whether or not the profile is approved to read
+	/// </summary>
+	/// <param name="profileId">The profile ID</param>
+	/// <param name="canRead">Whether or not the profile is approved to read</param>
+	/// <returns>The profile that was updated</returns>
+	Task<MbProfile?> CanRead(Guid profileId, bool canRead);
+
+	/// <summary>
+	/// Updates whether or not the profile is an administrator
+	/// </summary>
+	/// <param name="profileId">The profile ID</param>
+	/// <param name="admin">Whether or not the profile is an administrator</param>
+	/// <returns>The profile that was updated</returns>
+	Task<MbProfile?> Admin(Guid profileId, bool admin);
 }
 
 internal class MbProfileDbService(
@@ -125,6 +155,76 @@ WHERE
             inProgress = settings.InProgress
         });
     }
+
+	public async Task<PaginatedResult<MbProfile>> Search(ProfileSearchFilter filter)
+	{
+		var query = filter.Build(out var pars);
+		using var con = await _sql.CreateConnection();
+		using var rdr = await con.QueryMultipleAsync(query, pars);
+
+		var total = await rdr.ReadSingleAsync<int>();
+		if (total == 0) return new();
+		var size = filter.Size <= 0 ? 100 : filter.Size;
+		var pages = (int)Math.Ceiling((double)total / size);
+
+		var results = await rdr.ReadAsync<MbProfile>();
+		return new(pages, total, [..results]);
+	}
+
+	public async Task<string[]> Providers()
+	{
+		const string QUERY = """
+            SELECT DISTINCT LOWER(provider)
+            FROM mb_profiles
+            WHERE
+                provider IS NOT NULL AND
+                provider <> '' AND
+                deleted_at IS NULL
+            ORDER BY provider;
+            """;
+
+		using var con = await _sql.CreateConnection();
+		var providers = await con.QueryAsync<string>(QUERY);
+		return [..providers];
+	}
+
+	public Task<MbProfile?> CanRead(Guid profileId, bool canRead)
+	{
+		const string QUERY = """
+			UPDATE mb_profiles
+			SET can_read = :canRead
+			WHERE
+				id = :profileId AND
+				deleted_at IS NULL;
+
+			SELECT *
+			FROM mb_profiles
+			WHERE
+				id = :profileId AND
+				deleted_at IS NULL;
+			""";
+
+		return Fetch(QUERY, new { profileId, canRead });
+	}
+
+	public Task<MbProfile?> Admin(Guid profileId, bool admin)
+	{
+		const string QUERY = """
+			UPDATE mb_profiles
+			SET admin = :admin
+			WHERE
+				id = :profileId AND
+				deleted_at IS NULL;
+
+			SELECT *
+			FROM mb_profiles
+			WHERE
+				id = :profileId AND
+				deleted_at IS NULL;
+			""";
+
+		return Fetch(QUERY, new { profileId, admin });
+	}
 
     public async Task<MangaBoxType<MbProfile>?> FetchWithRelationships(Guid id)
     {

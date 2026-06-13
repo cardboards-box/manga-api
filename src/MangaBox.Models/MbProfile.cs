@@ -7,6 +7,7 @@ using static Constants;
 /// </summary>
 [Table("mb_profiles")]
 [InterfaceOption(nameof(MbProfile))]
+[Searchable(nameof(Username), nameof(Email), nameof(ProviderId), nameof(Provider))]
 public class MbProfile : MbDbObjectLegacy
 {
 	/// <summary>

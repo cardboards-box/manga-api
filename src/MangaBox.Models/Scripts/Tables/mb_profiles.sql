@@ -24,3 +24,14 @@ ADD COLUMN IF NOT EXISTS
 ALTER TABLE mb_profiles
 ADD COLUMN IF NOT EXISTS 
 	notify_in_progress BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE mb_profiles
+ADD COLUMN IF NOT EXISTS
+	fts tsvector GENERATED ALWAYS AS (
+		to_tsvector('english',
+			username || ' ' ||
+			email || ' ' ||
+			provider_id || ' ' ||
+			provider
+		)
+	) STORED;
