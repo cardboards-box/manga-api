@@ -30,6 +30,7 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 {
 	private const string DEFAULT_CHAPTER_TITLE = "Chapter 1";
 	private static readonly ConcurrentDictionary<string, RateLimiter> _limiters = new(StringComparer.InvariantCultureIgnoreCase);
+	private static RateLimiter? _globalLimiter;
 
 	private readonly FlareSolverInstance _api;
 	private readonly IConfiguration _config;
@@ -132,14 +133,27 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 
 	public override RateLimiter GetRateLimiter(string url)
 	{
+		_globalLimiter ??= new TokenBucketRateLimiter(new()
+		{
+			TokenLimit = 10,
+			TokensPerPeriod = 10,
+			QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+			QueueLimit = int.MaxValue,
+			ReplenishmentPeriod = TimeSpan.FromSeconds(30),
+			AutoReplenishment = true
+		});
+
+		if (string.IsNullOrEmpty(url) || url.StartsWithIc(HomeUrl))
+			return _globalLimiter;
+
 		var uri = new Uri(url).Host;
 		if (_limiters.TryGetValue(uri, out var limiter))
 			return limiter;
 
 		return _limiters[uri] = new TokenBucketRateLimiter(new()
 		{
-			TokenLimit = 10,
-			TokensPerPeriod = 10,
+			TokenLimit = 30,
+			TokensPerPeriod = 30,
 			QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
 			QueueLimit = int.MaxValue,
 			ReplenishmentPeriod = TimeSpan.FromSeconds(30),
