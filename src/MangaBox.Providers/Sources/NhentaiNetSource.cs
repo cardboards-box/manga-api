@@ -259,7 +259,19 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 		try
 		{
 			var doc = await _api.GetHtml($"{MangaBaseUri}{id}/", token);
-			return ParseGallery(id, doc);
+			var gallery = ParseGallery(id, doc);
+			if (IsValidGallery(gallery))
+				return gallery;
+
+			_logger.LogWarning(
+				"Skipping incomplete NHentai.net gallery {GalleryId}: title={HasTitle}, pages={PageCount}, tags={TagCount}, mediaId={MediaId}",
+				id,
+				!string.IsNullOrWhiteSpace(gallery.Title),
+				gallery.Pages.Length,
+				gallery.Tags.Length,
+				gallery.MediaId ?? string.Empty);
+
+			return null;
 		}
 		catch (Exception ex)
 		{
@@ -325,6 +337,12 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 			Uploaded: uploaded,
 			MediaId: mediaId,
 			Pages: pages);
+	}
+
+	private static bool IsValidGallery(ParsedGallery gallery)
+	{
+		return !string.IsNullOrWhiteSpace(gallery.Title) &&
+			gallery.Pages.Length > 0;
 	}
 
 	private static NhentaiNetSearchResult[] ParseSearchResults(HtmlDocument doc)
