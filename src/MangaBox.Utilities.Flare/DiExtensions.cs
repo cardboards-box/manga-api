@@ -14,6 +14,7 @@ public static class DiExtensions
     {
         return services
             .AddTransient<IFlareSolverApiService, FlareSolverApiService>()
-            .AddTransient<IFlareSolverService,  FlareSolverService>();
+            .AddTransient<IFlareSolverService,  FlareSolverService>()
+			.AddTransient<INordVpnEndpointsService, NordVpnEndpointsService>();
     }
 }

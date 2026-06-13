@@ -453,7 +453,7 @@ internal class TestVerb(
 	public async Task TestProxies(CancellationToken token)
 	{
 		const string URL = "https://t2.nhentai.net/galleries/3975529/cover.webp.webp";
-		const int REQUESTS = 1;
+		const int REQUESTS = 10;
 		const string DIR = "proxy-tests";
 
 		if (!Directory.Exists(DIR))
@@ -486,6 +486,59 @@ internal class TestVerb(
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error occurred during proxy test request {RequestNumber} for URL: {URL}", i + 1, URL);
+			}
+		});
+	}
+
+	public async Task TestProxies2(CancellationToken token)
+	{
+		const string PROXY_HOSTNAME = "localhost";
+		int[] PROXY_PORTS = [3300, 3301, 3302];
+
+		var proxies = PROXY_PORTS.Select(t => $"socks5://{PROXY_HOSTNAME}:{t}").ToArray();
+		const string DIR = "proxy-tests";
+
+		const string URL = "https://t2.nhentai.net/galleries/3975529/cover.webp.webp";
+
+		var opts = new ParallelOptions
+		{
+			MaxDegreeOfParallelism = Environment.ProcessorCount,
+			CancellationToken = token
+		};
+
+		int index = 0;
+
+		await Parallel.ForEachAsync(proxies, opts, async (proxyUrl, token) =>
+		{
+			try
+			{
+				int i = index;
+				Interlocked.Increment(ref index);
+
+				var proxy = new WebProxy
+				{
+					Address = new Uri(proxyUrl),
+					BypassProxyOnLocal = false,
+					UseDefaultCredentials = false,
+				};
+				var handler = new HttpClientHandler
+				{
+					Proxy = proxy,
+					UseProxy = true,
+				};
+				using var client = new HttpClient(handler);
+				using var response = await client.GetAsync(URL, token);
+
+				var name = $"proxy-test-{i + 1}.{Path.GetExtension(URL)?.TrimStart('.') ?? "dat"}";
+				var path = Path.Combine(DIR, name);
+				using var io = File.Create(path);
+				await response.Content.CopyToAsync(io, token);
+				await io.FlushAsync(token);
+				_logger.LogInformation("Response for request {RequestNumber}: {Path}", i + 1, path);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error occurred while testing proxy: {Proxy} for URL: {URL}", proxyUrl, URL);
 			}
 		});
 	}

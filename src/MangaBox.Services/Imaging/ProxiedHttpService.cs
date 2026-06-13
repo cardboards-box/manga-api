@@ -1,3 +1,5 @@
+using CardboardBox.Extensions;
+
 using System.Threading.RateLimiting;
 
 namespace MangaBox.Services.Imaging;
@@ -30,7 +32,7 @@ internal class ProxiedHttpService(
 		var (endpoint, lease) = await Acquire(endpoints, token);
 		using var _ = lease;
 
-		_logger.LogDebug("Downloading {Url} through proxy {ProxyName}: {ProxyUrl}", url, endpoint.Name, endpoint.Url);
+		_logger.LogDebug("Downloading {Url} through proxy {ProxyUrl}", url, endpoint.Url);
 		return await _http.Download(url, headers, request =>
 		{
 			request.ClientFactory(_ => endpoint.CreateClient());
@@ -45,7 +47,13 @@ internal class ProxiedHttpService(
 		await _endpointLock.WaitAsync(token);
 		try
 		{
-			return _endpoints ??= await NordVpnEndpoints(token);
+			var tokens = _config.GetValue("Proxies:Tokens", 10);
+			var seconds = _config.GetValue<double>("Proxies:Seconds", 60);
+			var urls = _config.GetSection("Proxies:Urls").Get<string[]>() ?? [];
+
+			return _endpoints ??= [..urls.Select(t => ProxyEndpoint.Create(t, tokens, seconds))
+				.Where(t => t is not null)
+				.Select(t => t!)];
 		}
 		finally
 		{
@@ -81,166 +89,22 @@ internal class ProxiedHttpService(
 		return next % length;
 	}
 
-	private async Task<ProxyEndpoint[]> NordVpnEndpoints(CancellationToken token)
-	{
-		var config = _config.GetSection("Proxies:NordVPN").Get<NordVpnProxyConfig>();
-		if (config is null || !config.Enabled)
-			return [];
-
-		if (string.IsNullOrWhiteSpace(config.Username) || string.IsNullOrWhiteSpace(config.Password))
-		{
-			_logger.LogWarning("NordVPN proxies are enabled but Proxies:NordVPN:Username or Proxies:NordVPN:Password is missing.");
-			return [];
-		}
-
-		try
-		{
-			using var client = new HttpClient
-			{
-				Timeout = TimeSpan.FromSeconds(Math.Max(1, config.TimeoutSeconds))
-			};
-			using var response = await client.GetAsync(config.ServersUrl, token);
-			response.EnsureSuccessStatusCode();
-
-			await using var stream = await response.Content.ReadAsStreamAsync(token);
-			using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: token);
-			var hosts = NordVpnProxyHosts(doc.RootElement);
-			var endpoints = hosts
-				.Take(Math.Max(1, config.MaxServers))
-				.Select(host => ProxyEndpoint.Create(
-					new(
-						config.Name,
-						config.Username,
-						config.Password,
-						config.RateLimits,
-						config.PeriodSeconds),
-					$"{config.Scheme}://{host}:{config.Port}"))
-				.Where(x => x is not null)
-				.Cast<ProxyEndpoint>()
-				.ToArray();
-
-			_logger.LogInformation("Loaded {Count} NordVPN HTTP proxy endpoints.", endpoints.Length);
-			return endpoints;
-		}
-		catch (Exception ex)
-		{
-			_logger.LogWarning(ex, "Failed to load NordVPN HTTP proxy endpoints from {Url}", config.ServersUrl);
-			return [];
-		}
-	}
-
-	private static string[] NordVpnProxyHosts(JsonElement root)
-	{
-		if (root.ValueKind != JsonValueKind.Array)
-			return [];
-
-		var hosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		foreach (var server in root.EnumerateArray())
-		{
-			if (!JsonString(server, "status").Equals("online", StringComparison.OrdinalIgnoreCase))
-				continue;
-
-			if (!server.TryGetProperty("technologies", out var technologies) ||
-				technologies.ValueKind != JsonValueKind.Array)
-				continue;
-
-			foreach (var technology in technologies.EnumerateArray())
-			{
-				if (!JsonString(technology, "identifier").Equals("proxy_ssl", StringComparison.OrdinalIgnoreCase) ||
-					!PivotIsOnline(technology))
-					continue;
-
-				var host = ProxyHost(technology);
-				if (!string.IsNullOrWhiteSpace(host))
-					hosts.Add(host);
-			}
-		}
-
-		return [..hosts.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)];
-	}
-
-	private static bool PivotIsOnline(JsonElement technology)
-	{
-		if (!technology.TryGetProperty("pivot", out var pivot) ||
-			pivot.ValueKind != JsonValueKind.Object)
-			return true;
-
-		return JsonString(pivot, "status").Equals("online", StringComparison.OrdinalIgnoreCase);
-	}
-
-	private static string? ProxyHost(JsonElement technology)
-	{
-		if (!technology.TryGetProperty("metadata", out var metadata) ||
-			metadata.ValueKind != JsonValueKind.Array)
-			return null;
-
-		foreach (var item in metadata.EnumerateArray())
-		{
-			if (JsonString(item, "name").Equals("proxy_hostname", StringComparison.OrdinalIgnoreCase))
-				return JsonString(item, "value");
-		}
-
-		return null;
-	}
-
-	private static string JsonString(JsonElement element, string property)
-	{
-		return element.TryGetProperty(property, out var value) &&
-			value.ValueKind == JsonValueKind.String
-				? value.GetString() ?? string.Empty
-				: string.Empty;
-	}
-
-	/// <summary>
-	/// Represents the configuration for a proxy
-	/// </summary>
-	/// <param name="Name">The name of the proxy provider</param>
-	/// <param name="Username">The username for the proxy</param>
-	/// <param name="Password">The password for the proxy</param>
-	/// <param name="RateLimits">The rate limits to apply to each URL</param>
-	/// <param name="PeriodSeconds">The period in seconds for the rate limits</param>
-	public record class ProxyConfig(
-		[property: JsonPropertyName("name")] string Name,
-		[property: JsonPropertyName("username")] string? Username,
-		[property: JsonPropertyName("password")] string? Password,
-		[property: JsonPropertyName("rateLimits")] int RateLimits,
-		[property: JsonPropertyName("periodSeconds")] double PeriodSeconds);
-
-	public sealed class NordVpnProxyConfig
-	{
-		public bool Enabled { get; set; } = true;
-		public string Name { get; set; } = "NordVPN";
-		public string ServersUrl { get; set; } = "https://api.nordvpn.com/v1/servers";
-		public string Scheme { get; set; } = "https";
-		public int Port { get; set; } = 89;
-		public string? Username { get; set; }
-		public string? Password { get; set; }
-		public int RateLimits { get; set; } = 10;
-		public double PeriodSeconds { get; set; } = 20;
-		public int TimeoutSeconds { get; set; } = 30;
-		public int MaxServers { get; set; } = 100;
-	}
-
 	/// <summary>
 	/// Represents a single configured proxy endpoint
 	/// </summary>
-	/// <param name="Name">The name of the proxy provider</param>
 	/// <param name="Url">The proxy URL</param>
 	/// <param name="Handler">The HTTP handler to use</param>
 	/// <param name="Limiter">The rate limiter for the proxy</param>
 	public sealed record ProxyEndpoint(
-		string Name,
 		string Url,
 		SocketsHttpHandler Handler,
 		RateLimiter Limiter)
 	{
-		public static ProxyEndpoint? Create(ProxyConfig config, string url)
+		public static ProxyEndpoint? Create(string url, int tokens, double seconds)
 		{
 			if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
 				return null;
 
-			var tokens = Math.Max(1, config.RateLimits);
-			var seconds = Math.Max(1, config.PeriodSeconds);
 			var limiter = new TokenBucketRateLimiter(new()
 			{
 				TokenLimit = tokens,
@@ -253,9 +117,9 @@ internal class ProxiedHttpService(
 
 			var handler = ProxyHandler(
 				WithoutUserInfo(uri),
-				Credentials(uri, config.Username, config.Password));
+				Credentials(uri));
 
-			return new(config.Name, Redact(uri), handler, limiter);
+			return new(Redact(uri), handler, limiter);
 		}
 
 		public HttpClient CreateClient() => new(Handler, false);
@@ -274,11 +138,8 @@ internal class ProxiedHttpService(
 			};
 		}
 
-		private static NetworkCredential? Credentials(Uri uri, string? username, string? password)
+		private static NetworkCredential? Credentials(Uri uri)
 		{
-			if (!string.IsNullOrWhiteSpace(username))
-				return new(username, password);
-
 			if (string.IsNullOrWhiteSpace(uri.UserInfo))
 				return null;
 
