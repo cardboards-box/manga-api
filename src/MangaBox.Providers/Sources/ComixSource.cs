@@ -1,5 +1,6 @@
 ﻿using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using System.Numerics;
 using System.Text.Json.Nodes;
 
 namespace MangaBox.Providers.Sources;
@@ -160,17 +161,20 @@ internal class ComixSource(
 
 		const string SCRAMBLE_SEED_HEADER = "X-Scramble-Seed";
 		const string SCRAMBLE_GRID_HEADER = "X-Scramble-Grid";
+		const string SCRAMBLE_ALGO_HEADER = "X-Scramble-Algo";
 		if (result?.Response is null) return null;
 
-		var headers = result.Response.Headers;
 		var encrypted = HeaderValue(result.Response, ComixImageDecryptor.ENC_SEED_HEADER) is not null &&
 			HeaderValue(result.Response, ComixImageDecryptor.ENC_LEN_HEADER) is not null;
-		var seed = headers.TryGetValues(SCRAMBLE_SEED_HEADER, out var seedValues) ? seedValues.FirstOrDefault() : null;
-		var grid = headers.TryGetValues(SCRAMBLE_GRID_HEADER, out var gridValues) ? gridValues.FirstOrDefault() : null;
+		var seed = HeaderValue(result.Response, SCRAMBLE_SEED_HEADER);
+		var grid = HeaderValue(result.Response, SCRAMBLE_GRID_HEADER);
+		var algorithm = HeaderValue(result.Response, SCRAMBLE_ALGO_HEADER);
 		if (string.IsNullOrWhiteSpace(seed) || string.IsNullOrWhiteSpace(grid))
 			return encrypted ? image : null;
 
-		return ImageUnscrambler.Unscramble((Image<Rgba32>) image, seed, grid);
+		_logger.LogInformation("Unscrambling image with seed: {Seed}, grid: {Grid}, algorithm: {Algorithm} >> {Url}", seed, grid, algorithm, result.Response.RequestMessage?.RequestUri);
+
+		return ImageUnscrambler.Unscramble((Image<Rgba32>) image, seed, grid, algorithm);
 	}
 
 	private static string? HeaderValue(HttpResponseMessage response, string name)
@@ -1297,11 +1301,30 @@ internal class ComixSource(
 			Image<Rgba32> image, 
 			string scrambleSeedHeader,
 			string scrambleGridHeader,
+			string? scrambleAlgorithmHeader,
 			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
 		{
 			var seed = ParseSeed(scrambleSeedHeader);
 			var (columns, rows) = ParseGrid(scrambleGridHeader);
-			return Unscramble(image, seed, columns, rows, mode);
+			var algorithm = ParseAlgorithm(scrambleAlgorithmHeader);
+			return Unscramble(image, seed, columns, rows, algorithm, mode);
+		}
+
+		public static Image Unscramble(
+			Image<Rgba32> image, 
+			string scrambleSeedHeader,
+			string scrambleGridHeader,
+			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
+		{
+			var seed = ParseSeed(scrambleSeedHeader);
+			var (columns, rows) = ParseGrid(scrambleGridHeader);
+			return Unscramble(image, seed, columns, rows, ScrambleAlgorithm.LegacyLcg, mode);
+		}
+
+		public enum ScrambleAlgorithm
+		{
+			LegacyLcg = 1,
+			BuildOrderV2 = 3
 		}
 
 		public static Image Unscramble(
@@ -1309,6 +1332,7 @@ internal class ComixSource(
 			uint seed,
 			int columns,
 			int rows,
+			ScrambleAlgorithm algorithm,
 			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
 		{
 			ArgumentNullException.ThrowIfNull(scrambled);
@@ -1322,7 +1346,7 @@ internal class ComixSource(
 				throw new InvalidOperationException("Image is too small for the requested scramble grid.");
 
 			var tileCount = columns * rows;
-			var permutation = ScrambleRandom.CreatePermutation(seed, tileCount);
+			var permutation = ScrambleRandom.CreatePermutation(seed, tileCount, algorithm);
 
 			// Clone instead of creating a blank image so any right/bottom remainder pixels
 			// that were not part of the fixed-size scramble grid are preserved.
@@ -1356,6 +1380,16 @@ internal class ComixSource(
 			}
 
 			return output;
+		}
+
+		public static Image Unscramble(
+			Image<Rgba32> scrambled,
+			uint seed,
+			int columns,
+			int rows,
+			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
+		{
+			return Unscramble(scrambled, seed, columns, rows, ScrambleAlgorithm.LegacyLcg, mode);
 		}
 
 		private static Rectangle GetFixedTileRectangle(
@@ -1474,10 +1508,27 @@ internal class ComixSource(
 
 			return (columns, rows);
 		}
+
+		public static ScrambleAlgorithm ParseAlgorithm(string? value)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				return ScrambleAlgorithm.LegacyLcg;
+
+			if (!int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var algorithm))
+				throw new FormatException($"Invalid X-Scramble-Algo value: {value}");
+
+			return algorithm switch
+			{
+				1 => ScrambleAlgorithm.LegacyLcg,
+				2 => ScrambleAlgorithm.LegacyLcg,
+				3 => ScrambleAlgorithm.BuildOrderV2,
+				_ => throw new FormatException($"Unsupported X-Scramble-Algo value: {value}")
+			};
+		}
 	}
 
 	/// <summary>
-	/// Seeded pseudo-random generator extracted from the JavaScript.
+	/// Seeded pseudo-random generators extracted from the JavaScript.
 	/// </summary>
 	public sealed class ScrambleRandom(uint seed)
 	{
@@ -1504,15 +1555,23 @@ internal class ComixSource(
 			return (int)(NextUInt32() % (uint)maxExclusive);
 		}
 
+		public static int[] CreatePermutation(uint seed, int count)
+		{
+			return CreatePermutation(seed, count, ImageUnscrambler.ScrambleAlgorithm.LegacyLcg);
+		}
+
 		/// <summary>
 		/// Recreates the seeded Fisher-Yates permutation from the JavaScript.
 		/// </summary>
-		public static int[] CreatePermutation(uint seed, int count)
+		public static int[] CreatePermutation(
+			uint seed,
+			int count,
+			ImageUnscrambler.ScrambleAlgorithm algorithm)
 		{
 			if (count < 0)
 				throw new ArgumentOutOfRangeException(nameof(count), "Value cannot be negative.");
 
-			var rng = new ScrambleRandom(seed);
+			var rng = Create(seed, algorithm);
 			var values = Enumerable.Range(0, count).ToArray();
 
 			for (var i = values.Length - 1; i > 0; i--)
@@ -1522,6 +1581,48 @@ internal class ComixSource(
 			}
 
 			return values;
+		}
+
+		private static IScrambleRandom Create(uint seed, ImageUnscrambler.ScrambleAlgorithm algorithm)
+		{
+			return algorithm switch
+			{
+				ImageUnscrambler.ScrambleAlgorithm.LegacyLcg => new LcgScrambleRandom(seed),
+				ImageUnscrambler.ScrambleAlgorithm.BuildOrderV2 => new BuildOrderV2ScrambleRandom(seed),
+				_ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null)
+			};
+		}
+
+		private interface IScrambleRandom
+		{
+			int NextInt32(int maxExclusive);
+		}
+
+		private sealed class LcgScrambleRandom(uint seed) : IScrambleRandom
+		{
+			private readonly ScrambleRandom _rng = new(seed);
+
+			public int NextInt32(int maxExclusive) => _rng.NextInt32(maxExclusive);
+		}
+
+		private sealed class BuildOrderV2ScrambleRandom(uint seed) : IScrambleRandom
+		{
+			private uint _state = seed | 1u;
+			private uint _mix;
+
+			public int NextInt32(int maxExclusive)
+			{
+				if (maxExclusive <= 0)
+					throw new ArgumentOutOfRangeException(nameof(maxExclusive), "Value must be greater than zero.");
+
+				_state ^= _state << 13;
+				_mix = unchecked(_mix + (_state * (uint)maxExclusive));
+				_state ^= _state >> 17;
+				_mix = BitOperations.RotateLeft(_mix, 9) ^ _state;
+				_state ^= _state << 5;
+
+				return (int)(_state % (uint)maxExclusive);
+			}
 		}
 	}
 }

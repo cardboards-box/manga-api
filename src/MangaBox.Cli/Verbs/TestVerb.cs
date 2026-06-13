@@ -130,7 +130,7 @@ internal class TestVerb(
 
 	public Task TestNhentaiNet(CancellationToken token)
 	{
-		const string URL = "https://nhentai.net/g/653374/";
+		const string URL = "https://nhentai.net/g/655680/";
 		return TestSource(_nhentaiNet, URL, true, token);
 	}
 
