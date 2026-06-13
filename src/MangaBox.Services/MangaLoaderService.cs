@@ -266,6 +266,10 @@ internal class MangaLoaderService(
 
 	public async Task<Boxed> Load(IdedSource found, Guid? profileId, CancellationToken token)
 	{
+		if (!found.Source.Info.Enabled ||
+			!found.Service.Enabled)
+			return Boxed.NotFound(nameof(MbSource), "Manga source is not enabled.");
+	
 		var before = await found.Service.Manga(found.Id, token);
 		if (before is null)
 			return Boxed.NotFound(nameof(MbManga), "Could not load manga from source");
@@ -282,10 +286,12 @@ internal class MangaLoaderService(
 			MaxDegreeOfParallelism = 4,
 			CancellationToken = token
 		};
-		return Parallel.ForEachAsync(_sources.All(token), opts, async (source, ct) =>
-		{
-			if (!source.Service.IndexEnabled) return;
 
+		var services = _sources.All(token)
+			.Where(t => t.Info.Enabled && t.Service.Enabled && t.Service.IndexEnabled);
+
+		return Parallel.ForEachAsync(services, opts, async (source, ct) =>
+		{
 			await RunIndexer(source, ct);
 		});
 	}
@@ -302,7 +308,7 @@ internal class MangaLoaderService(
 	public async Task<(LoaderSource, TimeSpan, string)[]> GetIndexableSources(CancellationToken token)
 	{
 		return await _sources.All(token)
-			.Where(t => t.Service.IndexEnabled)
+			.Where(t => t.Info.Enabled && t.Service.Enabled && t.Service.IndexEnabled)
 			.Select(t => (t, t.Service.IndexFrequency, t.Service.GetType().Name))
 			.ToArrayAsync(token);
 	}

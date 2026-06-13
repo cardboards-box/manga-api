@@ -3,6 +3,9 @@ WITH earliest AS (
         MIN(m.updated_at) as updated_at,
         m.source_id
     FROM mb_manga m
+    JOIN mb_sources s ON s.id = m.source_id
+    WHERE 
+        s.enabled = TRUE
     GROUP BY m.source_id
 ), refresh_manga AS (
     SELECT
@@ -11,7 +14,7 @@ WITH earliest AS (
     JOIN earliest e ON
         e.source_id = m.source_id AND
         e.updated_at = m.updated_at
-    WHERE
+    WHERE 
         m.updated_at < CURRENT_TIMESTAMP + INTERVAL '-6 hours'
 ), do_update AS (
     UPDATE mb_manga

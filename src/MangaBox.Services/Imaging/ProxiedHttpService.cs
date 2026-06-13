@@ -47,8 +47,8 @@ internal class ProxiedHttpService(
 		await _endpointLock.WaitAsync(token);
 		try
 		{
-			var tokens = _config.GetValue("Proxies:Tokens", 10);
-			var seconds = _config.GetValue<double>("Proxies:Seconds", 60);
+			var tokens = _config.GetValue("Proxies:Tokens", 120);
+			var seconds = _config.GetValue<double>("Proxies:Seconds", 10);
 			var urls = _config.GetSection("Proxies:Urls").Get<string[]>() ?? [];
 
 			return _endpoints ??= [..urls.Select(t => ProxyEndpoint.Create(t, tokens, seconds))

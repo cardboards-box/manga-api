@@ -48,7 +48,9 @@ internal class SourceService(
 	public async Task<LoaderSource?> FindById(Guid id, CancellationToken token)
 	{
 		await foreach (var source in All(token))
-			if (source.Info.Id == id)
+			if (source.Info.Id == id &&
+				source.Info.Enabled &&
+				source.Service.Enabled)
 				return source;
 
 		return null;
@@ -58,7 +60,9 @@ internal class SourceService(
 	public async Task<LoaderSource?> FindBySlug(string slug, CancellationToken token)
 	{
 		await foreach(var source in All(token))
-			if (source.Info.Slug.EqualsIc(slug))
+			if (source.Info.Slug.EqualsIc(slug) && 
+				source.Info.Enabled && 
+				source.Service.Enabled)
 				return source;
 
 		return null;
@@ -69,6 +73,8 @@ internal class SourceService(
 	{
 		await foreach (var source in All(token))
 		{
+			if (!source.Info.Enabled || !source.Service.Enabled) continue;
+
 			token.ThrowIfCancellationRequested();
 			var (matches, part) = source.Service.MatchesProvider(url);
 			if (!matches || string.IsNullOrEmpty(part)) continue;
