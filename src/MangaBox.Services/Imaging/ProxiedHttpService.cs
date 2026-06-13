@@ -1,6 +1,7 @@
 using System.Threading.RateLimiting;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 
 namespace MangaBox.Services.Imaging;
 
@@ -152,7 +153,12 @@ internal class ProxiedHttpService(
 				.Cast<ProxyEndpoint>()
 				.ToArray();
 
-			_logger.LogInformation("Loaded {Count} NordVPN HTTP proxy endpoints.", endpoints.Length);
+			_logger.LogInformation(
+				"Loaded {Count} NordVPN HTTP proxy endpoints. Credential diagnostics: userLength={UserLength}, passwordLength={PasswordLength}, fingerprint={Fingerprint}",
+				endpoints.Length,
+				config.Username?.Length ?? 0,
+				config.Password?.Length ?? 0,
+				CredentialFingerprint(config.Username, config.Password));
 			return endpoints;
 		}
 		catch (Exception ex)
@@ -256,6 +262,15 @@ internal class ProxiedHttpService(
 			value.ValueKind == JsonValueKind.String
 				? value.GetString() ?? string.Empty
 				: string.Empty;
+	}
+
+	private static string CredentialFingerprint(string? username, string? password)
+	{
+		if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+			return "missing";
+
+		var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{username}:{password}"));
+		return Convert.ToHexString(hash)[..12];
 	}
 
 	/// <summary>
@@ -455,8 +470,8 @@ internal class ProxiedHttpService(
 
 		private static NetworkCredential? Credentials(Uri uri, string? username, string? password)
 		{
-			if (!string.IsNullOrWhiteSpace(username))
-				return new(username.Trim(), password?.Trim());
+			if (!string.IsNullOrEmpty(username))
+				return new(username, password);
 
 			if (string.IsNullOrWhiteSpace(uri.UserInfo))
 				return null;
@@ -467,7 +482,7 @@ internal class ProxiedHttpService(
 				? Uri.UnescapeDataString(parts[1])
 				: string.Empty;
 
-			return string.IsNullOrWhiteSpace(user) ? null : new(user.Trim(), pass.Trim());
+			return string.IsNullOrEmpty(user) ? null : new(user, pass);
 		}
 
 		private static string? BasicProxyAuthorization(NetworkCredential? credentials)
@@ -476,7 +491,7 @@ internal class ProxiedHttpService(
 				return null;
 
 			var raw = $"{credentials.UserName}:{credentials.Password}";
-			return $"Basic {Convert.ToBase64String(Encoding.ASCII.GetBytes(raw))}";
+			return $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes(raw))}";
 		}
 
 		private static Uri WithoutUserInfo(Uri uri)
