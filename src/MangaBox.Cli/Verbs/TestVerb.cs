@@ -397,8 +397,7 @@ internal class TestVerb(
 		const string DIR = "test-images";
 		string[] IMAGE_IDS =
 		[
-			"0267d40e-d3b7-400b-b397-7113f0f9900c",
-			"486846ab-9801-48c5-98b1-187c1631fc5f"
+			"32b27664-c180-47e6-a563-a53e7b7aea27"
 		];
 
 		if (!Directory.Exists(DIR))

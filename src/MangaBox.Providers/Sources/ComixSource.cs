@@ -148,11 +148,12 @@ internal class ComixSource(
 
 		var seed = HeaderValue(result.Response, ComixImageDecryptor.ENC_SEED_HEADER);
 		var length = HeaderValue(result.Response, ComixImageDecryptor.ENC_LEN_HEADER);
+		var algorithm = HeaderValue(result.Response, ComixImageDecryptor.ENC_ALGO_HEADER);
 
 		if (string.IsNullOrWhiteSpace(seed) || string.IsNullOrWhiteSpace(length))
 			return;
 
-		await ComixImageDecryptor.DecryptFilePrefixAsync(path, seed, length, token);
+		await ComixImageDecryptor.DecryptFilePrefixAsync(path, seed, length, algorithm, token);
 	}
 
 	public override async Task<Image?> PostProcessing(DownloadResult result, Image? image, CancellationToken token)
@@ -1159,6 +1160,7 @@ internal class ComixSource(
 	{
 		public const string ENC_LEN_HEADER = "X-Enc-Len";
 		public const string ENC_SEED_HEADER = "X-Enc-Seed";
+		public const string ENC_ALGO_HEADER = "X-Enc-Algo";
 
 		private const uint ENC_MULTIPLIER = 1000005u;
 		private const uint ENC_INCREMENT = 1234567891u;
@@ -1168,10 +1170,11 @@ internal class ComixSource(
 			string outputPath,
 			string seedHeader,
 			string lengthHeader,
+			string? algorithmHeader,
 			CancellationToken token = default)
 		{
 			var bytes = await File.ReadAllBytesAsync(inputPath, token);
-			DecryptPrefix(bytes, seedHeader, lengthHeader);
+			DecryptPrefix(bytes, seedHeader, lengthHeader, algorithmHeader);
 			await File.WriteAllBytesAsync(outputPath, bytes, token);
 		}
 
@@ -1179,10 +1182,12 @@ internal class ComixSource(
 			string path,
 			string seedHeader,
 			string lengthHeader,
+			string? algorithmHeader,
 			CancellationToken token = default)
 		{
 			var seed = ParseSeed(seedHeader);
 			var length = ParseLength(lengthHeader);
+			var algorithm = ParseAlgorithm(algorithmHeader);
 
 			if (seed == 0 || length <= 0)
 				return;
@@ -1210,29 +1215,94 @@ internal class ComixSource(
 				read += count;
 			}
 
-			DecryptPrefix(bytes.AsSpan(0, read), seed, read);
+			DecryptPrefix(bytes.AsSpan(0, read), seed, read, algorithm);
 
 			stream.Position = 0;
 			await stream.WriteAsync(bytes.AsMemory(0, read), token);
 			await stream.FlushAsync(token);
 		}
 
+		public static Task DecryptFilePrefixAsync(
+			string path,
+			string seedHeader,
+			string lengthHeader,
+			CancellationToken token = default)
+		{
+			return DecryptFilePrefixAsync(path, seedHeader, lengthHeader, null, token);
+		}
+
 		public static void DecryptPrefix(byte[] bytes, string seedHeader, string lengthHeader)
+		{
+			DecryptPrefix(bytes, seedHeader, lengthHeader, null);
+		}
+
+		public static void DecryptPrefix(byte[] bytes, string seedHeader, string lengthHeader, string? algorithmHeader)
 		{
 			var seed = ParseSeed(seedHeader);
 			var length = ParseLength(lengthHeader);
-			DecryptPrefix(bytes, seed, length);
+			var algorithm = ParseAlgorithm(algorithmHeader);
+			DecryptPrefix(bytes, seed, length, algorithm);
 		}
 
 		public static void DecryptPrefix(Span<byte> bytes, uint seed, int length)
 		{
+			DecryptPrefix(bytes, seed, length, EncryptionAlgorithm.XorPrefixV1);
+		}
+
+		public enum EncryptionAlgorithm
+		{
+			XorPrefixV1 = 1,
+			XorPrefixV2 = 2
+		}
+
+		public static void DecryptPrefix(Span<byte> bytes, uint seed, int length, EncryptionAlgorithm algorithm)
+		{
 			var limit = Math.Min(bytes.Length, length);
+
+			switch (algorithm)
+			{
+				case EncryptionAlgorithm.XorPrefixV1:
+					DecryptPrefixV1(bytes[..limit], seed);
+					break;
+				case EncryptionAlgorithm.XorPrefixV2:
+					DecryptPrefixV2(bytes[..limit], seed);
+					break;
+				default:
+					throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null);
+			}
+		}
+
+		private static void DecryptPrefixV1(Span<byte> bytes, uint seed)
+		{
 			var state = seed;
 
-			for (var i = 0; i < limit; i++)
+			for (var i = 0; i < bytes.Length; i++)
 			{
 				state = unchecked((state * ENC_MULTIPLIER) + ENC_INCREMENT);
 				bytes[i] = (byte)(bytes[i] ^ (state >> 24));
+			}
+		}
+
+		private static void DecryptPrefixV2(Span<byte> bytes, uint seed)
+		{
+			if (seed == 0)
+				return;
+
+			var state = seed | 1u;
+			var mix = unchecked((seed * (uint)bytes.Length) + 1437226407u);
+
+			for (var i = 0; i < bytes.Length; i++)
+			{
+				state ^= state << 13;
+				mix = unchecked(mix + (state * (uint)i));
+				state ^= state >> 17;
+				mix = BitOperations.RotateLeft(mix, 9) ^ state;
+				state ^= state << 5;
+
+				var key = (byte)(state & 0xff);
+				var encrypted = bytes[i];
+				bytes[i] = (byte)(encrypted ^ key);
+				mix = unchecked((mix << 5) ^ (uint)(key + encrypted));
 			}
 		}
 
@@ -1259,6 +1329,22 @@ internal class ComixSource(
 				throw new FormatException($"Invalid X-Enc-Len value: {value}");
 
 			return length;
+		}
+
+		public static EncryptionAlgorithm ParseAlgorithm(string? value)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+				return EncryptionAlgorithm.XorPrefixV1;
+
+			if (!int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var algorithm))
+				throw new FormatException($"Invalid X-Enc-Algo value: {value}");
+
+			return algorithm switch
+			{
+				1 => EncryptionAlgorithm.XorPrefixV1,
+				2 => EncryptionAlgorithm.XorPrefixV2,
+				_ => throw new FormatException($"Unsupported X-Enc-Algo value: {value}")
+			};
 		}
 	}
 
