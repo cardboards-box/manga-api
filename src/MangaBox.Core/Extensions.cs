@@ -1,4 +1,5 @@
-﻿using System.Threading.Channels;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Threading.Channels;
 
 namespace MangaBox.Core;
 
@@ -254,5 +255,59 @@ public static class Extensions
 			.ConfigureAwait(false))
 			items.Add(item);
 		return items;
+	}
+
+	/// <summary>
+	/// Checks to see if the given boxed result is an error
+	/// </summary>
+	/// <param name="result">The boxed result</param>
+	/// <param name="error">A human readable error message</param>
+	/// <returns><see langword="true"/> if the result is an error, otherwise <see langword="false"/></returns>
+	public static bool IsError(this Boxed result, [MaybeNullWhen(false)] out string error)
+	{
+		if (result.Success)
+		{
+			error = null;
+			return false;
+		}
+
+		var bob = new StringBuilder();
+		bob.Append($"Error: {result.Code}");
+		if (!string.IsNullOrEmpty(result.Description))
+			bob.Append($": {result.Description}");
+		if (result.Errors is { Length: > 0 })
+			bob.Append($" - {string.Join(", ", result.Errors)}");
+
+		error = bob.ToString();
+		return true;
+	}
+
+	/// <summary>
+	/// Checks to see if the given boxed result is an error
+	/// </summary>
+	/// <typeparam name="T">The type of data contained in the boxed result</typeparam>
+	/// <param name="result">The boxed result</param>
+	/// <param name="error">A human readable error message</param>
+	/// <param name="data">The data contained in the boxed result</param>
+	/// <returns><see langword="true"/> if the result is an error, otherwise <see langword="false"/></returns>
+	public static bool IsError<T>(this Boxed result, 
+		[MaybeNullWhen(false)] out string error, 
+		[MaybeNullWhen(true)] out T data)
+	{
+		if (result.IsError(out error))
+		{
+			data = default;
+			return true;
+		}
+
+		if (result is not Boxed<T> val)
+		{
+			error = $"Expected data of type {typeof(T)}, but got {result.GetType()}";
+			data = default;
+			return true;
+		}
+
+		data = val.Data!;
+		return false;
 	}
 }

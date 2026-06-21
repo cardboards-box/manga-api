@@ -86,6 +86,21 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 
 	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
+		IEnumerable<string> Extract(List<ImportAttribute> attributes, params string[] names)
+		{
+			foreach(var name in names)
+			{
+				var attrs = attributes.Where(t => t.Name.EqualsIc(name)).ToArray();
+				foreach (var attr in attrs)
+				{
+					if (!string.IsNullOrWhiteSpace(attr.Value))
+						yield return attr.Value;
+
+					attributes.Remove(attr);
+				}
+			}
+		}
+
 		id = IdFromValue(id) ?? id;
 		var gallery = await FetchGallery(id, token);
 		if (gallery is null)
@@ -98,6 +113,14 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 		if (!string.IsNullOrWhiteSpace(gallery.Uploaded))
 			attributes.Add(new("uploaded", gallery.Uploaded));
 
+		var artists = Extract(attributes, "artist", "circle", "group")
+			.Distinct()
+			.ToArray();
+		var tags = gallery.Tags
+			.Concat(Extract(attributes, "category"))
+			.Distinct()
+			.ToArray();
+
 		return new ImportManga
 		{
 			Title = gallery.Title,
@@ -107,7 +130,8 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 			Cover = [gallery.Cover ?? string.Empty],
 			Description = null,
 			AltTitles = gallery.AltTitles,
-			Tags = gallery.Tags,
+			Artists = artists,
+			Tags = tags,
 			Rating = ContentRating.Pornographic,
 			Nsfw = true,
 			Referer = Referer,

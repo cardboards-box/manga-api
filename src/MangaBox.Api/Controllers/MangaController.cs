@@ -9,6 +9,7 @@ using Models.Composites.Import;
 public class MangaController(
 	IDbService _db,
 	IVolumeService _volume,
+	IBulkImportService _bulk,
 	IRelatingService _relating,
 	IMangaLoaderService _loader,
 	ILogger<MangaController> logger) : BaseController(logger)
@@ -177,6 +178,23 @@ public class MangaController(
 		if (!pid.HasValue) return Boxed.Unauthorized("User is not authenticated.");
 
 		return await _loader.Load(this.GetProfileId(), request.Url, request.Force, token);
+	});
+
+	/// <summary>
+	/// Bulk loads manga from their sources
+	/// </summary>
+	/// <param name="urls">The URLs of the manga to load</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The results of the bulk load operation</returns>
+	[HttpPost, Route("manga/load/bulk")]
+	[ProducesArray<BulkImportResult>, ProducesError(400), ProducesError(404), ProducesError(401)]
+	public Task<IActionResult> LoadBulk([FromBody] string[] urls, CancellationToken token) => Box(async () =>
+	{
+		var pid = this.GetProfileId();
+		if (!pid.HasValue || !this.IsAdmin()) 
+			return Boxed.Unauthorized("User is not authenticated.");
+
+		return await _bulk.Import(pid.Value, token, urls);
 	});
 
 	/// <summary>

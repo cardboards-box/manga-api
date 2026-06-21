@@ -27,6 +27,7 @@ public static class DiExtensions
 			.AddSingleton<ISourceService, SourceService>()
 			.AddTransient<IVolumeService, VolumeService>()
 			.AddTransient<IRelatingService, RelatingService>()
+			.AddTransient<IBulkImportService, BulkImportService>()
 			.AddSingleton<IFlareImageService, FlareImageService>()
 			.AddTransient<IRestitcherService, RestitcherService>()
 			.AddTransient<IMangaLoaderService, MangaLoaderService>()
