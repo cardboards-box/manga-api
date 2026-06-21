@@ -323,15 +323,34 @@ WITH input AS (
         updated_at = CURRENT_TIMESTAMP
     RETURNING id
 ), tags_in AS (
-    SELECT DISTINCT
-        NULLIF(t.name, '') AS name,
+    SELECT
+        (ARRAY_AGG(NULLIF(t.name, '') ORDER BY NULLIF(t.name, '') IS NULL, NULLIF(t.name, '')))[1] AS name,
         NULLIF(t.slug, '') AS slug
     FROM input i
     CROSS JOIN LATERAL jsonb_to_recordset(COALESCE(i.j->'tags', '[]'::jsonb))
         AS t(name text, slug text)
     WHERE NULLIF(t.slug, '') IS NOT NULL
+    GROUP BY NULLIF(t.slug, '')
 ),
-tags_upsert AS (
+tags_existing AS (
+    SELECT DISTINCT ON (ti.slug)
+        t.id,
+        ti.slug
+    FROM tags_in ti
+    JOIN mb_tags t
+        ON t.slug = ti.slug
+        OR ti.slug = ANY(COALESCE(t.aliases, '{}'::text[]))
+    ORDER BY ti.slug, (t.slug = ti.slug) DESC, t.updated_at DESC
+),
+tags_missing AS (
+    SELECT
+        ti.name,
+        ti.slug
+    FROM tags_in ti
+    LEFT JOIN tags_existing te ON te.slug = ti.slug
+    WHERE te.id IS NULL
+),
+tags_inserted AS (
     INSERT INTO mb_tags (
         name,
         slug,
@@ -340,18 +359,23 @@ tags_upsert AS (
         updated_at
     )
     SELECT
-        ti.name,
-        ti.slug,
+        tm.name,
+        tm.slug,
         NULL,
         i.source_id,
         CURRENT_TIMESTAMP
-    FROM tags_in ti
+    FROM tags_missing tm
     CROSS JOIN input i
     ON CONFLICT (slug)
     DO UPDATE SET
         name = COALESCE(EXCLUDED.name, mb_tags.name),
         updated_at = CURRENT_TIMESTAMP
     RETURNING id, slug
+),
+tags_upsert AS (
+    SELECT id, slug FROM tags_existing
+    UNION
+    SELECT id, slug FROM tags_inserted
 ),
 manga_tags_upsert AS (
     INSERT INTO mb_manga_tags (

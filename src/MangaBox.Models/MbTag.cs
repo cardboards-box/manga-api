@@ -12,8 +12,6 @@ public partial class MbTag : MbDbObject
 	/// </summary>
 	public const char SLUG = '-';
 
-	private string? _slug;
-
 	/// <summary>
 	/// The slug of the chapter
 	/// </summary>
@@ -21,8 +19,8 @@ public partial class MbTag : MbDbObject
 	[JsonPropertyName("slug"), MinLength(1), Required]
 	public string Slug
 	{
-		get => _slug ??= GenerateSlug(Name);
-		set => _slug = GenerateSlug(value);
+		get => field ??= GenerateSlug(Name);
+		set => field = GenerateSlug(value);
 	}
 
 	/// <summary>
@@ -45,6 +43,17 @@ public partial class MbTag : MbDbObject
 	[Column("source_id"), Fk<MbSource>(ignore: true)]
 	[JsonPropertyName("sourceId")]
 	public Guid SourceId { get; set; }
+
+	/// <summary>
+	/// The various aliases for this tag
+	/// </summary>
+	[Column("aliases")]
+	[JsonPropertyName("aliases")]
+	public string[] Aliases
+	{
+		get => field ?? [];
+		set => field = [..value.Distinct().Select(GenerateSlug)];
+	}
 
 	/// <summary>
 	/// Converts the given name to the appropriate slug
