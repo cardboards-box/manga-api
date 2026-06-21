@@ -18,7 +18,6 @@ public static class DiExtensions
 		return services
 			.AddSingleton<IZipService, ZipService>()
 			.AddTransient<IHttpService, HttpService>()
-			.AddSingleton<IProxiedHttpService, ProxiedHttpService>()
 			.AddTransient<IListService, ListService>()
 			.AddTransient<ICacheService, CacheService>()
 			.AddTransient<IImageService, ImageService>()
@@ -31,6 +30,7 @@ public static class DiExtensions
 			.AddSingleton<IFlareImageService, FlareImageService>()
 			.AddTransient<IRestitcherService, RestitcherService>()
 			.AddTransient<IMangaLoaderService, MangaLoaderService>()
+			.AddSingleton<IProxiedHttpService, ProxiedHttpService>()
 			.AddSingleton<IMangaPublishService, MangaPublishService>()
 			.AddTransient<INotificationService, NotificationService>();
 	}

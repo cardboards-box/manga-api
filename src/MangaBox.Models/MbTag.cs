@@ -28,7 +28,11 @@ public partial class MbTag : MbDbObject
 	/// </summary>
 	[Column("name")]
 	[JsonPropertyName("name"), MinLength(1), Required]
-	public string Name { get; set; } = string.Empty;
+	public string Name
+	{
+		get;
+		set => field = StandardizeName(value);
+	} = string.Empty;
 
 	/// <summary>
 	/// The description of the tag
@@ -66,6 +70,21 @@ public partial class MbTag : MbDbObject
 		while (name.Contains($"{SLUG}{SLUG}"))
 			name = name.Replace($"{SLUG}{SLUG}", SLUG.ToString());
 		return name.Trim(SLUG).ToLower();
+	}
+
+	/// <summary>
+	/// Standardizes the tag name
+	/// </summary>
+	/// <param name="name">The name of the tag</param>
+	/// <returns>The standardized name</returns>
+	public static string StandardizeName(string name)
+	{
+		var info = new CultureInfo("en-US", false).TextInfo;
+
+		while (name.Contains("  "))
+			name = name.Replace("  ", " ");
+
+		return info.ToTitleCase(name);
 	}
 
 	[GeneratedRegex(@"[^a-zA-Z0-9]+")]

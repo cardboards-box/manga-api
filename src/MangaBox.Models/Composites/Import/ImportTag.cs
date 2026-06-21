@@ -9,7 +9,11 @@ public class ImportTag
     /// The name of the tag
     /// </summary>
     [JsonPropertyName("name")]
-    public string Name { get; set; } = string.Empty;
+    public string Name
+    {
+        get;
+        set => field = MbTag.StandardizeName(value);
+    } = string.Empty;
 
     /// <summary>
     /// The optional slug of the tag (will be generated from the name if not provided)

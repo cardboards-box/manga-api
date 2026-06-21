@@ -106,18 +106,6 @@ public class MetaDataController(
 	});
 
 	/// <summary>
-	/// Gets the manga tags
-	/// </summary>
-	/// <returns>The manga tags</returns>
-	[HttpGet, Route("metadata/manga-tag")]
-	[ProducesArray<MangaBoxType<MbTag>>]
-	public Task<IActionResult> GetTags() => Box(async () =>
-	{
-		var tags = await _db.Tag.GetWithRelationships();
-		return Boxed.Ok(tags);
-	});
-
-	/// <summary>
 	/// Gets the manga sources
 	/// </summary>
 	/// <returns>The manga sources</returns>

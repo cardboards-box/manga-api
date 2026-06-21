@@ -2,7 +2,6 @@ namespace MangaBox.Database.Services;
 
 using Models;
 using Models.Composites;
-using Models.Types;
 
 /// <summary>
 /// The service for interacting with the mb_manga_tags table
@@ -54,7 +53,6 @@ public interface IMbMangaTagDbService
 internal class MbMangaTagDbService(
     IOrmService orm) : Orm<MbMangaTag>(orm), IMbMangaTagDbService
 {
-
     public async Task<MangaBoxType<MbMangaTag>?> FetchWithRelationships(Guid id)
     {
         const string QUERY = @"SELECT * FROM mb_manga_tags WHERE id = :id AND deleted_at IS NULL;
