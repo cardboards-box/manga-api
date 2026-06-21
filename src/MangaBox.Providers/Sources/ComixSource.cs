@@ -163,6 +163,7 @@ internal class ComixSource(
 		const string SCRAMBLE_SEED_HEADER = "X-Scramble-Seed";
 		const string SCRAMBLE_GRID_HEADER = "X-Scramble-Grid";
 		const string SCRAMBLE_ALGO_HEADER = "X-Scramble-Algo";
+		const string SCRAMBLE_HASH_HEADER = "X-Scramble-Hash";
 		if (result?.Response is null) return null;
 
 		var encrypted = HeaderValue(result.Response, ComixImageDecryptor.ENC_SEED_HEADER) is not null &&
@@ -170,12 +171,13 @@ internal class ComixSource(
 		var seed = HeaderValue(result.Response, SCRAMBLE_SEED_HEADER);
 		var grid = HeaderValue(result.Response, SCRAMBLE_GRID_HEADER);
 		var algorithm = HeaderValue(result.Response, SCRAMBLE_ALGO_HEADER);
+		var hash = HeaderValue(result.Response, SCRAMBLE_HASH_HEADER);
 		if (string.IsNullOrWhiteSpace(seed) || string.IsNullOrWhiteSpace(grid))
 			return encrypted ? image : null;
 
-		_logger.LogInformation("Unscrambling image with seed: {Seed}, grid: {Grid}, algorithm: {Algorithm} >> {Url}", seed, grid, algorithm, result.Response.RequestMessage?.RequestUri);
+		_logger.LogInformation("Unscrambling image with seed: {Seed}, grid: {Grid}, algorithm: {Algorithm}, hash: {Hash} >> {Url}", seed, grid, algorithm, hash, result.Response.RequestMessage?.RequestUri);
 
-		return ImageUnscrambler.Unscramble((Image<Rgba32>) image, seed, grid, algorithm);
+		return ImageUnscrambler.Unscramble((Image<Rgba32>) image, seed, grid, algorithm, hash);
 	}
 
 	private static string? HeaderValue(HttpResponseMessage response, string name)
@@ -627,7 +629,7 @@ internal class ComixSource(
 			.ThenBy(GetPageNumber)
 			.ToArray();
 
-		return ExpandLazyNumericPages(doc, pages);
+		return ExpandLazyEncodedPages(doc, ExpandLazyNumericPages(doc, pages));
 	}
 
 	private ImportPage? ParseReaderPage(HtmlNode pageNode, string chapterUrl)
@@ -899,10 +901,20 @@ internal class ComixSource(
 		if (string.IsNullOrWhiteSpace(url))
 			return false;
 
+		if (IsComixImageUrl(url))
+			return true;
+
 		return Regex.IsMatch(
 			url,
 			@"\.(?:avif|webp|jpe?g|png)(?:[?#].*)?$",
 			RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+	}
+
+	private static bool IsComixImageUrl(string? url)
+	{
+		return Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+			Regex.IsMatch(uri.Host, @"(^|\.)wowpic\d+\.store$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
+			Regex.IsMatch(uri.AbsolutePath, @"/i\d+/", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 	}
 
 	private static string ImageSeriesKey(string url)
@@ -967,6 +979,83 @@ internal class ComixSource(
 		return [..output
 			.OrderBy(x => x.Key)
 			.Select(x => x.Value)];
+	}
+
+	private static ImportPage[] ExpandLazyEncodedPages(HtmlDocument doc, ImportPage[] pages)
+	{
+		var pageCount = ParseReaderPageCount(doc);
+		if (pageCount is null || pageCount <= pages.Length)
+			return pages;
+
+		var template = pages
+			.Select(x => (Page: x, Encoded: TryParseEncodedComixImageUrl(x.Page)))
+			.Where(x => x.Encoded is not null)
+			.Select(x => (x.Page, Encoded: x.Encoded!))
+			.OrderBy(x => GetOrdinal(x.Page))
+			.FirstOrDefault();
+
+		if (template.Encoded is null)
+			return pages;
+
+		var output = pages
+			.GroupBy(x => GetOrdinal(x))
+			.ToDictionary(x => x.Key, x => x.First());
+
+		for (var pageNumber = 1; pageNumber <= pageCount; pageNumber++)
+		{
+			if (output.ContainsKey(pageNumber))
+				continue;
+
+			var token = EncodeComixPageToken(pageNumber);
+			var page = new ImportPage($"{template.Encoded.Prefix}{token}{template.Encoded.Suffix}");
+			page.Headers.Add(new("ordinal", pageNumber.ToString(CultureInfo.InvariantCulture)));
+			output[pageNumber] = page;
+		}
+
+		return [..output
+			.OrderBy(x => x.Key)
+			.Select(x => x.Value)];
+	}
+
+	private sealed record EncodedComixImageUrl(
+		string Prefix,
+		string Token,
+		string Suffix);
+
+	private static EncodedComixImageUrl? TryParseEncodedComixImageUrl(string url)
+	{
+		if (!IsComixImageUrl(url))
+			return null;
+
+		var queryIndex = url.IndexOf('?');
+		var cleanUrl = queryIndex >= 0 ? url[..queryIndex] : url;
+		var match = Regex.Match(
+			cleanUrl,
+			@"^(?<prefix>.*?y4)(?<token>[A-Za-z0-9_-]{2})(?<suffix>S5.+)$",
+			RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+		if (!match.Success)
+			return null;
+
+		return new EncodedComixImageUrl(
+			Prefix: match.Groups["prefix"].Value,
+			Token: match.Groups["token"].Value,
+			Suffix: match.Groups["suffix"].Value);
+	}
+
+	private static string EncodeComixPageToken(int pageNumber)
+	{
+		const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+		ReadOnlySpan<char> lowChars = ['j', 'g', 'h', 'm', 'n', 'k', 'l', 'q', 'r', 'i'];
+
+		var highIndex = Math.Clamp((pageNumber / 10) * 4, 0, alphabet.Length - 1);
+		var lowIndex = (pageNumber - 1) % lowChars.Length;
+
+		return string.Create(2, (High: alphabet[highIndex], Low: lowChars[lowIndex]), static (span, state) =>
+		{
+			span[0] = state.High;
+			span[1] = state.Low;
+		});
 	}
 
 	private static int? ParseReaderPageCount(HtmlDocument doc)
@@ -1288,22 +1377,62 @@ internal class ComixSource(
 			if (seed == 0)
 				return;
 
-			var state = seed | 1u;
-			var mix = unchecked((seed * (uint)bytes.Length) + 1437226407u);
+			var candidates = new[]
+			{
+				DecodeWithXorshift(bytes, seed | 1u, highByte: false),
+				DecodeWithXorshift(bytes, seed, highByte: false),
+				DecodeWithXorshift(bytes, seed | 1u, highByte: true),
+				DecodeWithLcg(bytes, seed)
+			};
 
-			for (var i = 0; i < bytes.Length; i++)
+			var decoded = candidates.FirstOrDefault(HasImageSignature) ?? candidates[0];
+			decoded.CopyTo(bytes);
+		}
+
+		private static byte[] DecodeWithXorshift(ReadOnlySpan<byte> bytes, uint initialState, bool highByte)
+		{
+			var result = bytes.ToArray();
+			var state = initialState;
+
+			for (var i = 0; i < result.Length; i++)
 			{
 				state ^= state << 13;
-				mix = unchecked(mix + (state * (uint)i));
 				state ^= state >> 17;
-				mix = BitOperations.RotateLeft(mix, 9) ^ state;
 				state ^= state << 5;
 
-				var key = (byte)(state & 0xff);
-				var encrypted = bytes[i];
-				bytes[i] = (byte)(encrypted ^ key);
-				mix = unchecked((mix << 5) ^ (uint)(key + encrypted));
+				var key = highByte ? state >> 24 : state & 0xff;
+				result[i] = (byte)(result[i] ^ key);
 			}
+
+			return result;
+		}
+
+		private static byte[] DecodeWithLcg(ReadOnlySpan<byte> bytes, uint seed)
+		{
+			var result = bytes.ToArray();
+			DecryptPrefixV1(result, seed);
+			return result;
+		}
+
+		private static bool HasImageSignature(byte[] bytes)
+		{
+			if (bytes.Length < 12)
+				return false;
+
+			return bytes[0] == 'R' &&
+				bytes[1] == 'I' &&
+				bytes[2] == 'F' &&
+				bytes[3] == 'F' &&
+				bytes[8] == 'W' &&
+				bytes[9] == 'E' &&
+				bytes[10] == 'B' &&
+				bytes[11] == 'P' ||
+				bytes[0] == 0xff &&
+				bytes[1] == 0xd8 ||
+				bytes[0] == 0x89 &&
+				bytes[1] == 'P' &&
+				bytes[2] == 'N' &&
+				bytes[3] == 'G';
 		}
 
 		public static uint ParseSeed(string? value)
@@ -1388,12 +1517,24 @@ internal class ComixSource(
 			string scrambleSeedHeader,
 			string scrambleGridHeader,
 			string? scrambleAlgorithmHeader,
+			string? scrambleHashHeader,
 			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
 		{
 			var seed = ParseSeed(scrambleSeedHeader);
 			var (columns, rows) = ParseGrid(scrambleGridHeader);
 			var algorithm = ParseAlgorithm(scrambleAlgorithmHeader);
+			seed = ApplyHashSeedSalt(seed, algorithm, scrambleHashHeader);
 			return Unscramble(image, seed, columns, rows, algorithm, mode);
+		}
+
+		public static Image Unscramble(
+			Image<Rgba32> image, 
+			string scrambleSeedHeader,
+			string scrambleGridHeader,
+			string? scrambleAlgorithmHeader,
+			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
+		{
+			return Unscramble(image, scrambleSeedHeader, scrambleGridHeader, scrambleAlgorithmHeader, null, mode);
 		}
 
 		public static Image Unscramble(
@@ -1411,6 +1552,21 @@ internal class ComixSource(
 		{
 			LegacyLcg = 1,
 			BuildOrderV2 = 3
+		}
+
+		private static uint ApplyHashSeedSalt(uint seed, ScrambleAlgorithm algorithm, string? hashHeader)
+		{
+			if (algorithm != ScrambleAlgorithm.BuildOrderV2 || string.IsNullOrWhiteSpace(hashHeader))
+				return seed;
+
+			return hashHeader.Trim() switch
+			{
+				// Current Comix algo-3 hash-validated path. When this content hash
+				// validates, the frontend XORs this salt into the seed before using
+				// the existing BuildOrderV2 permutation generator.
+				"03632" => seed ^ 58414u,
+				_ => seed
+			};
 		}
 
 		public static Image Unscramble(

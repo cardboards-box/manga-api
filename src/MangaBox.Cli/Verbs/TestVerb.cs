@@ -1,5 +1,6 @@
 ﻿namespace MangaBox.Cli.Verbs;
 
+using SixLabors.ImageSharp;
 using Database;
 using Models;
 using Models.Composites;
@@ -20,6 +21,7 @@ internal class TestVerb(
 	IComixSource _comix,
 	IMangaDexSource _md,
 	IImageService _image,
+	IHttpService _http,
 	ISourceService _sources,
 	IHyakuroSource _hyakuro,
 	IKappaBeastSource _kappa,
@@ -43,6 +45,21 @@ internal class TestVerb(
 	public static string Serialize<T>(T item)
 	{
 		return JsonSerializer.Serialize(item, _options);
+	}
+
+	private void LogHeader(DownloadResult result, string name)
+	{
+		if (result.Response is null)
+			return;
+
+		var value = result.Response.Headers.TryGetValues(name, out var values)
+			? values.FirstOrDefault()
+			: result.Response.Content.Headers.TryGetValues(name, out values)
+				? values.FirstOrDefault()
+				: null;
+
+		if (!string.IsNullOrWhiteSpace(value))
+			_logger.LogInformation("{Header}: {Value}", name, value);
 	}
 
 	public void PrintDbMethods()
@@ -154,8 +171,8 @@ internal class TestVerb(
 	{
 		Task BasicTest(CancellationToken token)
 		{
-			const string URL = "https://comix.to/title/vvnqy-mangatitle";//"https://comix.to/title/8w6dm-i-saved-you-but-im-not-responsible";
-			return TestSource(_comix, URL, true, token);
+			const string URL = "https://comix.to/title/yn96-the-casual-chronicles-of-a-great-saint";//"https://comix.to/title/8w6dm-i-saved-you-but-im-not-responsible";
+			return TestSource(_comix, URL, true, token, null);
 		}
 
 		async Task DebugChapters(CancellationToken token)
@@ -253,7 +270,7 @@ internal class TestVerb(
 		});
 	}
 
-	public async Task TestSource(IMangaSource source, string url, bool images, CancellationToken token)
+	public async Task TestSource(IMangaSource source, string url, bool images, CancellationToken token, int? maxImages = 10)
 	{
 		var name = source.Name;
 		var (match, id) = source.MatchesProvider(url);
@@ -295,7 +312,11 @@ internal class TestVerb(
 			MaxDegreeOfParallelism = 4,
 			CancellationToken = token
 		};
-		await Parallel.ForEachAsync(pages.Take(10), async (page, token) =>
+		var downloadPages = maxImages is null
+			? pages
+			: pages.Take(maxImages.Value);
+
+		await Parallel.ForEachAsync(downloadPages, opts, async (page, token) =>
 		{
 			try
 			{
@@ -431,6 +452,133 @@ internal class TestVerb(
 		});
 	}
 
+	public async Task TestComixImage(CancellationToken token)
+	{
+		async Task TestImage(string url, CancellationToken token)
+		{
+			if (string.IsNullOrWhiteSpace(url))
+			{
+				_logger.LogError("Usage: test TestComixImage <image-url>");
+				return;
+			}
+
+			const string DIR = "test-comix-images";
+			if (!Directory.Exists(DIR))
+				Directory.CreateDirectory(DIR);
+
+			var loader = await _sources.FindBySlug(_comix.Provider, token);
+			if (loader is null)
+			{
+				_logger.LogError("Comix source was not found or is disabled");
+				return;
+			}
+
+			var manga = new MbManga
+			{
+				Id = Guid.NewGuid(),
+				SourceId = loader.Info.Id,
+				Referer = loader.Info.Referer,
+				UserAgent = loader.Info.UserAgent,
+			};
+			var image = new MbImage
+			{
+				Id = Guid.NewGuid(),
+				MangaId = manga.Id,
+				ChapterId = Guid.NewGuid(),
+				Url = url,
+			};
+
+			var headers = _http.HeadersFrom(url, loader.Info, manga, image);
+			IDownloadService downloader = loader.Service.UseFlareImages
+				? _flare
+				: loader.Service.UseProxiedImages
+					? _proxied
+					: _http;
+
+			_logger.LogInformation("Downloading Comix image with {Downloader}: {Url}", downloader.GetType().Name, url);
+			using var download = await downloader.Download(url, headers, token);
+			if (!string.IsNullOrEmpty(download.Error) || download.Stream is null)
+			{
+				_logger.LogError("Error occurred while fetching image: {Error} >> {Url}", download.Error, url);
+				return;
+			}
+
+			LogHeader(download, "x-enc-seed");
+			LogHeader(download, "x-enc-len");
+			LogHeader(download, "x-enc-algo");
+			LogHeader(download, "x-scramble-seed");
+			LogHeader(download, "x-scramble-grid");
+			LogHeader(download, "x-scramble-algo");
+			LogHeader(download, "x-scramble-hash");
+
+			var stem = $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-{url.MD5Hash()}";
+			var extension = Path.GetExtension(download.FileName)?.TrimStart('.');
+			if (string.IsNullOrWhiteSpace(extension))
+				extension = _http.DetermineExtension(download.MimeType);
+			if (string.IsNullOrWhiteSpace(extension))
+				extension = "dat";
+
+			var rawPath = Path.Combine(DIR, $"{stem}.raw.{extension}");
+			var outputPath = Path.Combine(DIR, $"{stem}.processed.{extension}");
+
+			await using (var io = File.Create(rawPath))
+			{
+				await download.Stream.CopyToAsync(io, token);
+				await io.FlushAsync(token);
+			}
+
+			File.Copy(rawPath, outputPath, true);
+			await loader.Service.PostProcessDownload(download, outputPath, token);
+
+			var (width, height, loaded) = await _http.DetermineImageSize(outputPath);
+			_logger.LogInformation("Downloaded Comix image: raw={RawPath}, decoded={OutputPath}, size={Width}x{Height}",
+				rawPath, outputPath, width, height);
+
+			using var sourceImage = loaded;
+			if (sourceImage is null)
+			{
+				_logger.LogWarning("Downloaded file could not be decoded as an image after download post-processing: {Path}", outputPath);
+				return;
+			}
+
+			using var processed = await loader.Service.PostProcessing(download, sourceImage, token);
+			if (processed is null)
+			{
+				_logger.LogInformation("Comix image did not require ImageSharp post-processing: {Path}", outputPath);
+				return;
+			}
+
+			var finalPath = Path.Combine(DIR, $"{stem}.final.{extension}");
+			await using (var io = File.Create(finalPath))
+			{
+				await processed.SaveAsync(io, sourceImage.Metadata.DecodedImageFormat!, token);
+				await io.FlushAsync(token);
+			}
+
+			_logger.LogInformation("Comix ImageService-style output written to {Path}", finalPath);
+		}
+
+		string[] urls =
+		[
+			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4AjS5FIHyEz7PI11FmpSw",
+			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4AhS5FIHyEz7PI11FmpSw",
+			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4AgS5FIHyEz7PI11FmpSw",
+			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4ImS5FIHyEz7PI11FmpSw",
+			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4InS5FIHyEz7PI11FmpSw",
+			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4IkS5FIHyEz7PI11FmpSw",
+			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4IlS5FIHyEz7PI11FmpSw",
+			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4IqS5FIHyEz7PI11FmpSw",
+			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4IrS5FIHyEz7PI11FmpSw",
+			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4MiS5FIHyEz7PI11FmpSw",
+			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4MjS5FIHyEz7PI11FmpSw",
+		];
+
+		await Parallel.ForEachAsync(urls, token, async (url, token) =>
+		{
+			await TestImage(url, token);
+		});
+	}
+
 	public Task TestKappaBeast(CancellationToken token)
 	{
 		const string URL = "https://kappabeast.com/series/jimoto-no-ijimekko-tachi-ni-shikaeshi-shiyou-to-shitara-betsu-no-tatakai-ga-hajimatta";
@@ -557,7 +705,15 @@ internal class TestVerb(
 			return false;
 		}
 
-		object[] parameters = method.GetParameters().Length <= 0 ? [] : [token];
+		object[] parameters = [..method.GetParameters().Select(parameter =>
+		{
+			if (parameter.ParameterType == typeof(CancellationToken))
+				return (object)token;
+			if (parameter.ParameterType == typeof(TestOption))
+				return options;
+
+			return parameter.HasDefaultValue ? parameter.DefaultValue! : null!;
+		})];
 		var result = method.Invoke(this, parameters);
 		if (result is null) { }
 		else if (result is Task task)
