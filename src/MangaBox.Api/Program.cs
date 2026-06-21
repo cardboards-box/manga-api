@@ -38,6 +38,12 @@ builder.Services.AddHostedService<NewChapterBackgroundService>();
 
 var app = builder.Build();
 
+app.UseCors(c => c
+   .AllowAnyHeader()
+   .AllowAnyMethod()
+   .AllowAnyOrigin()
+   .WithExposedHeaders("Content-Disposition", "Content-Length"));
+
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 var pub = app.Services.GetRequiredService<IMangaPublishService>();
 
@@ -58,12 +64,6 @@ if (app.Environment.IsDevelopment() ||
 		c.SwaggerEndpoint("/swagger/v1/swagger.json", "MangaBox V1");
 	});
 }
-
-app.UseCors(c => c
-   .AllowAnyHeader()
-   .AllowAnyMethod()
-   .AllowAnyOrigin()
-   .WithExposedHeaders("Content-Disposition"));
 
 app.UseHttpsRedirection();
 

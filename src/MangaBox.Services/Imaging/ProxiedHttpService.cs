@@ -1,15 +1,21 @@
-using CardboardBox.Extensions;
-
 using System.Threading.RateLimiting;
 
 namespace MangaBox.Services.Imaging;
 
 using Headers = Dictionary<string, string>;
+using Config = (string[] Urls, int Tokens, double Seconds);
 
 /// <summary>
 /// A service for fetching images through a proxy
 /// </summary>
-public interface IProxiedHttpService : IDownloadService { }
+public interface IProxiedHttpService : IDownloadService
+{
+	/// <summary>
+	/// Gets the configuration for the proxy endpoints
+	/// </summary>
+	/// <returns>The proxy configuration</returns>
+	Config GetConfig();
+}
 
 internal class ProxiedHttpService(
 	IHttpService _http,
@@ -19,6 +25,14 @@ internal class ProxiedHttpService(
 	private ProxyEndpoint[]? _endpoints;
 	private readonly SemaphoreSlim _endpointLock = new(1, 1);
 	private int _index = -1;
+
+	public Config GetConfig()
+	{
+		var urls = _config.GetSection("Proxies:Urls").Get<string[]>() ?? [];
+		var tokens = _config.GetValue("Proxies:Tokens", 120);
+		var seconds = _config.GetValue<double>("Proxies:Seconds", 10);
+		return (urls, tokens, seconds);
+	}
 
 	public async Task<DownloadResult> Download(string url, Headers? headers, CancellationToken token)
 	{
@@ -47,10 +61,7 @@ internal class ProxiedHttpService(
 		await _endpointLock.WaitAsync(token);
 		try
 		{
-			var tokens = _config.GetValue("Proxies:Tokens", 120);
-			var seconds = _config.GetValue<double>("Proxies:Seconds", 10);
-			var urls = _config.GetSection("Proxies:Urls").Get<string[]>() ?? [];
-
+			var (urls, tokens, seconds) = GetConfig();
 			return _endpoints ??= [..urls.Select(t => ProxyEndpoint.Create(t, tokens, seconds))
 				.Where(t => t is not null)
 				.Select(t => t!)];

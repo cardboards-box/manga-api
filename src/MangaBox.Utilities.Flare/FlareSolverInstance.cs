@@ -181,8 +181,9 @@ public class FlareSolverInstance(
 	/// <param name="body">The optional body for the request</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <param name="count">The number of retry attempts</param>
+	/// <param name="proxy">The optional proxy to use for the request</param>
 	/// <returns>The raw response from the URL</returns>
-	private async Task<SolverResponse> DoRequest(string url, bool get, NameValueCollection? body, CancellationToken token, int count = 0)
+	private async Task<SolverResponse> DoRequest(string url, bool get, NameValueCollection? body, CancellationToken token, SolverProxy? proxy = null, int count = 0)
 	{
 		try
 		{
@@ -192,12 +193,14 @@ public class FlareSolverInstance(
 					waitInSeconds: ResponseWaitSeconds, 
 					returnScreenshot: ReturnScreenshot, 
 					disableMedia: DisableMedia, 
-					token: token)
+					token: token,
+					proxy: proxy)
 				: await _flare.Post(url, body ?? [], _cookies, timeout: 30_000, 
 					waitInSeconds: ResponseWaitSeconds, 
 					returnScreenshot: ReturnScreenshot, 
 					disableMedia: DisableMedia, 
-					token: token);
+					token: token,
+					proxy: proxy);
 			if (data is null || data.Solution is null) throw new Exception("Failed to get data");
 
 			if (data.Solution.Status < 200 || data.Solution.Status >= 300)
@@ -218,7 +221,7 @@ public class FlareSolverInstance(
 			_logger.LogError(ex, "Failed to get data for url {count}/{max}, retrying after {delay} seconds: {url}", count, MaxRetries, delay, url);
 			await Task.Delay(delay * 1000, token);
 			_logger.LogInformation("Retrying request");
-			return await DoRequest(url, get, body, token, count);
+			return await DoRequest(url, get, body, token, proxy, count);
 		}
 	}
 
@@ -243,10 +246,11 @@ public class FlareSolverInstance(
 	/// <param name="url">The URL to fetch</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <param name="count">The number of retry attempts</param>
+	/// <param name="proxy">The optional proxy to use for the request</param>
 	/// <returns>The raw response from the URL</returns>
-	public virtual Task<SolverResponse> Get(string url, CancellationToken token, int count = 0)
+	public virtual Task<SolverResponse> Get(string url, CancellationToken token, SolverProxy? proxy = null, int count = 0)
 	{
-		return DoRequest(url, true, null, token, count);
+		return DoRequest(url, true, null, token, proxy, count);
 	}
 
 	/// <summary>
@@ -256,10 +260,11 @@ public class FlareSolverInstance(
 	/// <param name="body">The body of the request</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <param name="count">The number of retry attempts</param>
+	/// <param name="proxy">The optional proxy to use for the request</param>
 	/// <returns>The raw response from the URL</returns>
-	public virtual Task<SolverResponse> Post(string url, NameValueCollection body, CancellationToken token, int count = 0)
+	public virtual Task<SolverResponse> Post(string url, NameValueCollection body, CancellationToken token, SolverProxy? proxy = null, int count = 0)
 	{
-		return DoRequest(url, false, body, token, count);
+		return DoRequest(url, false, body, token, proxy, count);
 	}
 
 	/// <summary>
@@ -268,14 +273,15 @@ public class FlareSolverInstance(
 	/// <param name="url">The URL to fetch</param>
 	/// <param name="cache">Whether or not to cache the page</param>
 	/// <param name="token">The cancellation token for the request</param>
+	/// <param name="proxy">The optional proxy to use for the request</param>
 	/// <returns>The HTML document retrieved from the URL</returns>
 	/// <remarks>This does not use <see cref="LimitCheck(CancellationToken)"/></remarks>
-	public virtual async Task<FlareHtmlDocument> GetHtml(string url, CancellationToken token, bool cache = false)
+	public virtual async Task<FlareHtmlDocument> GetHtml(string url, CancellationToken token, bool cache = false, SolverProxy? proxy = null)
 	{
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;
 
-		var resp = await DoRequest(url, true, null, token);
+		var resp = await DoRequest(url, true, null, token, proxy);
 		var page = FromResponse(resp);
 		if (cache) _pageCache[url] = page;
 		return page;
@@ -288,14 +294,15 @@ public class FlareSolverInstance(
 	/// <param name="body">The body of the request</param>
 	/// <param name="cache">Whether or not to cache the page</param>
 	/// <param name="token">The cancellation token for the request</param>
+	/// <param name="proxy">The optional proxy to use for the request</param>
 	/// <returns>The HTML document retrieved from the URL</returns>
 	/// <remarks>This does not use <see cref="LimitCheck(CancellationToken)"/></remarks>
-	public virtual async Task<FlareHtmlDocument> PostHtml(string url, CancellationToken token, NameValueCollection? body = null, bool cache = false)
+	public virtual async Task<FlareHtmlDocument> PostHtml(string url, CancellationToken token, NameValueCollection? body = null, bool cache = false, SolverProxy? proxy = null)
 	{
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;
 
-		var resp = await DoRequest(url, false, body, token);
+		var resp = await DoRequest(url, false, body, token, proxy);
 		var page = FromResponse(resp);
 		if (cache) _pageCache[url] = page;
 		return page;

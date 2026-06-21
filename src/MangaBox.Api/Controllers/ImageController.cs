@@ -1,4 +1,6 @@
-﻿namespace MangaBox.Api.Controllers;
+﻿using Microsoft.AspNetCore.Cors;
+
+namespace MangaBox.Api.Controllers;
 
 using Match;
 using Services.Imaging;
@@ -6,6 +8,7 @@ using Services.Imaging;
 /// <summary>
 /// A service for interacting with images
 /// </summary>
+[EnableCors]
 public class ImageController(
 	IDbService _db,
 	IImageService _image,

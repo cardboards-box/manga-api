@@ -4,7 +4,9 @@ namespace MangaBox.Providers.Sources;
 
 using Database;
 using Models.Types;
+using Services.Imaging;
 using Utilities.Flare;
+using Utilities.Flare.Models;
 
 public interface INhentaiNetSource : IMangaSource
 {
@@ -32,20 +34,26 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 	private static readonly ConcurrentDictionary<string, RateLimiter> _limiters = new(StringComparer.InvariantCultureIgnoreCase);
 	private static RateLimiter? _globalLimiter;
 
+	public static bool UseProxy { get; set; } = false;
+	private static int _proxyIndex = -1;
+
 	private readonly FlareSolverInstance _api;
 	private readonly IConfiguration _config;
 	private readonly ILogger<NhentaiNetSource> _logger;
 	private readonly IDbService _db;
+	private readonly IProxiedHttpService _proxy;
 
 	public NhentaiNetSource(
 		IDbService db,
 		IFlareSolverService flare,
 		IConfiguration config,
+		IProxiedHttpService proxy,
 		ILogger<NhentaiNetSource> logger)
 	{
 		_db = db;
 		_logger = logger;
 		_config = config;
+		_proxy = proxy;
 		_api = flare.Limiter();
 		_api.DisableMedia = true;
 	}
@@ -216,7 +224,7 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 
 		try
 		{
-			var doc = await _api.GetHtml(url, token);
+			var doc = await GetHtml(url, token);
 			return ParseSearchResults(doc);
 		}
 		catch (Exception ex)
@@ -238,7 +246,7 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 
 		try
 		{
-			var doc = await _api.GetHtml(url, token);
+			var doc = await GetHtml(url, token);
 			return ParseSearchResults(doc);
 		}
 		catch (Exception ex)
@@ -246,6 +254,18 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 			_logger.LogWarning(ex, "Failed to search NHentai.net: {Query}", queryString);
 			return [];
 		}
+	}
+
+	public Task<FlareHtmlDocument> GetHtml(string url, CancellationToken token)
+	{
+		var urls = _proxy.GetConfig().Urls;
+		var next = Interlocked.Increment(ref _proxyIndex);
+		if (next < 0)
+			next = Interlocked.Exchange(ref _proxyIndex, 0);
+
+		next %= urls.Length;
+		var proxy = UseProxy ? new SolverProxy { Url = urls[next] } : null;
+		return _api.GetHtml(url, token, false, proxy);
 	}
 
 	private string[] IndexQueries()
@@ -272,7 +292,7 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 	{
 		try
 		{
-			var doc = await _api.GetHtml($"{MangaBaseUri}{id}/", token);
+			var doc = await GetHtml($"{MangaBaseUri}{id}/", token);
 			var gallery = ParseGallery(id, doc);
 			if (IsValidGallery(gallery))
 				return gallery;

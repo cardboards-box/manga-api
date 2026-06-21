@@ -395,10 +395,14 @@ internal class TestVerb(
 	public async Task TestImages(CancellationToken token)
 	{
 		const string DIR = "test-images";
+		const string CACHE = "file-cache";
 		string[] IMAGE_IDS =
 		[
-			"32b27664-c180-47e6-a563-a53e7b7aea27"
+			"94171f0b-07b6-4856-b170-235bc455064a",
 		];
+
+		if (Directory.Exists(CACHE))
+			Directory.Delete(CACHE, true);
 
 		if (!Directory.Exists(DIR))
 			Directory.CreateDirectory(DIR);
