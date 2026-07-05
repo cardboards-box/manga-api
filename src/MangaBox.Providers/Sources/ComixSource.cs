@@ -1,5 +1,4 @@
-﻿using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
 using System.Numerics;
 using System.Text.Json.Nodes;
 
@@ -156,7 +155,7 @@ internal class ComixSource(
 		await ComixImageDecryptor.DecryptFilePrefixAsync(path, seed, length, algorithm, token);
 	}
 
-	public override async Task<Image?> PostProcessing(DownloadResult result, Image? image, CancellationToken token)
+	public override async Task<SKBitmap?> PostProcessing(DownloadResult result, SKBitmap? image, CancellationToken token)
 	{
 		if (image is null) return image;
 
@@ -177,7 +176,7 @@ internal class ComixSource(
 
 		_logger.LogInformation("Unscrambling image with seed: {Seed}, grid: {Grid}, algorithm: {Algorithm}, hash: {Hash} >> {Url}", seed, grid, algorithm, hash, result.Response.RequestMessage?.RequestUri);
 
-		return ImageUnscrambler.Unscramble((Image<Rgba32>) image, seed, grid, algorithm, hash);
+		return ImageUnscrambler.Unscramble(image, seed, grid, algorithm, hash);
 	}
 
 	private static string? HeaderValue(HttpResponseMessage response, string name)
@@ -1506,14 +1505,17 @@ internal class ComixSource(
 			var seed = ParseSeed(scrambleSeedHeader);
 			var (columns, rows) = ParseGrid(scrambleGridHeader);
 
-			using var image = await Image.LoadAsync<Rgba32>(inputPath, token);
+			using var image = await SkiaImageHelpers.LoadAsync(inputPath, token);
+			if (image is null)
+				throw new InvalidOperationException($"Image could not be decoded: {inputPath}");
+
 			using var output = Unscramble(image, seed, columns, rows, mode);
 
-			await output.SaveAsync(outputPath, token);
+			await SkiaImageHelpers.SaveAsync(output, outputPath, SkiaImageHelpers.DetermineFormat(outputPath), token);
 		}
 
-		public static Image Unscramble(
-			Image<Rgba32> image, 
+		public static SKBitmap Unscramble(
+			SKBitmap image, 
 			string scrambleSeedHeader,
 			string scrambleGridHeader,
 			string? scrambleAlgorithmHeader,
@@ -1527,8 +1529,8 @@ internal class ComixSource(
 			return Unscramble(image, seed, columns, rows, algorithm, mode);
 		}
 
-		public static Image Unscramble(
-			Image<Rgba32> image, 
+		public static SKBitmap Unscramble(
+			SKBitmap image, 
 			string scrambleSeedHeader,
 			string scrambleGridHeader,
 			string? scrambleAlgorithmHeader,
@@ -1537,8 +1539,8 @@ internal class ComixSource(
 			return Unscramble(image, scrambleSeedHeader, scrambleGridHeader, scrambleAlgorithmHeader, null, mode);
 		}
 
-		public static Image Unscramble(
-			Image<Rgba32> image, 
+		public static SKBitmap Unscramble(
+			SKBitmap image, 
 			string scrambleSeedHeader,
 			string scrambleGridHeader,
 			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
@@ -1569,8 +1571,8 @@ internal class ComixSource(
 			};
 		}
 
-		public static Image Unscramble(
-			Image<Rgba32> scrambled,
+		public static SKBitmap Unscramble(
+			SKBitmap scrambled,
 			uint seed,
 			int columns,
 			int rows,
@@ -1592,12 +1594,12 @@ internal class ComixSource(
 
 			// Clone instead of creating a blank image so any right/bottom remainder pixels
 			// that were not part of the fixed-size scramble grid are preserved.
-			var output = new Image<Rgba32>(scrambled.Width, scrambled.Height);
+			var output = SkiaImageHelpers.CreateBitmap(scrambled.Width, scrambled.Height);
 			CopyPixels(
 				source: scrambled,
-				sourceRect: new Rectangle(0, 0, scrambled.Width, scrambled.Height),
+				sourceRect: new SKRectI(0, 0, scrambled.Width, scrambled.Height),
 				destination: output,
-				destinationPoint: Point.Empty);
+				destinationPoint: SKPointI.Empty);
 
 			for (var scrambledIndex = 0; scrambledIndex < tileCount; scrambledIndex++)
 			{
@@ -1624,8 +1626,8 @@ internal class ComixSource(
 			return output;
 		}
 
-		public static Image Unscramble(
-			Image<Rgba32> scrambled,
+		public static SKBitmap Unscramble(
+			SKBitmap scrambled,
 			uint seed,
 			int columns,
 			int rows,
@@ -1634,7 +1636,7 @@ internal class ComixSource(
 			return Unscramble(scrambled, seed, columns, rows, ScrambleAlgorithm.LegacyLcg, mode);
 		}
 
-		private static Rectangle GetFixedTileRectangle(
+		private static SKRectI GetFixedTileRectangle(
 			int index,
 			int tileWidth,
 			int tileHeight,
@@ -1643,14 +1645,14 @@ internal class ComixSource(
 			var column = index % columns;
 			var row = index / columns;
 
-			return new Rectangle(
+			return new SKRectI(
 				column * tileWidth,
 				row * tileHeight,
-				tileWidth,
-				tileHeight);
+				(column + 1) * tileWidth,
+				(row + 1) * tileHeight);
 		}
 
-		private static Point GetFixedTilePoint(
+		private static SKPointI GetFixedTilePoint(
 			int index,
 			int tileWidth,
 			int tileHeight,
@@ -1659,62 +1661,25 @@ internal class ComixSource(
 			var column = index % columns;
 			var row = index / columns;
 
-			return new Point(
+			return new SKPointI(
 				column * tileWidth,
 				row * tileHeight);
 		}
 
 		private static void CopyPixels(
-			Image<Rgba32> source,
-			Rectangle sourceRect,
-			Image<Rgba32> destination,
-			Point destinationPoint)
+			SKBitmap source,
+			SKRectI sourceRect,
+			SKBitmap destination,
+			SKPointI destinationPoint)
 		{
-			source.ProcessPixelRows(destination, (sourceAccessor, destinationAccessor) =>
-			{
-				for (var y = 0; y < sourceRect.Height; y++)
-				{
-					var sourceY = sourceRect.Y + y;
-					var destinationY = destinationPoint.Y + y;
-
-					if ((uint)sourceY >= (uint)source.Height)
-						continue;
-
-					if ((uint)destinationY >= (uint)destination.Height)
-						continue;
-
-					var sourceRow = sourceAccessor.GetRowSpan(sourceY);
-					var destinationRow = destinationAccessor.GetRowSpan(destinationY);
-
-					var sourceX = sourceRect.X;
-					var destinationX = destinationPoint.X;
-					var width = sourceRect.Width;
-
-					if (sourceX < 0)
-					{
-						var offset = -sourceX;
-						sourceX = 0;
-						destinationX += offset;
-						width -= offset;
-					}
-
-					if (destinationX < 0)
-					{
-						var offset = -destinationX;
-						destinationX = 0;
-						sourceX += offset;
-						width -= offset;
-					}
-
-					width = Math.Min(width, source.Width - sourceX);
-					width = Math.Min(width, destination.Width - destinationX);
-
-					if (width <= 0)
-						continue;
-
-					sourceRow.Slice(sourceX, width).CopyTo(destinationRow.Slice(destinationX, width));
-				}
-			});
+			using var canvas = new SKCanvas(destination);
+			var destinationRect = new SKRect(
+				destinationPoint.X,
+				destinationPoint.Y,
+				destinationPoint.X + sourceRect.Width,
+				destinationPoint.Y + sourceRect.Height);
+			canvas.DrawBitmap(source, sourceRect, destinationRect, SKSamplingOptions.Default);
+			canvas.Flush();
 		}
 
 		public static uint ParseSeed(string? value)

@@ -1,4 +1,3 @@
-﻿using SixLabors.ImageSharp;
 using System.Threading.RateLimiting;
 
 namespace MangaBox.Providers;
@@ -60,7 +59,7 @@ public abstract class BaseMangaSource<T> : IMangaSource
 	public virtual RateLimiter GetRateLimiter(string url) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 
 	/// <inheritdoc />
-	public virtual Task<Image?> PostProcessing(DownloadResult result, Image? image, CancellationToken token) => Task.FromResult(image);
+	public virtual Task<SkiaSharp.SKBitmap?> PostProcessing(DownloadResult result, SkiaSharp.SKBitmap? image, CancellationToken token) => Task.FromResult(image);
 
 	/// <inheritdoc />
 	public virtual Task PostProcessDownload(DownloadResult result, string path, CancellationToken token) => Task.CompletedTask;

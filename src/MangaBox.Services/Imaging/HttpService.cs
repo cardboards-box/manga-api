@@ -4,7 +4,7 @@ using System.Net.Http.Headers;
 
 namespace MangaBox.Services.Imaging;
 
-using Image = SixLabors.ImageSharp.Image;
+using Image = SkiaSharp.SKBitmap;
 using Headers = Dictionary<string, string>;
 
 /// <summary>
@@ -178,7 +178,9 @@ internal class HttpService(
 	{
 		try
 		{
-			var image = await Image.LoadAsync(path);
+			var image = await SkiaImageHelpers.LoadAsync(path);
+			if (image is null)
+				return (null, null, null);
 			return (image.Width, image.Height, image);
 		}
 		catch (Exception ex)

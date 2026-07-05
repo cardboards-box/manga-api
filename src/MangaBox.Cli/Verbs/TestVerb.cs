@@ -1,6 +1,5 @@
 ﻿namespace MangaBox.Cli.Verbs;
 
-using SixLabors.ImageSharp;
 using Database;
 using Models;
 using Models.Composites;
@@ -398,8 +397,43 @@ internal class TestVerb(
 
 	public async Task TestRestitcher(CancellationToken token)
 	{
+		async Task<bool> BustImages(Guid chapterId)
+		{
+			var images = await _db.Chapter.FetchWithRelationships(chapterId);
+			if (images is null)
+			{
+				_logger.LogWarning("No images found for chapter ID: {ChapterId}", chapterId);
+				return false;
+			}
+
+			var imageIds = images.GetItems<MbImage>()?.Select(t => t.Id).ToHashSet();
+            if (imageIds is null || imageIds.Count == 0) 
+			{ 
+				_logger.LogWarning("Nothing to bust for chapter ID: {ChapterId}", chapterId);
+                return false; 
+			}
+
+            var opts = new ParallelOptions
+            {
+                CancellationToken = token,
+                MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 5)
+            };
+            var failed = 0;
+            await Parallel.ForEachAsync(imageIds, opts, async (id, ct) =>
+            {
+                var result = await _image.Bust(id, ct);
+                if (result.Success) return;
+
+                Interlocked.Increment(ref failed);
+            });
+
+			_logger.LogInformation("Bust operation completed for chapter ID: {ChapterId}. Failed attempts: {Failed}", chapterId, failed);
+            return failed > 0;
+        }
+
 		var id = Guid.Parse("5e4520c7-2ae8-4965-8622-660bdecf35b7");
-		var result = await _image.Download(id, Services.CBZModels.ComicFormat.Zip, token);
+		await BustImages(id);
+        var result = await _image.Download(id, Services.CBZModels.ComicFormat.Zip, token);
 		if (!string.IsNullOrEmpty(result.Error) || result.Stream is null)
 		{
 			_logger.LogError("Error occurred while fetching image: {Error} >> {ID}", result.Error, id);
@@ -544,14 +578,14 @@ internal class TestVerb(
 			using var processed = await loader.Service.PostProcessing(download, sourceImage, token);
 			if (processed is null)
 			{
-				_logger.LogInformation("Comix image did not require ImageSharp post-processing: {Path}", outputPath);
+				_logger.LogInformation("Comix image did not require SkiaSharp post-processing: {Path}", outputPath);
 				return;
 			}
 
 			var finalPath = Path.Combine(DIR, $"{stem}.final.{extension}");
 			await using (var io = File.Create(finalPath))
 			{
-				await processed.SaveAsync(io, sourceImage.Metadata.DecodedImageFormat!, token);
+				await SkiaImageHelpers.SaveAsync(processed, io, SkiaImageHelpers.DetermineFormat(finalPath, download.MimeType), token);
 				await io.FlushAsync(token);
 			}
 

@@ -1,5 +1,7 @@
 ﻿namespace MangaBox.Api.Controllers;
 
+using Database.Services;
+
 /// <summary>
 /// The controller for tag endpoints
 /// </summary>
@@ -25,6 +27,7 @@ public class TagController(
 	/// <param name="tags">The tags to update</param>
 	/// <returns>The updated tags</returns>
 	[HttpPost, Route("tag")]
+	[ProducesArray<MbTag>]
 	public Task<IActionResult> Post([FromBody] MbTag[] tags) => Box(async () =>
 	{
 		if (!this.IsAdmin())
@@ -41,6 +44,7 @@ public class TagController(
 	/// <param name="aliases">The tag IDs to merge into the kept tag</param>
 	/// <returns>The updated tag and deleted tag IDs</returns>
 	[HttpPost, Route("tag/merge/{id}")]
+	[ProducesBox<MbTagMergeResult>]
 	public Task<IActionResult> Merge([FromRoute] Guid id, [FromBody] Guid[] aliases) => Box(async () =>
 	{
 		if (!this.IsAdmin())

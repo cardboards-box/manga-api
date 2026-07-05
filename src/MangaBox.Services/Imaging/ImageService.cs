@@ -1,10 +1,8 @@
 ﻿using AsyncKeyedLock;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using SkiaSharp;
 using System.IO.Compression;
 using System.Threading.RateLimiting;
-using Image = SixLabors.ImageSharp.Image;
+using Image = SkiaSharp.SKBitmap;
 
 namespace MangaBox.Services.Imaging;
 
@@ -260,7 +258,8 @@ internal class ImageService(
 				return;
 
 			using var io = File.Create(scramPath);
-			await ppi.SaveAsync(io, image.Metadata.DecodedImageFormat!, token);
+			var format = SkiaImageHelpers.DetermineFormat(path, result.MimeType);
+			await SkiaImageHelpers.SaveAsync(ppi, io, format, token);
 			await io.FlushAsync(token);
 			io.Dispose();
 			image.Dispose();
@@ -649,7 +648,7 @@ internal class ImageService(
 			{
 				try
 				{
-					return Image.Load(t.Stream!);
+					return SkiaImageHelpers.LoadAsync(t.Stream!, token).GetAwaiter().GetResult();
 				}
 				catch (Exception ex)
 				{
@@ -658,7 +657,7 @@ internal class ImageService(
 					return null!;
 				}
 			})
-			.Where(t => t is not null)
+			.OfType<SKBitmap>()
 			.ToArray();
 
 		if (images.Length == 0)
@@ -667,19 +666,21 @@ internal class ImageService(
 		int width = images.Max(t => t.Width),
 			height = images.Sum(t => t.Height);
 
-		using var image = new Image<Rgba32>(width, height);
+		using var image = SkiaImageHelpers.CreateBitmap(width, height);
+		image.Erase(SKColors.Transparent);
 
 		int y = 0;
 		foreach (var img in images)
 		{
 			int x = (width / 2) - (img.Width / 2);
-			var p = new Point(x, y);
-			image.Mutate(t => t.DrawImage(img, p, 1));
+			using var canvas = new SKCanvas(image);
+			canvas.DrawBitmap(img, x, y, SKSamplingOptions.Default);
+			canvas.Flush();
 			y += img.Height;
 		}
 
 		var output = new MemoryStream();
-		await image.SaveAsPngAsync(output, token);
+		await SkiaImageHelpers.SaveAsync(image, output, SKEncodedImageFormat.Png, token);
 		output.Position = 0;
 
 		images.Each(t => t.Dispose());

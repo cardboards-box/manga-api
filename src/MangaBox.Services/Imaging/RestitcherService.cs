@@ -1,8 +1,6 @@
 ﻿using AsyncKeyedLock;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Drawing.Processing;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using SkiaSharp;
+using Image = SkiaSharp.SKBitmap;
 
 namespace MangaBox.Services.Imaging;
 
@@ -153,8 +151,8 @@ internal class RestitcherService(
 
 			var width = neededImages.Max(t => t.Width);
 			var height = slice.Slices.Sum(t => t.Stop - t.Start);
-			using var image = new Image<Rgba32>(width, height);
-			image.Mutate(t => t.Clear(Color.Transparent));
+			using var image = SkiaImageHelpers.CreateBitmap(width, height);
+			image.Erase(SKColors.Transparent);
 
 			int y = 0;
 			foreach(var part in slice.Slices.OrderBy(t => t.Ordinal))
@@ -163,10 +161,12 @@ internal class RestitcherService(
 				if (section is null)
 					return new($"Could not find image for slice: {slice.Id} - {part.Image}", slice);
 
-				var source = new Rectangle(0, part.Start, section.Width, part.Stop - part.Start);
-				var dest = new Point(CenterWidth(section.Width, width), y);
-				using var cropped = section.Clone(t => t.Crop(source));
-				image.Mutate(ctx => ctx.DrawImage(cropped, dest, 1f));
+				var source = new SKRectI(0, part.Start, section.Width, part.Stop);
+				var x = CenterWidth(section.Width, width);
+				var dest = new SKRect(x, y, x + section.Width, y + source.Height);
+				using var canvas = new SKCanvas(image);
+				canvas.DrawBitmap(section, source, dest, SKSamplingOptions.Default);
+				canvas.Flush();
 				y += source.Height;
 			}
 
@@ -207,7 +207,7 @@ internal class RestitcherService(
 	{
 		var outPath = _cache.GetCachePath(slice, out var hash, false);
 		using var io = File.Create(outPath);
-		await output.SaveAsWebpAsync(io, token);
+		await SkiaImageHelpers.SaveAsync(output, io, SKEncodedImageFormat.Webp, token);
 		await io.FlushAsync(token);
 		await io.DisposeAsync();
 
@@ -235,8 +235,7 @@ internal class RestitcherService(
 		if (image is null)
 			return new($"Could not find image for slice: {slice.Id}", slice);
 
-		using var cropped = image.Clone(t => t.Crop(
-			new Rectangle(0, single.Start, image.Width, single.Stop - single.Start)));
+		using var cropped = SkiaImageHelpers.Crop(image, new SKRectI(0, single.Start, image.Width, single.Stop));
 		return await SaveSlice(cropped, slice, token);
 	}
 
@@ -332,7 +331,9 @@ internal class RestitcherService(
 				throw new FileNotFoundException($"Image with ID {id} not found in restitch images");
 
 			using var cacheLock = await _cacheLocks.LockAsync(id, token);
-			image = await Image.LoadAsync(path, token);
+			image = await SkiaImageHelpers.LoadAsync(path, token);
+			if (image is null)
+				throw new InvalidOperationException($"Image could not be decoded: {path}");
 			_images[id] = image;
 			return image;
 		}

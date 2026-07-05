@@ -1,10 +1,7 @@
-﻿using SixLabors.ImageSharp;
-
 namespace MangaBox.Match;
 
 using RIS;
 using Services.Imaging;
-using SixLabors.ImageSharp.Processing;
 
 /// <summary>
 /// A service for indexing images in the RIS database
@@ -94,21 +91,26 @@ internal class RISIndexService(
 	{
 		try
 		{
-			using var image = await Image.LoadAsync(stream, token);
+			using var image = await SkiaImageHelpers.LoadAsync(stream, token);
+			if (image is null)
+				throw new InvalidOperationException("Failed to decode image");
+
+			SkiaSharp.SKBitmap outputImage = image;
 			var totalPixels = (long)image.Width * image.Height;
 			if (totalPixels > MAX_PIXELS)
 			{
 				var scale = Math.Sqrt((double)MAX_PIXELS / totalPixels);
 				var newWidth = (int)(image.Width * scale);
 				var newHeight = (int)(image.Height * scale);
-				image.Mutate(x => x.Resize(new ResizeOptions
-				{
-					Mode = ResizeMode.Max,
-					Size = new Size(newWidth, newHeight)
-				}));
+				outputImage = image.Resize(
+					new SkiaSharp.SKImageInfo(newWidth, newHeight, image.ColorType, image.AlphaType),
+					SkiaSharp.SKSamplingOptions.Default) ?? throw new InvalidOperationException("Failed to resize image");
 			}
 			var output = new MemoryStream();
-			await image.SaveAsJpegAsync(output, token);
+			await SkiaImageHelpers.SaveAsync(outputImage, output, SkiaSharp.SKEncodedImageFormat.Jpeg, token);
+			if (!ReferenceEquals(outputImage, image))
+				outputImage.Dispose();
+
 			output.Position = 0;
 			return output;
 		}

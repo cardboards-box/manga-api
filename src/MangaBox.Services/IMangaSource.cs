@@ -1,5 +1,5 @@
 ﻿using System.Threading.RateLimiting;
-using SixLabors.ImageSharp;
+using SkiaSharp;
 
 namespace MangaBox.Services;
 
@@ -136,7 +136,7 @@ public interface IMangaSource
 	/// <param name="image">The image to process</param>
 	/// <param name="token">The cancellation token for the request</param>
 	/// <returns>The processed image or null if something went wrong</returns>
-	Task<Image?> PostProcessing(DownloadResult result, Image? image, CancellationToken token);
+	Task<SKBitmap?> PostProcessing(DownloadResult result, SKBitmap? image, CancellationToken token);
 }
 
 /// <summary>
