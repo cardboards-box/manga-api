@@ -17,6 +17,8 @@ public class MangaClashSource(
 
 	public override string? Referer => null;
 
+    public override bool Enabled => false;
+
 	private readonly FlareSolverInstance _api = _flare.Limiter();
 
 	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
