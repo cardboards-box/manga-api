@@ -100,25 +100,27 @@ internal class VolumeService(
 	/// <param name="start">The index to start at</param>
 	public static void FixHangingVolumes(ProgressChapter[] chapters, int start = 0)
 	{
-		//Get the first chapter that has a null volume
-		var nullVol = chapters.IndexOf(t => !t.Chapter.Volume.HasValue, start);
-		//If the chapter doesn't exist or it's less than the start, skip processing
-		if (nullVol < start || nullVol <= 0) return;
+		for (var i = Math.Max(start, 0); i < chapters.Length; i++)
+		{
+			if (chapters[i].Chapter.Volume.HasValue)
+				continue;
 
-		//Find the next chapter that has a volume number
-		var next = chapters.IndexOf(t => t.Chapter.Volume.HasValue, nullVol);
-		if (next < 0) return;
-		//Get the previous volume that has a volume number
-		var previousIdx = chapters.IndexOfBefore(t => t.Chapter.Volume.HasValue, nullVol);
-		//Determine the volume number to use - If there is no previous index then use the next volume number
-		var volume = previousIdx == -1
-			? chapters[next].Chapter.Volume!.Value
-			: chapters[previousIdx].Chapter.Volume!.Value;
-		//Set all of the null volumes to the volume number
-		for(var i = nullVol; i < next; i++)
-			chapters[i].Chapter.Volume = volume;
-		//Recurse to the next chapter
-		FixHangingVolumes(chapters, next + 1);
+			var runStart = i;
+			while (i < chapters.Length && !chapters[i].Chapter.Volume.HasValue)
+				i++;
+
+			if (i >= chapters.Length)
+				return;
+
+			var nextVolume = chapters[i].Chapter.Volume!.Value;
+			var previousIdx = chapters.IndexOfBefore(t => t.Chapter.Volume.HasValue, runStart);
+			var volume = previousIdx == -1
+				? nextVolume
+				: chapters[previousIdx].Chapter.Volume!.Value;
+
+			for (var y = runStart; y < i; y++)
+				chapters[y].Chapter.Volume = volume;
+		}
 	}
 
 	/// <summary>
