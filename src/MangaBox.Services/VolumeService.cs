@@ -366,8 +366,19 @@ internal class VolumeService(
 			return available.First();
 		}
 
-		void NextWhole(SuggestionIndicesW indices, MbChapter chapter, Suggestions suggestions)
+		void NextWhole(SuggestionIndicesW indices, MbChapter chapter, Suggestions suggestions, bool includeCurrentPartials = true)
 		{
+			var currentChapter = volumes[indices.VolumeIndex].Chapters[indices.ChapterIndex];
+			if (includeCurrentPartials && currentChapter.Partial.Length > 0)
+			{
+				var partialMatch = FindBestMatch(chapter, currentChapter.Partial.First().Versions);
+				if (partialMatch is not null && partialMatch != chapter.Id)
+				{
+					suggestions.Add(chapter.Id, new(partialMatch, TransitionType.Partial));
+					return;
+				}
+			}
+
 			int nci = indices.ChapterIndex + 1;
 			var volume = volumes[indices.VolumeIndex];
 			VolumeChapter nextChapter;
@@ -409,7 +420,7 @@ internal class VolumeService(
 				.Chapters[indices.ChapterIndex].Partial;
 			if (partials.Length <= npi)
 			{
-				NextWhole(indices, chapter, suggestions);
+				NextWhole(indices, chapter, suggestions, false);
 				return;
 			}
 
@@ -417,7 +428,7 @@ internal class VolumeService(
 			var match = FindBestMatch(chapter, available);
 			if (match is null)
 			{
-				NextWhole(indices, chapter, suggestions);
+				NextWhole(indices, chapter, suggestions, false);
 				return;
 			}
 
