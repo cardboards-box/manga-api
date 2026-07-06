@@ -122,6 +122,20 @@ public interface IMangaSource
 	RateLimiter GetRateLimiter(string url);
 
 	/// <summary>
+	/// Downloads an image from the source using the selected downloader.
+	/// </summary>
+	/// <param name="downloader">The downloader selected for this image</param>
+	/// <param name="url">The image URL</param>
+	/// <param name="headers">The request headers</param>
+	/// <param name="token">The cancellation token for the request</param>
+	/// <returns>The download result</returns>
+	Task<DownloadResult> DownloadImage(
+		IDownloadService downloader,
+		string url,
+		Dictionary<string, string>? headers,
+		CancellationToken token) => downloader.Download(url, headers, token);
+
+	/// <summary>
 	/// The post processing to do on the downloaded file before it is decoded as an image.
 	/// </summary>
 	/// <param name="result">The download result for the image</param>

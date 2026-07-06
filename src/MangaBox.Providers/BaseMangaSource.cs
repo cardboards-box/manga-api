@@ -59,6 +59,13 @@ public abstract class BaseMangaSource<T> : IMangaSource
 	public virtual RateLimiter GetRateLimiter(string url) => _limiter ??= PolyfillExtensions.DefaultRateLimiter();
 
 	/// <inheritdoc />
+	public virtual Task<DownloadResult> DownloadImage(
+		IDownloadService downloader,
+		string url,
+		Dictionary<string, string>? headers,
+		CancellationToken token) => downloader.Download(url, headers, token);
+
+	/// <inheritdoc />
 	public virtual Task<SkiaSharp.SKBitmap?> PostProcessing(DownloadResult result, SkiaSharp.SKBitmap? image, CancellationToken token) => Task.FromResult(image);
 
 	/// <inheritdoc />

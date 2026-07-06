@@ -381,8 +381,10 @@ internal class ImageService(
 
 			//Determine the headers to use for the image request
 			var headers = _http.HeadersFrom(image.Url, source, manga, image);
+			//Determine which downloader to use for the image
+			var downloader = DetermineDownloader(loader, image);
 			//Download the image from the source
-			using var download = await DetermineDownloader(loader, image).Download(image.Url, headers, token);
+			using var download = await loader.Service.DownloadImage(downloader, image.Url, headers, token);
 			//If the image failed, forward the error
 			if (!string.IsNullOrEmpty(download.Error) || download.Stream is null)
 				return await HandleError(download.Error ?? "Stream came back empty!");
@@ -500,14 +502,20 @@ internal class ImageService(
 	{
 		//Check to see if the image exists and get it's various properties
 		var exists = ImageExists(image.Entity, out var path, out var zipPath, out _, out _);
-		//If the image doesn't exist, ignore the bust request
-		if (!exists) return Boxed.Ok();
 		//Lock the cache so we aren't double writing to it
 		using var cacheLock = await _cacheLocks.LockAsync(path, token);
 		//Delete the cached files
-		TryDelete(path);
-		TryDelete(zipPath);
-		return Boxed.Ok();
+		if (exists)
+		{
+			TryDelete(path);
+			TryDelete(zipPath);
+		}
+
+		var updated = await _db.Image.Bust(image.Entity.Id);
+		if (updated is null)
+			return Boxed.NotFound(nameof(MbImage), "Could not find that image");
+
+		return Boxed.Ok(updated);
 	}
 
 	/// <inheritdoc />

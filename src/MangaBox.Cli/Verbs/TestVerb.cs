@@ -530,7 +530,7 @@ internal class TestVerb(
 					: _http;
 
 			_logger.LogInformation("Downloading Comix image with {Downloader}: {Url}", downloader.GetType().Name, url);
-			using var download = await downloader.Download(url, headers, token);
+			using var download = await loader.Service.DownloadImage(downloader, url, headers, token);
 			if (!string.IsNullOrEmpty(download.Error) || download.Stream is null)
 			{
 				_logger.LogError("Error occurred while fetching image: {Error} >> {Url}", download.Error, url);
@@ -594,6 +594,7 @@ internal class TestVerb(
 
 		string[] urls =
 		[
+			"https://ek10.wowpic1.store/i5/bEqPbYfoMT0Gm13lbl6foA5A3oUJbu6i3R0VvpbI6y4EiS5FIHyEz7PI11FmpSw",
 			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4AjS5FIHyEz7PI11FmpSw",
 			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4AhS5FIHyEz7PI11FmpSw",
 			"https://ek10.wowpic4.store/i5/bEqPbYfoNT0GmyHlFi6foAJozoUFavqi3R0VvpbI6y4AgS5FIHyEz7PI11FmpSw",

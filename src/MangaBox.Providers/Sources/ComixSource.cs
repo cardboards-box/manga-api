@@ -1,5 +1,4 @@
 using SkiaSharp;
-using System.Numerics;
 using System.Text.Json.Nodes;
 
 namespace MangaBox.Providers.Sources;
@@ -17,6 +16,10 @@ internal class ComixSource(
 	IFlareSolverService _flare,
 	ILogger<ComixSource> _logger) : BaseMangaSource<ComixSource>, IComixSource
 {
+	private const string COMIX_HOME_URL = "https://comix.to";
+	private const string COMIX_REMOVE_ORIGIN_HEADER = "comix-remove-origin";
+	private const string COMIX_FALLBACK_HEADER = "comix-fallback";
+
 #if DEBUG
 	private static readonly JsonSerializerOptions _debugOptions = new()
 	{
@@ -25,7 +28,7 @@ internal class ComixSource(
 	};
 #endif
 
-	public override string HomeUrl => "https://comix.to";
+	public override string HomeUrl => COMIX_HOME_URL;
 
 	public override string Provider => "comix-to";
 
@@ -34,6 +37,30 @@ internal class ComixSource(
 	public override bool UseFlareImages => true;
 
 	public override bool UseFlareImagesCover => true;
+
+	public override async Task<DownloadResult> DownloadImage(
+		IDownloadService downloader,
+		string url,
+		Dictionary<string, string>? headers,
+		CancellationToken token)
+	{
+		var fallbackEnabled = headers?.ContainsKey(COMIX_FALLBACK_HEADER) == true;
+		var requestHeaders = PrepareComixHeaders(headers);
+		var result = await downloader.Download(url, requestHeaders, token);
+
+		if (result.Response?.StatusCode != HttpStatusCode.NotFound || !fallbackEnabled)
+			return result;
+
+		foreach (var fallbackUrl in ComixFallbackUrls(url))
+		{
+			result.Dispose();
+			result = await downloader.Download(fallbackUrl, requestHeaders, token);
+			if (result.Response?.StatusCode != HttpStatusCode.NotFound)
+				break;
+		}
+
+		return result;
+	}
 
 	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
@@ -668,6 +695,7 @@ internal class ComixSource(
 
 		var page = new ImportPage(pageUrl, width, height);
 		page.Headers.Add(new("ordinal", ordinal.Value.ToString(CultureInfo.InvariantCulture)));
+		ApplyComixImageRequestFlags(page, ordinal.Value, isV3: HasQueryParameter(page.Page, "v3"));
 		return page;
 	}
 
@@ -751,9 +779,11 @@ internal class ComixSource(
 		var ordinal = FindIntValue(node, "page", "pageNumber", "number", "order", "ordinal", "index") ?? fallbackOrdinal;
 		var width = FindIntValue(node, "width", "w");
 		var height = FindIntValue(node, "height", "h");
+		var isV3 = FindIntValue(node, "s") == 1 || HasQueryParameter(pageUrl, "v3");
 
 		var page = new ImportPage(pageUrl, width, height);
 		page.Headers.Add(new("ordinal", ordinal.ToString(CultureInfo.InvariantCulture)));
+		ApplyComixImageRequestFlags(page, ordinal, isV3);
 		return page;
 	}
 
@@ -860,6 +890,7 @@ internal class ComixSource(
 			{
 				var page = new ImportPage(x);
 				page.Headers.Add(new("ordinal", (GetPageNumber(page) ?? index++).ToString(CultureInfo.InvariantCulture)));
+				ApplyComixImageRequestFlags(page, GetOrdinal(page), isV3: HasQueryParameter(page.Page, "v3"));
 				return page;
 			})];
 	}
@@ -972,6 +1003,7 @@ internal class ComixSource(
 
 			var page = new ImportPage($"{template.Prefix}{padded}{template.Extension}{template.Query}");
 			page.Headers.Add(new("ordinal", pageNumber.ToString(CultureInfo.InvariantCulture)));
+			ApplyComixImageRequestFlags(page, pageNumber, isV3: HasQueryParameter(page.Page, "v3"));
 			output[pageNumber] = page;
 		}
 
@@ -1008,6 +1040,7 @@ internal class ComixSource(
 			var token = EncodeComixPageToken(pageNumber);
 			var page = new ImportPage($"{template.Encoded.Prefix}{token}{template.Encoded.Suffix}");
 			page.Headers.Add(new("ordinal", pageNumber.ToString(CultureInfo.InvariantCulture)));
+			ApplyComixImageRequestFlags(page, pageNumber, isV3: HasQueryParameter(page.Page, "v3"));
 			output[pageNumber] = page;
 		}
 
@@ -1055,6 +1088,86 @@ internal class ComixSource(
 			span[0] = state.High;
 			span[1] = state.Low;
 		});
+	}
+
+	private static void ApplyComixImageRequestFlags(ImportPage page, int ordinal, bool isV3)
+	{
+		if (!IsComixImageUrl(page.Page))
+			return;
+
+		page.Headers.Add(new(COMIX_FALLBACK_HEADER, "1"));
+
+		if (isV3)
+		{
+			page.Page = AddQueryFlag(page.Page, "v3");
+			page.Headers.Add(new(COMIX_REMOVE_ORIGIN_HEADER, "1"));
+			return;
+		}
+
+		if (ordinal % 4 != 0)
+			return;
+
+		page.Headers.Add(new("Origin", COMIX_HOME_URL));
+		if (!page.Page.Contains('#'))
+			page.Page += "#scrambled";
+	}
+
+	private static bool HasQueryParameter(string url, string name)
+	{
+		if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+			return false;
+
+		var query = uri.Query.TrimStart('?');
+		if (string.IsNullOrWhiteSpace(query))
+			return false;
+
+		return query
+			.Split('&', StringSplitOptions.RemoveEmptyEntries)
+			.Select(x => Uri.UnescapeDataString(x.Split('=', 2)[0]))
+			.Any(x => string.Equals(x, name, StringComparison.OrdinalIgnoreCase));
+	}
+
+	private static string AddQueryFlag(string url, string name)
+	{
+		if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || HasQueryParameter(url, name))
+			return url;
+
+		var builder = new UriBuilder(uri);
+		var query = builder.Query.TrimStart('?');
+		builder.Query = string.IsNullOrWhiteSpace(query)
+			? name
+			: $"{query}&{name}";
+		return builder.Uri.ToString();
+	}
+
+	private static Dictionary<string, string> PrepareComixHeaders(Dictionary<string, string>? headers)
+	{
+		var output = new Dictionary<string, string>(headers ?? [], StringComparer.InvariantCultureIgnoreCase);
+		if (output.Remove(COMIX_REMOVE_ORIGIN_HEADER))
+			output.Remove("Origin");
+
+		output.Remove(COMIX_FALLBACK_HEADER);
+		return output;
+	}
+
+	private static IEnumerable<string> ComixFallbackUrls(string url)
+	{
+		if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+			!IsComixImageUrl(url) ||
+			!Regex.IsMatch(uri.AbsolutePath, @"/(?:i5|s?i+)/", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+			yield break;
+
+		foreach (var path in new[] { "/i5/", "/si/", "/i/", "/sii/", "/ii/" })
+		{
+			var fallback = Regex.Replace(uri.AbsolutePath, @"/(?:i5|s?i+)/", path, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+			if (string.Equals(fallback, uri.AbsolutePath, StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			yield return new UriBuilder(uri)
+			{
+				Path = fallback
+			}.Uri.ToString();
+		}
 	}
 
 	private static int? ParseReaderPageCount(HtmlDocument doc)
@@ -1499,7 +1612,7 @@ internal class ComixSource(
 			string outputPath,
 			string scrambleSeedHeader,
 			string? scrambleGridHeader = null,
-			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex,
+			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition,
 			CancellationToken token = default)
 		{
 			var seed = ParseSeed(scrambleSeedHeader);
@@ -1520,7 +1633,7 @@ internal class ComixSource(
 			string scrambleGridHeader,
 			string? scrambleAlgorithmHeader,
 			string? scrambleHashHeader,
-			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
+			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition)
 		{
 			var seed = ParseSeed(scrambleSeedHeader);
 			var (columns, rows) = ParseGrid(scrambleGridHeader);
@@ -1534,7 +1647,7 @@ internal class ComixSource(
 			string scrambleSeedHeader,
 			string scrambleGridHeader,
 			string? scrambleAlgorithmHeader,
-			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
+			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition)
 		{
 			return Unscramble(image, scrambleSeedHeader, scrambleGridHeader, scrambleAlgorithmHeader, null, mode);
 		}
@@ -1543,7 +1656,7 @@ internal class ComixSource(
 			SKBitmap image, 
 			string scrambleSeedHeader,
 			string scrambleGridHeader,
-			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
+			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition)
 		{
 			var seed = ParseSeed(scrambleSeedHeader);
 			var (columns, rows) = ParseGrid(scrambleGridHeader);
@@ -1563,10 +1676,8 @@ internal class ComixSource(
 
 			return hashHeader.Trim() switch
 			{
-				// Current Comix algo-3 hash-validated path. When this content hash
-				// validates, the frontend XORs this salt into the seed before using
-				// the existing BuildOrderV2 permutation generator.
 				"03632" => seed ^ 58414u,
+				"02900" => seed ^ 117532u,
 				_ => seed
 			};
 		}
@@ -1577,7 +1688,7 @@ internal class ComixSource(
 			int columns,
 			int rows,
 			ScrambleAlgorithm algorithm,
-			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
+			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition)
 		{
 			ArgumentNullException.ThrowIfNull(scrambled);
 			ArgumentOutOfRangeException.ThrowIfNegativeOrZero(columns);
@@ -1631,7 +1742,7 @@ internal class ComixSource(
 			uint seed,
 			int columns,
 			int rows,
-			PermutationMode mode = PermutationMode.ScrambledPositionContainsOriginalIndex)
+			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition)
 		{
 			return Unscramble(scrambled, seed, columns, rows, ScrambleAlgorithm.LegacyLcg, mode);
 		}
@@ -1787,7 +1898,11 @@ internal class ComixSource(
 				(values[i], values[j]) = (values[j], values[i]);
 			}
 
-			return values;
+			var inverse = new int[count];
+			for (var i = 0; i < values.Length; i++)
+				inverse[values[i]] = i;
+
+			return inverse;
 		}
 
 		private static IScrambleRandom Create(uint seed, ImageUnscrambler.ScrambleAlgorithm algorithm)
@@ -1815,7 +1930,6 @@ internal class ComixSource(
 		private sealed class BuildOrderV2ScrambleRandom(uint seed) : IScrambleRandom
 		{
 			private uint _state = seed | 1u;
-			private uint _mix;
 
 			public int NextInt32(int maxExclusive)
 			{
@@ -1823,9 +1937,7 @@ internal class ComixSource(
 					throw new ArgumentOutOfRangeException(nameof(maxExclusive), "Value must be greater than zero.");
 
 				_state ^= _state << 13;
-				_mix = unchecked(_mix + (_state * (uint)maxExclusive));
 				_state ^= _state >> 17;
-				_mix = BitOperations.RotateLeft(_mix, 9) ^ _state;
 				_state ^= _state << 5;
 
 				return (int)(_state % (uint)maxExclusive);

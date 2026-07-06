@@ -43,6 +43,13 @@ public interface IMbImageDbService
     /// <param name="id">The ID of the record to soft delete</param>
     Task<int> Delete(Guid id);
 
+	/// <summary>
+	/// Creates a replacement image record, clears cached file metadata, and deletes the old record.
+	/// </summary>
+	/// <param name="id">The current image ID</param>
+	/// <returns>The updated image record</returns>
+	Task<MbImage?> Bust(Guid id);
+
     /// <summary>
     /// Gets all of the records from the mb_images table
     /// </summary>
@@ -224,6 +231,142 @@ WHERE
     {
         return _sql.Execute("UPDATE mb_images SET indexed = TRUE WHERE id = :id", new { id });
     }
+
+	public async Task<MbImage?> Bust(Guid id)
+	{
+		const string QUERY = """
+			WITH old_image AS (
+				SELECT
+					o.*,
+					(
+						SELECT COALESCE(MIN(a.ordinal), 0) - 1
+						FROM mb_images a
+						WHERE
+							a.manga_id = o.manga_id AND (
+								(a.chapter_id IS NULL AND o.chapter_id IS NULL) OR
+								a.chapter_id = o.chapter_id
+							) AND
+							a.id != o.id
+					) AS temp_ordinal
+				FROM mb_images o
+				WHERE
+					o.id = :id AND
+					o.deleted_at IS NULL
+			),
+			replacement AS (
+				INSERT INTO mb_images (
+					url,
+					chapter_id,
+					manga_id,
+					ordinal,
+					file_name,
+					url_hash,
+					image_width,
+					image_height,
+					image_size,
+					mime_type,
+					indexed,
+					last_failed_at,
+					failed_count,
+					failed_reason,
+					headers,
+					slices,
+					created_at,
+					updated_at,
+					deleted_at
+				)
+				SELECT
+					url,
+					chapter_id,
+					manga_id,
+					temp_ordinal,
+					NULL,
+					NULL,
+					NULL,
+					NULL,
+					NULL,
+					NULL,
+					FALSE,
+					NULL,
+					0,
+					NULL,
+					headers,
+					slices,
+					CURRENT_TIMESTAMP,
+					CURRENT_TIMESTAMP,
+					NULL
+				FROM old_image
+				RETURNING *
+			),
+			updated_covers AS (
+				UPDATE mb_list_ext e
+				SET
+					cover_id = r.id,
+					updated_at = CURRENT_TIMESTAMP
+				FROM replacement r
+				WHERE e.cover_id = :id
+				RETURNING e.id
+			),
+			updated_slices AS (
+				UPDATE mb_images
+				SET
+					slices = COALESCE((
+						SELECT array_agg(
+							ROW(
+								CASE WHEN u.image_id = :id THEN r.id ELSE u.image_id END,
+								u.slice_ordinal,
+								u.slice_start,
+								u.slice_stop
+							)::mb_image_slice
+							ORDER BY u.position
+						)
+						FROM unnest(mb_images.slices) WITH ORDINALITY AS u(
+							image_id,
+							slice_ordinal,
+							slice_start,
+							slice_stop,
+							position
+						)
+						CROSS JOIN replacement r
+					), '{}'),
+					updated_at = CURRENT_TIMESTAMP
+				WHERE EXISTS (
+					SELECT 1
+					FROM unnest(mb_images.slices) AS u(
+						image_id,
+						slice_ordinal,
+						slice_start,
+						slice_stop
+					)
+					WHERE u.image_id = :id
+				)
+				RETURNING mb_images.id
+			),
+			deleted_old AS (
+				UPDATE mb_images i
+				SET
+					ordinal = o.temp_ordinal - 1,
+					deleted_at = CURRENT_TIMESTAMP,
+					updated_at = CURRENT_TIMESTAMP
+				FROM old_image o
+				WHERE i.id = o.id
+				RETURNING i.id
+			),
+			normalized_replacement AS (
+				UPDATE mb_images i
+				SET
+					ordinal = o.ordinal,
+					updated_at = CURRENT_TIMESTAMP
+				FROM old_image o, replacement r, deleted_old d
+				WHERE i.id = r.id
+				RETURNING i.*
+			)
+			SELECT *
+			FROM normalized_replacement;
+			""";
+
+		return await Fetch(QUERY, new { id });
+	}
 
 	public Task<MbImage[]> NotIndexed(DateTime failedBuffer)
 	{
