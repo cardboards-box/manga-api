@@ -74,6 +74,27 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 
 	public override ContentRating? DefaultRating => ContentRating.Pornographic;
 
+	public override async Task<DownloadResult> DownloadImage(
+		IDownloadService downloader,
+		string url,
+		Dictionary<string, string>? headers,
+		CancellationToken token)
+	{
+		var result = await downloader.Download(url, headers, token);
+		if (!ShouldRetryImageDownload(result))
+			return result;
+
+		foreach (var fallback in AlternateImageServerUrls(url))
+		{
+			result.Dispose();
+			result = await downloader.Download(fallback, headers, token);
+			if (!ShouldRetryImageDownload(result))
+				return result;
+		}
+
+		return result;
+	}
+
 	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var id = IdFromValue(mangaId) ?? IdFromValue(chapterId);
@@ -610,6 +631,13 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 	}
 
 	private const string ImageCdnHost = "https://i2.nhentai.net";
+	private static readonly string[] ImageCdnHosts =
+	[
+		"i1.nhentai.net",
+		"i2.nhentai.net",
+		"i3.nhentai.net",
+		"i4.nhentai.net"
+	];
 
 	private static string ImageUrlFromPath(string path)
 	{
@@ -619,6 +647,31 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 			return path;
 
 		return $"{ImageCdnHost}/{path}";
+	}
+
+	private static bool ShouldRetryImageDownload(DownloadResult result)
+	{
+		return !string.IsNullOrWhiteSpace(result.Error) ||
+			result.Stream is null ||
+			result.Response is { IsSuccessStatusCode: false };
+	}
+
+	private static IEnumerable<string> AlternateImageServerUrls(string url)
+	{
+		if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+			!Regex.IsMatch(uri.Host, @"^i\d+\.nhentai\.net$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+			yield break;
+
+		foreach (var host in ImageCdnHosts)
+		{
+			if (string.Equals(uri.Host, host, StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			yield return new UriBuilder(uri)
+			{
+				Host = host
+			}.Uri.ToString();
+		}
 	}
 
 	private static string? JsonString(JsonElement element, string property)
