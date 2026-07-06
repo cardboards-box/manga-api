@@ -133,7 +133,7 @@ public class ImageController(
 	/// <param name="token">The cancellation token</param>
 	/// <returns>The result of the request</returns>
 	[HttpGet, Route("image/{id}/bust")]
-	[ProducesBox, ProducesError(400), ProducesError(404), ProducesError(401)]
+	[ProducesBox<MangaBoxType<MbImage>>, ProducesError(400), ProducesError(404), ProducesError(401)]
 	public Task<IActionResult> Bust([FromRoute] string id, CancellationToken token) => Box(async () =>
 	{
 		if (!this.IsAdmin())
@@ -151,7 +151,7 @@ public class ImageController(
 	/// <param name="token">The cancellation token</param>
 	/// <returns>The result of the request</returns>
 	[HttpPost, Route("image/bust")]
-	[ProducesBox, ProducesError(400), ProducesError(404), ProducesError(401)]
+	[ProducesBox<MangaBoxType<MbImage>>, ProducesError(400), ProducesError(404), ProducesError(401)]
 	public Task<IActionResult> Bust([FromBody] string[] ids, CancellationToken token) => Box(async () =>
 	{
 		var guids = ids

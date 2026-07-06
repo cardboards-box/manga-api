@@ -515,7 +515,11 @@ internal class ImageService(
 		if (updated is null)
 			return Boxed.NotFound(nameof(MbImage), "Could not find that image");
 
-		return Boxed.Ok(updated);
+		var full = await _db.Image.FetchWithRelationships(updated.Id);
+		if (full is null)
+            return Boxed.NotFound(nameof(MbImage), "Could not find that image - Full");
+
+        return Boxed.Ok(full);
 	}
 
 	/// <inheritdoc />

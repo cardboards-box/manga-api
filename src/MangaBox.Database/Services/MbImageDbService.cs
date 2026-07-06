@@ -232,7 +232,7 @@ WHERE
         return _sql.Execute("UPDATE mb_images SET indexed = TRUE WHERE id = :id", new { id });
     }
 
-	public async Task<MbImage?> Bust(Guid id)
+	public Task<MbImage?> Bust(Guid id)
 	{
 		const string QUERY = """
 			WITH old_image AS (
@@ -252,6 +252,16 @@ WHERE
 				WHERE
 					o.id = :id AND
 					o.deleted_at IS NULL
+			),
+			deleted_old AS (
+				UPDATE mb_images i
+				SET
+					ordinal = o.temp_ordinal - 1,
+					deleted_at = CURRENT_TIMESTAMP,
+					updated_at = CURRENT_TIMESTAMP
+				FROM old_image o
+				WHERE i.id = o.id
+				RETURNING i.id
 			),
 			replacement AS (
 				INSERT INTO mb_images (
@@ -276,10 +286,10 @@ WHERE
 					deleted_at
 				)
 				SELECT
-					url,
-					chapter_id,
-					manga_id,
-					temp_ordinal,
+					o.url,
+					o.chapter_id,
+					o.manga_id,
+					o.ordinal,
 					NULL,
 					NULL,
 					NULL,
@@ -290,12 +300,13 @@ WHERE
 					NULL,
 					0,
 					NULL,
-					headers,
-					slices,
+					o.headers,
+					o.slices,
 					CURRENT_TIMESTAMP,
 					CURRENT_TIMESTAMP,
 					NULL
-				FROM old_image
+				FROM old_image o
+				JOIN deleted_old d ON d.id = o.id
 				RETURNING *
 			),
 			updated_covers AS (
@@ -341,31 +352,12 @@ WHERE
 					WHERE u.image_id = :id
 				)
 				RETURNING mb_images.id
-			),
-			deleted_old AS (
-				UPDATE mb_images i
-				SET
-					ordinal = o.temp_ordinal - 1,
-					deleted_at = CURRENT_TIMESTAMP,
-					updated_at = CURRENT_TIMESTAMP
-				FROM old_image o
-				WHERE i.id = o.id
-				RETURNING i.id
-			),
-			normalized_replacement AS (
-				UPDATE mb_images i
-				SET
-					ordinal = o.ordinal,
-					updated_at = CURRENT_TIMESTAMP
-				FROM old_image o, replacement r, deleted_old d
-				WHERE i.id = r.id
-				RETURNING i.*
 			)
 			SELECT *
-			FROM normalized_replacement;
+			FROM replacement;
 			""";
 
-		return await Fetch(QUERY, new { id });
+		return Fetch(QUERY, new { id });
 	}
 
 	public Task<MbImage[]> NotIndexed(DateTime failedBuffer)
