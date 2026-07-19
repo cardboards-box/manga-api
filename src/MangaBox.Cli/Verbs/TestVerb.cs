@@ -453,7 +453,7 @@ internal class TestVerb(
 		const string CACHE = "file-cache";
 		string[] IMAGE_IDS =
 		[
-			"94171f0b-07b6-4856-b170-235bc455064a",
+            "32a2d837-7afa-4b16-aaae-d6c1c0e8427b",
 		];
 
 		if (Directory.Exists(CACHE))

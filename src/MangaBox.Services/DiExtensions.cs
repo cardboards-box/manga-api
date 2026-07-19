@@ -32,6 +32,8 @@ public static class DiExtensions
 			.AddTransient<IMangaLoaderService, MangaLoaderService>()
 			.AddSingleton<IProxiedHttpService, ProxiedHttpService>()
 			.AddSingleton<IMangaPublishService, MangaPublishService>()
-			.AddTransient<INotificationService, NotificationService>();
-	}
+			.AddTransient<INotificationService, NotificationService>()
+			.AddTransient<IProxiedFlareImageService, ProxiedFlareImageService>();
+
+    }
 }

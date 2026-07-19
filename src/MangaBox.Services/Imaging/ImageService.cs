@@ -90,14 +90,15 @@ internal class ImageService(
 	IDbService _db,
 	IZipService _zip,
 	IHttpService _http,
-	IProxiedHttpService _proxy,
-	ICacheService _cache,
+    ICacheService _cache,
 	IConfiguration _config,
 	ISourceService _sources,
-	IFlareImageService _flare,
+    IFlareImageService _flare,
+    IProxiedHttpService _proxy,
 	IMangaLoaderService _loader,
-	IRestitcherService _stitcher,
-	ILogger<ImageService> _logger) : IImageService
+    IRestitcherService _stitcher,
+    IProxiedFlareImageService _fp,
+    ILogger<ImageService> _logger) : IImageService
 {
 	private const int BUFFER_SIZE = 81920;
 	private int? _failures;
@@ -279,13 +280,16 @@ internal class ImageService(
 	/// <returns>The appropriate download service</returns>
 	public IDownloadService DetermineDownloader(LoaderSource source, MbImage image)
 	{
-		//Check to see if we should use FlareSolverr to download images with headers
-		if ((source.Service.UseFlareImages && image.ChapterId is not null) ||
-			(source.Service.UseFlareImagesCover && image.ChapterId is null))
-			return _flare;
+		var useFlare = (source.Service.UseFlareImages && image.ChapterId is not null) ||
+			(source.Service.UseFlareImagesCover && image.ChapterId is null);
+		var useProxy = source.Service.UseProxiedImages;
+
+        //Check to see if we should use the proxied FlareSolverr service to download images with headers
+		//if (useFlare && useProxy) return _fp;
+        //Check to see if we should use FlareSolverr to download images with headers
+        if (useFlare) return _flare;
 		//Check to see if we should use the proxied http service to download the image
-		if (source.Service.UseProxiedImages)
-			return _proxy;
+		if (useProxy) return _proxy;
 		//Return the standard http service by default
 		return _http;
 	}

@@ -34,9 +34,11 @@ internal class ComixSource(
 
 	public override string Name => "Comix.to";
 
-	public override bool UseFlareImages => true;
+	public override bool UseFlareImages => false;
 
-	public override bool UseFlareImagesCover => true;
+	public override bool UseFlareImagesCover => false;
+
+	public override bool UseProxiedImages => true;
 
 	public override async Task<DownloadResult> DownloadImage(
 		IDownloadService downloader,

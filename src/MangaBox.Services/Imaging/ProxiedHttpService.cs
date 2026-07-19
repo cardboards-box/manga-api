@@ -15,6 +15,13 @@ public interface IProxiedHttpService : IDownloadService
 	/// </summary>
 	/// <returns>The proxy configuration</returns>
 	Config GetConfig();
+
+    /// <summary>
+    /// Acquires a proxy endpoint and its associated rate limit lease
+    /// </summary>
+    /// <param name="token">The cancellation token</param>
+    /// <returns>A tuple containing the proxy endpoint and its rate limit lease</returns>
+    Task<(ProxyEndpoint endpoint, RateLimitLease lease)> Aquire(CancellationToken token);
 }
 
 internal class ProxiedHttpService(
@@ -36,14 +43,7 @@ internal class ProxiedHttpService(
 
 	public async Task<DownloadResult> Download(string url, Headers? headers, CancellationToken token)
 	{
-		var endpoints = await Endpoints(token);
-		if (endpoints.Length == 0)
-		{
-			_logger.LogWarning("No proxies configured, falling back to direct download");
-			return await _http.Download(url, headers, token);
-		}
-
-		var (endpoint, lease) = await Acquire(endpoints, token);
+		var (endpoint, lease) = await Aquire(token);
 		using var _ = lease;
 
 		_logger.LogDebug("Downloading {Url} through proxy {ProxyUrl}", url, endpoint.Url);
@@ -52,6 +52,18 @@ internal class ProxiedHttpService(
 			request.ClientFactory(_ => endpoint.CreateClient());
 		}, token);
 	}
+
+	public async Task<(ProxyEndpoint endpoint, RateLimitLease lease)> Aquire(CancellationToken token)
+	{
+		var endpoints = await Endpoints(token);
+		if (endpoints.Length == 0)
+		{
+			_logger.LogWarning("No proxies configured, cannot acquire endpoint");
+            throw new InvalidOperationException("No proxies configured");
+        }
+
+		return await Aquire(endpoints, token);
+    }
 
 	private async Task<ProxyEndpoint[]> Endpoints(CancellationToken token)
 	{
@@ -72,7 +84,7 @@ internal class ProxiedHttpService(
 		}
 	}
 
-	private async Task<(ProxyEndpoint endpoint, RateLimitLease lease)> Acquire(ProxyEndpoint[] endpoints, CancellationToken token)
+	private async Task<(ProxyEndpoint endpoint, RateLimitLease lease)> Aquire(ProxyEndpoint[] endpoints, CancellationToken token)
 	{
 		var start = NextIndex(endpoints.Length);
 
@@ -99,87 +111,98 @@ internal class ProxiedHttpService(
 
 		return next % length;
 	}
+}
 
-	/// <summary>
-	/// Represents a single configured proxy endpoint
-	/// </summary>
-	/// <param name="Url">The proxy URL</param>
-	/// <param name="Handler">The HTTP handler to use</param>
-	/// <param name="Limiter">The rate limiter for the proxy</param>
-	public sealed record ProxyEndpoint(
-		string Url,
-		SocketsHttpHandler Handler,
-		RateLimiter Limiter)
-	{
-		public static ProxyEndpoint? Create(string url, int tokens, double seconds)
-		{
-			if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-				return null;
+/// <summary>
+/// Represents a single configured proxy endpoint
+/// </summary>
+/// <param name="Url">The proxy URL</param>
+/// <param name="Handler">The HTTP handler to use</param>
+/// <param name="Limiter">The rate limiter for the proxy</param>
+public sealed record ProxyEndpoint(
+    string Url,
+    SocketsHttpHandler Handler,
+    RateLimiter Limiter)
+{
+    /// <summary>
+    /// Creates a new proxy endpoint from the given URL, token limit, and replenishment period
+    /// </summary>
+    /// <param name="url">The URL of the proxy</param>
+    /// <param name="tokens">The maximum number of tokens for the rate limiter</param>
+    /// <param name="seconds">The replenishment period in seconds for the rate limiter</param>
+    /// <returns>A new instance of <see cref="ProxyEndpoint"/> or null if the URL is invalid</returns>
+    public static ProxyEndpoint? Create(string url, int tokens, double seconds)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return null;
 
-			var limiter = new TokenBucketRateLimiter(new()
-			{
-				TokenLimit = tokens,
-				TokensPerPeriod = tokens,
-				QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-				QueueLimit = int.MaxValue,
-				ReplenishmentPeriod = TimeSpan.FromSeconds(seconds),
-				AutoReplenishment = true
-			});
+        var limiter = new TokenBucketRateLimiter(new()
+        {
+            TokenLimit = tokens,
+            TokensPerPeriod = tokens,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = int.MaxValue,
+            ReplenishmentPeriod = TimeSpan.FromSeconds(seconds),
+            AutoReplenishment = true
+        });
 
-			var handler = ProxyHandler(
-				WithoutUserInfo(uri),
-				Credentials(uri));
+        var handler = ProxyHandler(
+            WithoutUserInfo(uri),
+            Credentials(uri));
 
-			return new(Redact(uri), handler, limiter);
-		}
+        return new(Redact(uri), handler, limiter);
+    }
 
-		public HttpClient CreateClient() => new(Handler, false);
+    /// <summary>
+    /// Creates a new <see cref="HttpClient"/> instance using the proxy handler.
+    /// </summary>
+    /// <returns>A new instance of <see cref="HttpClient"/> configured with the proxy handler</returns>
+    public HttpClient CreateClient() => new(Handler, false);
 
-		private static SocketsHttpHandler ProxyHandler(Uri uri, NetworkCredential? credentials)
-		{
-			var proxy = new WebProxy(uri);
-			if (credentials is not null)
-				proxy.Credentials = credentials;
+    private static SocketsHttpHandler ProxyHandler(Uri uri, NetworkCredential? credentials)
+    {
+        var proxy = new WebProxy(uri);
+        if (credentials is not null)
+            proxy.Credentials = credentials;
 
-			return new()
-			{
-				Proxy = proxy,
-				UseProxy = true,
-				AutomaticDecompression = DecompressionMethods.All,
-			};
-		}
+        return new()
+        {
+            Proxy = proxy,
+            UseProxy = true,
+            AutomaticDecompression = DecompressionMethods.All,
+        };
+    }
 
-		private static NetworkCredential? Credentials(Uri uri)
-		{
-			if (string.IsNullOrWhiteSpace(uri.UserInfo))
-				return null;
+    private static NetworkCredential? Credentials(Uri uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri.UserInfo))
+            return null;
 
-			var parts = uri.UserInfo.Split(':', 2);
-			var user = Uri.UnescapeDataString(parts[0]);
-			var pass = parts.Length > 1
-				? Uri.UnescapeDataString(parts[1])
-				: string.Empty;
+        var parts = uri.UserInfo.Split(':', 2);
+        var user = Uri.UnescapeDataString(parts[0]);
+        var pass = parts.Length > 1
+            ? Uri.UnescapeDataString(parts[1])
+            : string.Empty;
 
-			return string.IsNullOrWhiteSpace(user) ? null : new(user, pass);
-		}
+        return string.IsNullOrWhiteSpace(user) ? null : new(user, pass);
+    }
 
-		private static Uri WithoutUserInfo(Uri uri)
-		{
-			if (string.IsNullOrWhiteSpace(uri.UserInfo))
-				return uri;
+    private static Uri WithoutUserInfo(Uri uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri.UserInfo))
+            return uri;
 
-			return new UriBuilder(uri)
-			{
-				UserName = string.Empty,
-				Password = string.Empty
-			}.Uri;
-		}
+        return new UriBuilder(uri)
+        {
+            UserName = string.Empty,
+            Password = string.Empty
+        }.Uri;
+    }
 
-		private static string Redact(Uri uri)
-		{
-			return string.IsNullOrWhiteSpace(uri.UserInfo)
-				? uri.ToString()
-				: WithoutUserInfo(uri).ToString();
-		}
-	}
+    private static string Redact(Uri uri)
+    {
+        return string.IsNullOrWhiteSpace(uri.UserInfo)
+            ? uri.ToString()
+            : WithoutUserInfo(uri).ToString();
+    }
 }

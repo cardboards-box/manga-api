@@ -10,7 +10,15 @@ using Headers = Dictionary<string, string>;
 /// <summary>
 /// A service for fetching images with FlareSolverr
 /// </summary>
-public interface IFlareImageService : IDownloadService { }
+public interface IFlareImageService : IDownloadService
+{
+	/// <summary>
+	/// Gets an instance of the FlareSolver scoped to the given URL's host.
+	/// </summary>
+	/// <param name="url">The URL of the fetch</param>
+	/// <returns>An instance of the FlareSolver</returns>
+	FlareSolverInstance GetInstance(string url);
+}
 
 internal class FlareImageService(
 	IHttpService _http,
