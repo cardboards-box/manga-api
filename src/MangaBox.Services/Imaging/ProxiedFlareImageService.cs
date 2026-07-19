@@ -19,7 +19,7 @@ internal class ProxiedFlareImageService(
 #if DEBUG
     public static bool Debug { get; set; } = true;
 #else
-    public static bool IsDebug { get; set; } = false;
+    public static bool Debug { get; set; } = false;
 #endif
 
     private static readonly JsonSerializerOptions _options = new()
