@@ -28,6 +28,7 @@ internal class TestVerb(
 	IMangaFireSource _mangaFire,
 	IMangaReadSource _mangaRead,
 	INhentaiNetSource _nhentaiNet,
+	IHentaiNexusSource _hentaiNexus,
 	IFlareImageService _flare,
 	IMangaLoaderService _loader,
 	IRestitcherService _restitch,
@@ -166,6 +167,12 @@ internal class TestVerb(
 			_logger.LogWarning("No NHentai.net search results found for query: {Query}", str);
 	}
 
+	public Task TestHentaiNexus(CancellationToken token)
+	{
+		const string URL = "https://hentainexus.com/view/5297";
+		return TestSource(_hentaiNexus, URL, true, token);
+	}
+
 	public Task TestComix(CancellationToken token)
 	{
 		Task BasicTest(CancellationToken token)
@@ -271,7 +278,12 @@ internal class TestVerb(
 
 	public async Task TestSource(IMangaSource source, string url, bool images, CancellationToken token, int? maxImages = 10)
 	{
-		var name = source.Name;
+		const string DIR = "test-source";
+
+		if (!Directory.Exists(DIR))
+            Directory.CreateDirectory(DIR);
+
+        var name = source.Name;
 		var (match, id) = source.MatchesProvider(url);
 		if (!match || string.IsNullOrEmpty(id))
 		{
@@ -315,6 +327,10 @@ internal class TestVerb(
 			? pages
 			: pages.Take(maxImages.Value);
 
+		var downloadDir = Path.Combine(DIR, name);
+		if (!Directory.Exists(downloadDir))
+			Directory.CreateDirectory(downloadDir);
+
 		await Parallel.ForEachAsync(downloadPages, opts, async (page, token) =>
 		{
 			try
@@ -327,12 +343,13 @@ internal class TestVerb(
 				}
 
 				var name = image.FileName ?? (page.Page.MD5Hash() + ".jpg");
-				using var io = File.Create(name);
+				var path = Path.Combine(downloadDir, name);
+				using var io = File.Create(path);
 				await image.Stream.CopyToAsync(io, token);
 				await io.FlushAsync(token);
 
 				_logger.LogInformation("Successfully downloaded page {PageUrl} of chapter ID: {ChapterId} of manga ID: {ID} >> {Name}", 
-					page.Page, chapter.Id, id, name);
+					page.Page, chapter.Id, id, path);
 			}
 			catch (Exception ex)
 			{

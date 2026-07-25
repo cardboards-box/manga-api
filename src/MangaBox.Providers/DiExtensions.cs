@@ -35,6 +35,7 @@ public static class DiExtensions
 			.AddSource<IMangaReadSource, MangaReadSource>()
 			.AddSource<INhentaiSource, NhentaiSource>()
 			.AddSource<INhentaiNetSource, NhentaiNetSource>()
+			.AddSource<IHentaiNexusSource, HentaiNexusSource>()
 			.AddSource<IKappaBeastSource, KappaBeastSource>()
 			.AddSource<IMangaKatanaSource, MangaKatanaSource>()
 			.AddSource<IDarkScansSource, DarkScansSource>()
