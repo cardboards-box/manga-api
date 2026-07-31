@@ -5,6 +5,7 @@ namespace MangaBox.Providers.Sources;
 
 using Models.Types;
 using Services.Imaging;
+using Utilities.Comix;
 using Utilities.Flare;
 
 public interface IComixSource : IMangaSource
@@ -13,20 +14,24 @@ public interface IComixSource : IMangaSource
 }
 
 internal class ComixSource(
-	IFlareSolverService _flare,
+    IComixHtmlService _api,
 	ILogger<ComixSource> _logger) : BaseMangaSource<ComixSource>, IComixSource
 {
+	private static ComixWAFVerify? _wafResult;
+	private static readonly SemaphoreSlim _wafCheck = new(1, 1);
+	private const int WAF_RETRY_MAX = 3;
+	private const int WAF_RETRY_MIN_WAIT = 10;
+	private const int WAF_RETRY_MAX_WAIT = 30;
+
 	private const string COMIX_HOME_URL = "https://comix.to";
 	private const string COMIX_REMOVE_ORIGIN_HEADER = "comix-remove-origin";
 	private const string COMIX_FALLBACK_HEADER = "comix-fallback";
 
-#if DEBUG
-	private static readonly JsonSerializerOptions _debugOptions = new()
+	private static readonly JsonSerializerOptions _options = new()
 	{
 		WriteIndented = true,
 		AllowTrailingCommas = true,
 	};
-#endif
 
 	public override string HomeUrl => COMIX_HOME_URL;
 
@@ -40,7 +45,12 @@ internal class ComixSource(
 
 	public override bool UseProxiedImages => true;
 
-	public override async Task<DownloadResult> DownloadImage(
+	public Task<FlareHtmlDocument> GetHtml(string url, CancellationToken token)
+	{
+		return _api.GetHtml(url, token);
+    }
+
+    public override async Task<DownloadResult> DownloadImage(
 		IDownloadService downloader,
 		string url,
 		Dictionary<string, string>? headers,
@@ -67,15 +77,7 @@ internal class ComixSource(
 	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{HomeUrl}/title/{mangaId}-mangatitle/{chapterId}-chapter-1";
-		var instance = new FlareSolverInstance(_flare, _logger)
-		{
-			MaxRequestsBeforePauseMin = 5,
-			MaxRequestsBeforePauseMax = 15,
-			ResponseWait = TimeSpan.FromSeconds(2),
-			DisableMedia = false,
-		};
-
-		var doc = await instance.GetHtml(url, token);
+		var doc = await GetHtml(url, token);
 		if (doc is null)
 		{
 			_logger.LogWarning("Could not find page for {Url}", url);
@@ -95,26 +97,17 @@ internal class ComixSource(
 			Directory.CreateDirectory(DIR);
 
 		await File.WriteAllTextAsync($"{DIR}/debug-comix-{id}-{page}.html", doc.FlareSolution.Response, token);
-		var result = JsonSerializer.Serialize(doc.FlareSolution, _debugOptions);
+		var result = JsonSerializer.Serialize(doc.FlareSolution, _options);
 		await File.WriteAllTextAsync($"{DIR}/debug-comix-{id}-{page}.json", result, token);
-		result = JsonSerializer.Serialize(value, _debugOptions);
+		result = JsonSerializer.Serialize(value, _options);
 		await File.WriteAllTextAsync($"{DIR}/debug-comix-{id}-{page}-data.json", result, token);
 #endif
 	}
 
 	public override async Task<ImportManga?> Manga(string id, CancellationToken token)
 	{
-		await using var session = await _flare.CreateSession(null, token);
-		var instance = new FlareSolverInstance(session, _logger)
-		{
-			MaxRequestsBeforePauseMin = 5,
-			MaxRequestsBeforePauseMax = 15,
-			ResponseWait = TimeSpan.FromSeconds(2),
-			DisableMedia = true,
-		};
-
 		var baseUrl = $"{HomeUrl}/title/{id}";
-		var doc = await instance.GetHtml(baseUrl, token);
+		var doc = await GetHtml(baseUrl, token);
 		if (doc is null)
 		{
 			_logger.LogWarning("Failed to retrieve manga page for id: {MangaId}", id);
@@ -135,7 +128,7 @@ internal class ComixSource(
 		for(var page = 2; page <= pagination.TotalPages; page++)
 		{
 			var pageUrl = $"{baseUrl}?page={page}";
-			var next = await instance.GetHtml(pageUrl, token);
+			var next = await GetHtml(pageUrl, token);
 			if (next is null)
 			{
 				_logger.LogWarning("Failed to retrieve chapter page {Page} for manga id: {MangaId}", page, id);
@@ -1355,595 +1348,4 @@ internal class ComixSource(
 			.FirstOrDefault();
 	}
 	#endregion
-
-	/// <summary>
-	/// Decrypts Comix image responses that have an encoded byte prefix.
-	/// </summary>
-	public static class ComixImageDecryptor
-	{
-		public const string ENC_LEN_HEADER = "X-Enc-Len";
-		public const string ENC_SEED_HEADER = "X-Enc-Seed";
-		public const string ENC_ALGO_HEADER = "X-Enc-Algo";
-
-		private const uint ENC_MULTIPLIER = 1000005u;
-		private const uint ENC_INCREMENT = 1234567891u;
-
-		public static async Task DecryptFilePrefixAsync(
-			string inputPath,
-			string outputPath,
-			string seedHeader,
-			string lengthHeader,
-			string? algorithmHeader,
-			CancellationToken token = default)
-		{
-			var bytes = await File.ReadAllBytesAsync(inputPath, token);
-			DecryptPrefix(bytes, seedHeader, lengthHeader, algorithmHeader);
-			await File.WriteAllBytesAsync(outputPath, bytes, token);
-		}
-
-		public static async Task DecryptFilePrefixAsync(
-			string path,
-			string seedHeader,
-			string lengthHeader,
-			string? algorithmHeader,
-			CancellationToken token = default)
-		{
-			var seed = ParseSeed(seedHeader);
-			var length = ParseLength(lengthHeader);
-			var algorithm = ParseAlgorithm(algorithmHeader);
-
-			if (seed == 0 || length <= 0)
-				return;
-
-			await using var stream = new FileStream(
-				path,
-				FileMode.Open,
-				FileAccess.ReadWrite,
-				FileShare.None,
-				bufferSize: 8192,
-				options: FileOptions.Asynchronous | FileOptions.SequentialScan);
-
-			var limit = (int)Math.Min(length, stream.Length);
-			if (limit <= 0)
-				return;
-
-			var bytes = new byte[limit];
-			var read = 0;
-			while (read < limit)
-			{
-				var count = await stream.ReadAsync(bytes.AsMemory(read, limit - read), token);
-				if (count <= 0)
-					break;
-
-				read += count;
-			}
-
-			DecryptPrefix(bytes.AsSpan(0, read), seed, read, algorithm);
-
-			stream.Position = 0;
-			await stream.WriteAsync(bytes.AsMemory(0, read), token);
-			await stream.FlushAsync(token);
-		}
-
-		public static Task DecryptFilePrefixAsync(
-			string path,
-			string seedHeader,
-			string lengthHeader,
-			CancellationToken token = default)
-		{
-			return DecryptFilePrefixAsync(path, seedHeader, lengthHeader, null, token);
-		}
-
-		public static void DecryptPrefix(byte[] bytes, string seedHeader, string lengthHeader)
-		{
-			DecryptPrefix(bytes, seedHeader, lengthHeader, null);
-		}
-
-		public static void DecryptPrefix(byte[] bytes, string seedHeader, string lengthHeader, string? algorithmHeader)
-		{
-			var seed = ParseSeed(seedHeader);
-			var length = ParseLength(lengthHeader);
-			var algorithm = ParseAlgorithm(algorithmHeader);
-			DecryptPrefix(bytes, seed, length, algorithm);
-		}
-
-		public static void DecryptPrefix(Span<byte> bytes, uint seed, int length)
-		{
-			DecryptPrefix(bytes, seed, length, EncryptionAlgorithm.XorPrefixV1);
-		}
-
-		public enum EncryptionAlgorithm
-		{
-			XorPrefixV1 = 1,
-			XorPrefixV2 = 2
-		}
-
-		public static void DecryptPrefix(Span<byte> bytes, uint seed, int length, EncryptionAlgorithm algorithm)
-		{
-			var limit = Math.Min(bytes.Length, length);
-
-			switch (algorithm)
-			{
-				case EncryptionAlgorithm.XorPrefixV1:
-					DecryptPrefixV1(bytes[..limit], seed);
-					break;
-				case EncryptionAlgorithm.XorPrefixV2:
-					DecryptPrefixV2(bytes[..limit], seed);
-					break;
-				default:
-					throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null);
-			}
-		}
-
-		private static void DecryptPrefixV1(Span<byte> bytes, uint seed)
-		{
-			var state = seed;
-
-			for (var i = 0; i < bytes.Length; i++)
-			{
-				state = unchecked((state * ENC_MULTIPLIER) + ENC_INCREMENT);
-				bytes[i] = (byte)(bytes[i] ^ (state >> 24));
-			}
-		}
-
-		private static void DecryptPrefixV2(Span<byte> bytes, uint seed)
-		{
-			if (seed == 0)
-				return;
-
-			var candidates = new[]
-			{
-				DecodeWithXorshift(bytes, seed | 1u, highByte: false),
-				DecodeWithXorshift(bytes, seed, highByte: false),
-				DecodeWithXorshift(bytes, seed | 1u, highByte: true),
-				DecodeWithLcg(bytes, seed)
-			};
-
-			var decoded = candidates.FirstOrDefault(HasImageSignature) ?? candidates[0];
-			decoded.CopyTo(bytes);
-		}
-
-		private static byte[] DecodeWithXorshift(ReadOnlySpan<byte> bytes, uint initialState, bool highByte)
-		{
-			var result = bytes.ToArray();
-			var state = initialState;
-
-			for (var i = 0; i < result.Length; i++)
-			{
-				state ^= state << 13;
-				state ^= state >> 17;
-				state ^= state << 5;
-
-				var key = highByte ? state >> 24 : state & 0xff;
-				result[i] = (byte)(result[i] ^ key);
-			}
-
-			return result;
-		}
-
-		private static byte[] DecodeWithLcg(ReadOnlySpan<byte> bytes, uint seed)
-		{
-			var result = bytes.ToArray();
-			DecryptPrefixV1(result, seed);
-			return result;
-		}
-
-		private static bool HasImageSignature(byte[] bytes)
-		{
-			if (bytes.Length < 12)
-				return false;
-
-			return bytes[0] == 'R' &&
-				bytes[1] == 'I' &&
-				bytes[2] == 'F' &&
-				bytes[3] == 'F' &&
-				bytes[8] == 'W' &&
-				bytes[9] == 'E' &&
-				bytes[10] == 'B' &&
-				bytes[11] == 'P' ||
-				bytes[0] == 0xff &&
-				bytes[1] == 0xd8 ||
-				bytes[0] == 0x89 &&
-				bytes[1] == 'P' &&
-				bytes[2] == 'N' &&
-				bytes[3] == 'G';
-		}
-
-		public static uint ParseSeed(string? value)
-		{
-			if (string.IsNullOrWhiteSpace(value))
-				throw new ArgumentException("Missing X-Enc-Seed header.", nameof(value));
-
-			if (!uint.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var seed))
-				throw new FormatException($"Invalid X-Enc-Seed value: {value}");
-
-			return seed;
-		}
-
-		public static int ParseLength(string? value)
-		{
-			if (string.IsNullOrWhiteSpace(value))
-				throw new ArgumentException("Missing X-Enc-Len header.", nameof(value));
-
-			if (!int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var length))
-				throw new FormatException($"Invalid X-Enc-Len value: {value}");
-
-			if (length < 0)
-				throw new FormatException($"Invalid X-Enc-Len value: {value}");
-
-			return length;
-		}
-
-		public static EncryptionAlgorithm ParseAlgorithm(string? value)
-		{
-			if (string.IsNullOrWhiteSpace(value))
-				return EncryptionAlgorithm.XorPrefixV1;
-
-			if (!int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var algorithm))
-				throw new FormatException($"Invalid X-Enc-Algo value: {value}");
-
-			return algorithm switch
-			{
-				1 => EncryptionAlgorithm.XorPrefixV1,
-				2 => EncryptionAlgorithm.XorPrefixV2,
-				_ => throw new FormatException($"Unsupported X-Enc-Algo value: {value}")
-			};
-		}
-	}
-
-	/// <summary>
-	/// Unscrambles images that were scrambled using a seeded grid permutation.
-	/// </summary>
-	public static class ImageUnscrambler
-	{
-		public enum PermutationMode
-		{
-			/// <summary>
-			/// Scrambled tile position i contains the original tile permutation[i].
-			/// </summary>
-			ScrambledPositionContainsOriginalIndex,
-
-			/// <summary>
-			/// Original tile position i was moved to scrambled tile position permutation[i].
-			/// </summary>
-			OriginalIndexMovedToScrambledPosition
-		}
-
-		public static async Task UnscrambleFileAsync(
-			string inputPath,
-			string outputPath,
-			string scrambleSeedHeader,
-			string? scrambleGridHeader = null,
-			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition,
-			CancellationToken token = default)
-		{
-			var seed = ParseSeed(scrambleSeedHeader);
-			var (columns, rows) = ParseGrid(scrambleGridHeader);
-
-			using var image = await SkiaImageHelpers.LoadAsync(inputPath, token);
-			if (image is null)
-				throw new InvalidOperationException($"Image could not be decoded: {inputPath}");
-
-			using var output = Unscramble(image, seed, columns, rows, mode);
-
-			await SkiaImageHelpers.SaveAsync(output, outputPath, SkiaImageHelpers.DetermineFormat(outputPath), token);
-		}
-
-		public static SKBitmap Unscramble(
-			SKBitmap image, 
-			string scrambleSeedHeader,
-			string scrambleGridHeader,
-			string? scrambleAlgorithmHeader,
-			string? scrambleHashHeader,
-			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition)
-		{
-			var seed = ParseSeed(scrambleSeedHeader);
-			var (columns, rows) = ParseGrid(scrambleGridHeader);
-			var algorithm = ParseAlgorithm(scrambleAlgorithmHeader);
-			seed = ApplyHashSeedSalt(seed, algorithm, scrambleHashHeader);
-			return Unscramble(image, seed, columns, rows, algorithm, mode);
-		}
-
-		public static SKBitmap Unscramble(
-			SKBitmap image, 
-			string scrambleSeedHeader,
-			string scrambleGridHeader,
-			string? scrambleAlgorithmHeader,
-			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition)
-		{
-			return Unscramble(image, scrambleSeedHeader, scrambleGridHeader, scrambleAlgorithmHeader, null, mode);
-		}
-
-		public static SKBitmap Unscramble(
-			SKBitmap image, 
-			string scrambleSeedHeader,
-			string scrambleGridHeader,
-			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition)
-		{
-			var seed = ParseSeed(scrambleSeedHeader);
-			var (columns, rows) = ParseGrid(scrambleGridHeader);
-			return Unscramble(image, seed, columns, rows, ScrambleAlgorithm.LegacyLcg, mode);
-		}
-
-		public enum ScrambleAlgorithm
-		{
-			LegacyLcg = 1,
-			BuildOrderV2 = 3
-		}
-
-		private static uint ApplyHashSeedSalt(uint seed, ScrambleAlgorithm algorithm, string? hashHeader)
-		{
-			if (algorithm != ScrambleAlgorithm.BuildOrderV2 || string.IsNullOrWhiteSpace(hashHeader))
-				return seed;
-
-			return hashHeader.Trim() switch
-			{
-				"03632" => seed ^ 58414u,
-				"02900" => seed ^ 117532u,
-				_ => seed
-			};
-		}
-
-		public static SKBitmap Unscramble(
-			SKBitmap scrambled,
-			uint seed,
-			int columns,
-			int rows,
-			ScrambleAlgorithm algorithm,
-			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition)
-		{
-			ArgumentNullException.ThrowIfNull(scrambled);
-			ArgumentOutOfRangeException.ThrowIfNegativeOrZero(columns);
-			ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rows);
-
-			var tileWidth = scrambled.Width / columns;
-			var tileHeight = scrambled.Height / rows;
-
-			if (tileWidth <= 0 || tileHeight <= 0)
-				throw new InvalidOperationException("Image is too small for the requested scramble grid.");
-
-			var tileCount = columns * rows;
-			var permutation = ScrambleRandom.CreatePermutation(seed, tileCount, algorithm);
-
-			// Clone instead of creating a blank image so any right/bottom remainder pixels
-			// that were not part of the fixed-size scramble grid are preserved.
-			var output = SkiaImageHelpers.CreateBitmap(scrambled.Width, scrambled.Height);
-			CopyPixels(
-				source: scrambled,
-				sourceRect: new SKRectI(0, 0, scrambled.Width, scrambled.Height),
-				destination: output,
-				destinationPoint: SKPointI.Empty);
-
-			for (var scrambledIndex = 0; scrambledIndex < tileCount; scrambledIndex++)
-			{
-				var sourceIndex = mode switch
-				{
-					PermutationMode.ScrambledPositionContainsOriginalIndex => scrambledIndex,
-					PermutationMode.OriginalIndexMovedToScrambledPosition => permutation[scrambledIndex],
-					_ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
-				};
-
-				var destinationIndex = mode switch
-				{
-					PermutationMode.ScrambledPositionContainsOriginalIndex => permutation[scrambledIndex],
-					PermutationMode.OriginalIndexMovedToScrambledPosition => scrambledIndex,
-					_ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
-				};
-
-				var sourceRect = GetFixedTileRectangle(sourceIndex, tileWidth, tileHeight, columns);
-				var destinationPoint = GetFixedTilePoint(destinationIndex, tileWidth, tileHeight, columns);
-
-				CopyPixels(scrambled, sourceRect, output, destinationPoint);
-			}
-
-			return output;
-		}
-
-		public static SKBitmap Unscramble(
-			SKBitmap scrambled,
-			uint seed,
-			int columns,
-			int rows,
-			PermutationMode mode = PermutationMode.OriginalIndexMovedToScrambledPosition)
-		{
-			return Unscramble(scrambled, seed, columns, rows, ScrambleAlgorithm.LegacyLcg, mode);
-		}
-
-		private static SKRectI GetFixedTileRectangle(
-			int index,
-			int tileWidth,
-			int tileHeight,
-			int columns)
-		{
-			var column = index % columns;
-			var row = index / columns;
-
-			return new SKRectI(
-				column * tileWidth,
-				row * tileHeight,
-				(column + 1) * tileWidth,
-				(row + 1) * tileHeight);
-		}
-
-		private static SKPointI GetFixedTilePoint(
-			int index,
-			int tileWidth,
-			int tileHeight,
-			int columns)
-		{
-			var column = index % columns;
-			var row = index / columns;
-
-			return new SKPointI(
-				column * tileWidth,
-				row * tileHeight);
-		}
-
-		private static void CopyPixels(
-			SKBitmap source,
-			SKRectI sourceRect,
-			SKBitmap destination,
-			SKPointI destinationPoint)
-		{
-			using var canvas = new SKCanvas(destination);
-			var destinationRect = new SKRect(
-				destinationPoint.X,
-				destinationPoint.Y,
-				destinationPoint.X + sourceRect.Width,
-				destinationPoint.Y + sourceRect.Height);
-			canvas.DrawBitmap(source, sourceRect, destinationRect, SKSamplingOptions.Default);
-			canvas.Flush();
-		}
-
-		public static uint ParseSeed(string? value)
-		{
-			if (string.IsNullOrWhiteSpace(value))
-				throw new ArgumentException("Missing X-Scramble-Seed header.", nameof(value));
-
-			if (!uint.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var seed))
-				throw new FormatException($"Invalid X-Scramble-Seed value: {value}");
-
-			return seed;
-		}
-
-		public static (int Columns, int Rows) ParseGrid(string? value)
-		{
-			if (string.IsNullOrWhiteSpace(value))
-				return (5, 5);
-
-			value = value.Trim();
-
-			if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var single))
-				return (single, single);
-
-			var match = Regex.Match(value, @"^\s*(\d+)\s*[xX,\s]\s*(\d+)\s*$");
-			if (!match.Success)
-				throw new FormatException($"Invalid X-Scramble-Grid value: {value}");
-
-			var columns = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-			var rows = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
-
-			if (columns <= 0 || rows <= 0)
-				throw new FormatException($"Invalid X-Scramble-Grid value: {value}");
-
-			return (columns, rows);
-		}
-
-		public static ScrambleAlgorithm ParseAlgorithm(string? value)
-		{
-			if (string.IsNullOrWhiteSpace(value))
-				return ScrambleAlgorithm.LegacyLcg;
-
-			if (!int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var algorithm))
-				throw new FormatException($"Invalid X-Scramble-Algo value: {value}");
-
-			return algorithm switch
-			{
-				1 => ScrambleAlgorithm.LegacyLcg,
-				2 => ScrambleAlgorithm.LegacyLcg,
-				3 => ScrambleAlgorithm.BuildOrderV2,
-				_ => throw new FormatException($"Unsupported X-Scramble-Algo value: {value}")
-			};
-		}
-	}
-
-	/// <summary>
-	/// Seeded pseudo-random generators extracted from the JavaScript.
-	/// </summary>
-	public sealed class ScrambleRandom(uint seed)
-	{
-		private uint _state = seed;
-
-		/// <summary>
-		/// Equivalent to JavaScript:
-		/// state = Math.imul(state, 1664525) + 1013904223
-		/// </summary>
-		public uint NextUInt32()
-		{
-			_state = unchecked((_state * 1664525u) + 1013904223u);
-			return _state;
-		}
-
-		/// <summary>
-		/// Returns a deterministic value in the range [0, maxExclusive).
-		/// </summary>
-		public int NextInt32(int maxExclusive)
-		{
-			if (maxExclusive <= 0)
-				throw new ArgumentOutOfRangeException(nameof(maxExclusive), "Value must be greater than zero.");
-
-			return (int)(NextUInt32() % (uint)maxExclusive);
-		}
-
-		public static int[] CreatePermutation(uint seed, int count)
-		{
-			return CreatePermutation(seed, count, ImageUnscrambler.ScrambleAlgorithm.LegacyLcg);
-		}
-
-		/// <summary>
-		/// Recreates the seeded Fisher-Yates permutation from the JavaScript.
-		/// </summary>
-		public static int[] CreatePermutation(
-			uint seed,
-			int count,
-			ImageUnscrambler.ScrambleAlgorithm algorithm)
-		{
-			if (count < 0)
-				throw new ArgumentOutOfRangeException(nameof(count), "Value cannot be negative.");
-
-			var rng = Create(seed, algorithm);
-			var values = Enumerable.Range(0, count).ToArray();
-
-			for (var i = values.Length - 1; i > 0; i--)
-			{
-				var j = rng.NextInt32(i + 1);
-				(values[i], values[j]) = (values[j], values[i]);
-			}
-
-			var inverse = new int[count];
-			for (var i = 0; i < values.Length; i++)
-				inverse[values[i]] = i;
-
-			return inverse;
-		}
-
-		private static IScrambleRandom Create(uint seed, ImageUnscrambler.ScrambleAlgorithm algorithm)
-		{
-			return algorithm switch
-			{
-				ImageUnscrambler.ScrambleAlgorithm.LegacyLcg => new LcgScrambleRandom(seed),
-				ImageUnscrambler.ScrambleAlgorithm.BuildOrderV2 => new BuildOrderV2ScrambleRandom(seed),
-				_ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null)
-			};
-		}
-
-		private interface IScrambleRandom
-		{
-			int NextInt32(int maxExclusive);
-		}
-
-		private sealed class LcgScrambleRandom(uint seed) : IScrambleRandom
-		{
-			private readonly ScrambleRandom _rng = new(seed);
-
-			public int NextInt32(int maxExclusive) => _rng.NextInt32(maxExclusive);
-		}
-
-		private sealed class BuildOrderV2ScrambleRandom(uint seed) : IScrambleRandom
-		{
-			private uint _state = seed | 1u;
-
-			public int NextInt32(int maxExclusive)
-			{
-				if (maxExclusive <= 0)
-					throw new ArgumentOutOfRangeException(nameof(maxExclusive), "Value must be greater than zero.");
-
-				_state ^= _state << 13;
-				_state ^= _state >> 17;
-				_state ^= _state << 5;
-
-				return (int)(_state % (uint)maxExclusive);
-			}
-		}
-	}
 }

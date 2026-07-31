@@ -1,11 +1,11 @@
 ﻿using CardboardBox.Database.Postgres.Standard;
+using CardboardBox.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 
 namespace MangaBox.All;
 
-using CardboardBox.Json;
 using Core;
 using Database;
 using Jwt;
@@ -13,6 +13,7 @@ using Match;
 using Providers;
 using Services;
 using Utilities.Auth;
+using Utilities.Comix;
 using Utilities.FCM;
 using Utilities.Flare;
 using Utilities.MangaDex;
@@ -38,7 +39,8 @@ public static class DiExtensions
 			.AddOAuthServices(config)
 			.AddMatch()
 			.AddMangaDex()
-			.AddJson()
+            .AddComix()
+            .AddJson()
 			.ConfigureHttpClientDefaults(c =>
 			{
 				c.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler

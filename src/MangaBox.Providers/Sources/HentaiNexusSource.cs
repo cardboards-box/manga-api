@@ -1,14 +1,44 @@
+using System.Threading.RateLimiting;
+
 namespace MangaBox.Providers.Sources;
 
+using Database;
 using Models.Types;
 
-public interface IHentaiNexusSource : IMangaSource { }
+public interface IHentaiNexusSource : IMangaSource
+{
+	Task<string[]> Search(string query, int page, CancellationToken token);
+
+	Task<string[]> Search(HentaiNexusQuery[] query, int page, CancellationToken token);
+
+	Task<string[]> Search(string query, CancellationToken token);
+
+	Task<string[]> Search(HentaiNexusQuery[] query, CancellationToken token);
+}
+
+public sealed record HentaiNexusQuery(
+	[property: JsonPropertyName("criteria")] string Criteria,
+	[property: JsonPropertyName("value")] string Value,
+	[property: JsonPropertyName("negate")] bool Negate = false)
+{
+	public override string ToString()
+	{
+		var value = Value.Trim();
+		if (value.Any(char.IsWhiteSpace))
+			value = $"\"{value.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+
+		return $"{(Negate ? "-" : string.Empty)}{Criteria.Trim()}:{value}";
+	}
+}
 
 public class HentaiNexusSource(
 	IApiService _api,
+	IDbService _db,
+	IConfiguration _config,
 	ILogger<HentaiNexusSource> _logger) : BaseMangaSource<HentaiNexusSource>, IHentaiNexusSource
 {
 	private const string DEFAULT_CHAPTER_TITLE = "Chapter 1";
+	private static RateLimiter? _searchLimiter;
 
 	public override string HomeUrl => "https://hentainexus.com/";
 
@@ -18,7 +48,152 @@ public class HentaiNexusSource(
 
 	public override string Name => "HentaiNexus";
 
+	public override TimeSpan IndexFrequency => TimeSpan.FromMinutes(5);
+
+	public override bool IndexEnabled => false;
+
 	public override ContentRating? DefaultRating => ContentRating.Pornographic;
+
+	public override RateLimiter GetRateLimiter(string url)
+	{
+		return _searchLimiter ??= new TokenBucketRateLimiter(new()
+		{
+			TokenLimit = 10,
+			TokensPerPeriod = 10,
+			QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+			QueueLimit = int.MaxValue,
+			ReplenishmentPeriod = TimeSpan.FromSeconds(30),
+			AutoReplenishment = true
+		});
+	}
+
+	public override async IAsyncEnumerable<ImportManga> Index(
+		LoaderSource source,
+		[EnumeratorCancellation] CancellationToken token)
+	{
+		var queries = IndexQueries();
+		if (queries.Length == 0)
+		{
+			_logger.LogInformation("No HentaiNexus index queries configured at Indexers:HentaiNexus:Queries.");
+			yield break;
+		}
+
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		seen.UnionWith(await _db.Manga.Last30DaysOfIds(Provider));
+		foreach (var query in queries)
+		{
+			token.ThrowIfCancellationRequested();
+
+			string[] results;
+			using (var searchLease = await GetRateLimiter(SearchUrl(query, 1)).AcquireAsync(1, token))
+				results = await Search(query, 1, token);
+
+			foreach (var url in results)
+			{
+				token.ThrowIfCancellationRequested();
+
+				var id = IdFromValue(url);
+				if (string.IsNullOrWhiteSpace(id) || !seen.Add(id))
+					continue;
+
+				ImportManga? manga;
+				using (var mangaLease = await GetRateLimiter(url).AcquireAsync(1, token))
+					manga = await Manga(id, token);
+
+				if (manga is null)
+				{
+					_logger.LogWarning("Failed to fetch HentaiNexus indexed manga: {Url}", url);
+					continue;
+				}
+
+				yield return manga;
+			}
+		}
+	}
+
+	public async Task<string[]> Search(string query, int page, CancellationToken token)
+	{
+		if (string.IsNullOrWhiteSpace(query))
+			return [];
+
+		var result = await SearchPage(query.Trim(), Math.Max(1, page), token);
+		return result.Urls;
+	}
+
+	public Task<string[]> Search(HentaiNexusQuery[] query, int page, CancellationToken token)
+	{
+		if (query is null || query.Length == 0)
+			return Task.FromResult<string[]>([]);
+
+		return Search(QueryString(query), page, token);
+	}
+
+	public async Task<string[]> Search(string query, CancellationToken token)
+	{
+		if (string.IsNullOrWhiteSpace(query))
+			return [];
+
+		query = query.Trim();
+		var output = new List<string>();
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		for (var page = 1; ; page++)
+		{
+			token.ThrowIfCancellationRequested();
+
+			using var lease = await GetRateLimiter(SearchUrl(query, page)).AcquireAsync(1, token);
+			var result = await SearchPage(query, page, token);
+			foreach (var url in result.Urls)
+			{
+				if (seen.Add(url))
+					output.Add(url);
+			}
+
+			if (!result.HasNextPage)
+				break;
+		}
+
+		return [..output];
+	}
+
+	public Task<string[]> Search(HentaiNexusQuery[] query, CancellationToken token)
+	{
+		if (query is null || query.Length == 0)
+			return Task.FromResult<string[]>([]);
+
+		return Search(QueryString(query), token);
+	}
+
+	private async Task<SearchPageResult> SearchPage(string query, int page, CancellationToken token)
+	{
+		var doc = await GetHtml(SearchUrl(query, page), token);
+		if (doc is null)
+			return new([], false);
+
+		return new(
+			ParseSearchUrls(doc),
+			doc.DocumentNode.SelectSingleNode(
+				"//a[contains(concat(' ', normalize-space(@class), ' '), ' pagination-next ') and @href]") is not null);
+	}
+
+	private string[] IndexQueries()
+	{
+		string[] sectionPaths =
+		[
+			"Indexers:HentaiNexus:Queries",
+			"Indexers:hentaiNexus:Queries",
+			"Indexers:hentai-nexus:Queries",
+			"Indexers:hentainexus:Queries",
+			"Indexers:hentainexus.com:Queries"
+		];
+
+		return [..sectionPaths
+			.SelectMany(path => _config.GetSection(path).GetChildren())
+			.Select(x => x.Value)
+			.Where(x => !string.IsNullOrWhiteSpace(x))
+			.Cast<string>()
+			.Select(x => x.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)];
+	}
 
 	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
@@ -121,6 +296,37 @@ public class HentaiNexusSource(
 			_logger.LogWarning(ex, "Failed to retrieve HentaiNexus page: {Url}", url);
 			return null;
 		}
+	}
+
+	private static string[] ParseSearchUrls(HtmlDocument doc)
+	{
+		var anchors = doc.DocumentNode
+			.SelectNodes(
+				"//a[contains(@href, '/view/') and .//div[contains(concat(' ', normalize-space(@class), ' '), ' card ')]]")
+			?? Enumerable.Empty<HtmlNode>();
+
+		return [..anchors
+			.Select(x => IdFromValue(NormalizeUrl(x.GetAttributeValue("href", string.Empty))))
+			.Where(x => !string.IsNullOrWhiteSpace(x))
+			.Cast<string>()
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.Select(x => $"https://hentainexus.com/view/{x}")];
+	}
+
+	private static string QueryString(IEnumerable<HentaiNexusQuery> query)
+	{
+		return string.Join(
+			" ",
+			query
+				.Where(x => !string.IsNullOrWhiteSpace(x.Criteria) && !string.IsNullOrWhiteSpace(x.Value))
+				.Select(x => x.ToString()));
+	}
+
+	private static string SearchUrl(string query, int page)
+	{
+		var encoded = Uri.EscapeDataString(query.Trim()).Replace("%20", "+", StringComparison.Ordinal);
+		var path = page <= 1 ? string.Empty : $"page/{page}";
+		return $"https://hentainexus.com/{path}?q={encoded}";
 	}
 
 	private static ImportPage[] ParsePages(HtmlDocument doc)
@@ -426,4 +632,6 @@ public class HentaiNexusSource(
 	{
 		return values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
 	}
+
+	private sealed record SearchPageResult(string[] Urls, bool HasNextPage);
 }
