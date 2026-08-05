@@ -126,28 +126,44 @@ internal class RISIndexService(
 	{
 		if (image.Entity.Indexed && !force) return Boxed.Conflict("Image is already indexed");
 
-		var source = image.GetItem<MbSource>();
-		if (source is null || !source.Enabled)
-			return Boxed.NotFound(nameof(MbSource), "The image's source was either not found or is not enabled");
-
-		using var result = await _image.Get(image, token);
-		if (!string.IsNullOrEmpty(result.Error) || result.Stream is null)
+		try
 		{
-			_logger.LogError("Failed to get image stream for image {Id}: {Error}", image.Entity.Id, result.Error);
-			return Boxed.Exception(result.Error ?? "Unknown error");
-		}
+			var source = image.GetItem<MbSource>();
+			if (source is null || !source.Enabled)
+				return Boxed.NotFound(nameof(MbSource), "The image's source was either not found or is not enabled");
 
-		var metadata = GenerateMetaData(image);
-		var fileId = GenerateId(metadata);
-		using var jpg = await ToJpg(result.Stream, token);
-		var post = await _api.Add(jpg, "image.jpg", fileId, metadata);
-		if (!post.Success)
+			using var result = await _image.Get(image, token);
+			if (!string.IsNullOrEmpty(result.Error) || result.Stream is null)
+			{
+				_logger.LogError("Failed to get image stream for image {Id}: {Error}", image.Entity.Id, result.Error);
+				return Boxed.Exception(result.Error ?? "Unknown error");
+			}
+
+			var metadata = GenerateMetaData(image);
+			var fileId = GenerateId(metadata);
+			using var jpg = await ToJpg(result.Stream, token);
+			var post = await _api.Add(jpg, "image.jpg", fileId, metadata);
+			if (!post.Success)
+			{
+				_logger.LogWarning("Failed to index image {Id} in RIS: {Error}", image.Entity.Id, post.Error);
+				return Boxed.Exception(post.Error != null ? string.Join("; ", post.Error) : "Unknown error");
+			}
+
+			await _db.Image.Indexed(image.Entity.Id);
+			return Boxed.Ok(metadata);
+		}
+		catch(InvalidOperationException ex)
 		{
-			_logger.LogWarning("Failed to index image {Id} in RIS: {Error}", image.Entity.Id, post.Error);
-			return Boxed.Exception(post.Error != null ? string.Join("; ", post.Error) : "Unknown error");
-		}
+			if (ex.Message.ContainsIc("Failed to decode image"))
+				await _db.Image.Indexed(image.Entity.Id);
 
-		await _db.Image.Indexed(image.Entity.Id);
-		return Boxed.Ok(metadata);
+            _logger.LogError(ex, "Failed to index image {Id} in RIS - Invalid Op", image.Entity.Id);
+            return Boxed.Exception(ex);
+        }
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Failed to index image {Id} in RIS", image.Entity.Id);
+            return Boxed.Exception(ex);
+        }
 	}
 }
