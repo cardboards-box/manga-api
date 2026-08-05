@@ -41,18 +41,21 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 	private readonly IConfiguration _config;
 	private readonly ILogger<NhentaiNetSource> _logger;
 	private readonly IDbService _db;
+	private readonly IHttpService _http;
 	private readonly IProxiedHttpService _proxy;
 
 	public NhentaiNetSource(
 		IDbService db,
 		IFlareSolverService flare,
 		IConfiguration config,
+		IHttpService http,
 		IProxiedHttpService proxy,
 		ILogger<NhentaiNetSource> logger)
 	{
 		_db = db;
 		_logger = logger;
 		_config = config;
+		_http = http;
 		_proxy = proxy;
 		_api = flare.Limiter();
 		_api.DisableMedia = true;
@@ -80,14 +83,36 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 		Dictionary<string, string>? headers,
 		CancellationToken token)
 	{
-		var result = await downloader.Download(url, headers, token);
+		var urls = new[] { url }
+			.Concat(AlternateImageServerUrls(url))
+			.ToArray();
+		var result = await downloader.Download(urls[0], headers, token);
 		if (!ShouldRetryImageDownload(result))
 			return result;
 
-		foreach (var fallback in AlternateImageServerUrls(url))
+		// A TLS failure through one proxy normally affects every CDN hostname.
+		// Skip those redundant proxy attempts and retry using the direct client.
+		if (!IsSslConnectionError(result))
+		{
+			foreach (var fallback in urls.Skip(1))
+			{
+				result.Dispose();
+				result = await downloader.Download(fallback, headers, token);
+				if (!ShouldRetryImageDownload(result))
+					return result;
+			}
+		}
+
+		if (ReferenceEquals(downloader, _http))
+			return result;
+
+		_logger.LogWarning(
+			"Proxied NHentai.net image download failed; retrying directly: {Url}",
+			url);
+		foreach (var fallback in urls)
 		{
 			result.Dispose();
-			result = await downloader.Download(fallback, headers, token);
+			result = await _http.Download(fallback, headers, token);
 			if (!ShouldRetryImageDownload(result))
 				return result;
 		}
@@ -654,6 +679,13 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 		return !string.IsNullOrWhiteSpace(result.Error) ||
 			result.Stream is null ||
 			result.Response is { IsSuccessStatusCode: false };
+	}
+
+	private static bool IsSslConnectionError(DownloadResult result)
+	{
+		return result.Error?.Contains(
+			"SSL connection could not be established",
+			StringComparison.OrdinalIgnoreCase) == true;
 	}
 
 	private static IEnumerable<string> AlternateImageServerUrls(string url)
