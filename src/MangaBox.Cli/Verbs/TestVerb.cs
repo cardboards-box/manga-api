@@ -36,7 +36,9 @@ internal class TestVerb(
 	IFlareSolverService _flareHtml,
 	IProxiedHttpService _proxied,
 	IComixWAFService _comixWaf,
-	ILogger<TestVerb> logger) : BooleanVerb<TestOption>(logger)
+    IPortainerService _portainer,
+    IOptions<PortainerOptions> _portainerOpts,
+    ILogger<TestVerb> logger) : BooleanVerb<TestOption>(logger)
 {
 	private static readonly JsonSerializerOptions _options = new()
 	{
@@ -425,6 +427,8 @@ internal class TestVerb(
 			_logger.LogError("No images found for chapter: {Id} >> {title}", chapter.Entity.Id, chapter.Entity.Title);
 			return;
 		}
+
+		if (!dlImages) return;
 
 		var dlDir = Path.Combine(DIR, chapter.Entity.Id.ToString());
 		if (!Directory.Exists(dlDir))
@@ -877,6 +881,25 @@ internal class TestVerb(
 	{
 		const string URL = "https://comix.to/title/e93mr-tensei-youjo-wa-owabi-cheat-de-isekai-going-my-way";
 		return TestSource(URL, true, token);
+    }
+
+    public async Task TestRestarts(CancellationToken token)
+    {
+        _logger.LogInformation("Container options: {Containers}", Serialize(_portainerOpts.Value));
+
+        var container = _portainerOpts.Value.Containers.FirstOrDefault();
+        if (container is null)
+        {
+            _logger.LogError("No container found in Portainer options");
+            return;
+        }
+
+		var state = await _portainer.State(container, token);
+        _logger.LogInformation("Container {ContainerName} state: {State}", container.Container, Serialize(state));
+
+        _logger.LogInformation("Restarting container {ContainerName}", container.Container);
+        var result = await _portainer.Restart(container, token);
+        _logger.LogInformation("Restart result: {Result}", result);
     }
 
     public override async Task<bool> Execute(TestOption options, CancellationToken token)

@@ -33,7 +33,7 @@ public static class DiExtensions
 		services
 			.AddJwt()
 			.AddCoreServices()
-			.AddGeneralServices()
+			.AddGeneralServices(config)
 			.AddSources()
 			.AddFlareSolver()
 			.AddOAuthServices(config)

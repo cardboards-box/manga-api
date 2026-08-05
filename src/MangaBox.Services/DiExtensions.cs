@@ -8,14 +8,17 @@ using Queues;
 /// </summary>
 public static class DiExtensions
 {
-	/// <summary>
-	/// Adds the general services
-	/// </summary>
-	/// <param name="services">The service collection to add to</param>
-	/// <returns>The service collection for fluent method chaining</returns>
-	public static IServiceCollection AddGeneralServices(this IServiceCollection services)
-	{
-		return services
+    /// <summary>
+    /// Adds the general services
+    /// </summary>
+    /// <param name="services">The service collection to add to</param>
+    /// <param name="config">The configuration options</param>
+    /// <returns>The service collection for fluent method chaining</returns>
+    public static IServiceCollection AddGeneralServices(this IServiceCollection services, IConfiguration config)
+    {
+        services.Configure<PortainerOptions>(config.GetSection("Portainer"));
+
+        return services
 			.AddSingleton<IZipService, ZipService>()
 			.AddTransient<IHttpService, HttpService>()
 			.AddTransient<IListService, ListService>()
@@ -26,7 +29,8 @@ public static class DiExtensions
 			.AddSingleton<ISourceService, SourceService>()
 			.AddTransient<IVolumeService, VolumeService>()
 			.AddTransient<IRelatingService, RelatingService>()
-			.AddTransient<IBulkImportService, BulkImportService>()
+            .AddSingleton<IPortainerService, PortainerService>()
+            .AddTransient<IBulkImportService, BulkImportService>()
 			.AddSingleton<IFlareImageService, FlareImageService>()
 			.AddTransient<IRestitcherService, RestitcherService>()
 			.AddTransient<IMangaLoaderService, MangaLoaderService>()
