@@ -71,7 +71,7 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 
 	public override TimeSpan IndexFrequency => TimeSpan.FromMinutes(5);
 
-	public override bool IndexEnabled => true;
+	public override bool IndexEnabled => false;
 
 	public override bool UseProxiedImages => true;
 
