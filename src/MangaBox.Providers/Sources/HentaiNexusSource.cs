@@ -52,6 +52,8 @@ public class HentaiNexusSource(
 
 	public override bool IndexEnabled => false;
 
+	public override bool UseProxiedImages => true;
+
 	public override ContentRating? DefaultRating => ContentRating.Pornographic;
 
 	public override RateLimiter GetRateLimiter(string url)
