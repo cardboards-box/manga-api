@@ -17,12 +17,6 @@ internal class ComixSource(
     IComixHtmlService _api,
 	ILogger<ComixSource> _logger) : BaseMangaSource<ComixSource>, IComixSource
 {
-	private static ComixWAFVerify? _wafResult;
-	private static readonly SemaphoreSlim _wafCheck = new(1, 1);
-	private const int WAF_RETRY_MAX = 3;
-	private const int WAF_RETRY_MIN_WAIT = 10;
-	private const int WAF_RETRY_MAX_WAIT = 30;
-
 	private const string COMIX_HOME_URL = "https://comix.to";
 	private const string COMIX_REMOVE_ORIGIN_HEADER = "comix-remove-origin";
 	private const string COMIX_FALLBACK_HEADER = "comix-fallback";
@@ -632,14 +626,20 @@ internal class ComixSource(
 			.SelectNodes("//*[contains(concat(' ', normalize-space(@class), ' '), ' rpage-page ')][@data-page]")
 			?.Select(x => ParseReaderPage(x, chapterUrl))
 			.Where(x => x is not null)
-			.Cast<ImportPage>() ?? [];
+			.Cast<ImportPage>()
+			.ToArray() ?? [];
 
-		var dataPages = ParseInitialDataPages(doc, chapterUrl);
-		var embeddedPages = ParseEmbeddedImagePages(doc, chapterUrl);
+		// The reader DOM is authoritative. The document also contains unrelated manga
+		// artwork (including cover thumbnails), so the broad parsers must only be used
+		// when no reader pages were rendered at all.
+		var candidates = domPages.Length > 0
+			? domPages
+			: ParseInitialDataPages(doc, chapterUrl);
 
-		var pages = domPages
-			.Concat(dataPages)
-			.Concat(embeddedPages)
+		if (candidates.Length == 0)
+			candidates = ParseEmbeddedImagePages(doc, chapterUrl);
+
+		var pages = candidates
 			.Where(x => !string.IsNullOrWhiteSpace(x.Page))
 			.GroupBy(x => x.Page, StringComparer.OrdinalIgnoreCase)
 			.Select(x => x
@@ -650,7 +650,9 @@ internal class ComixSource(
 			.ThenBy(GetPageNumber)
 			.ToArray();
 
-		return ExpandLazyEncodedPages(doc, ExpandLazyNumericPages(doc, pages));
+		return ExpandLazyPatternPages(
+			doc,
+			ExpandLazyEncodedPages(doc, ExpandLazyNumericPages(doc, pages)));
 	}
 
 	private ImportPage? ParseReaderPage(HtmlNode pageNode, string chapterUrl)
@@ -748,6 +750,7 @@ internal class ComixSource(
 		}
 
 		var distinct = pages
+			.Where(x => IsComixImageUrl(x.Page))
 			.GroupBy(x => x.Page, StringComparer.OrdinalIgnoreCase)
 			.Select(x => x.OrderBy(GetOrdinal).First())
 			.OrderBy(GetOrdinal)
@@ -869,7 +872,7 @@ internal class ComixSource(
 
 		var urls = matches
 			.Select(x => AbsoluteUrl(UnescapeUrl(x.Groups["url"].Value), chapterUrl))
-			.Where(x => !string.IsNullOrWhiteSpace(x) && IsImageUrl(x))
+			.Where(x => !string.IsNullOrWhiteSpace(x) && IsComixImageUrl(x))
 			.Cast<string>()
 			.Distinct(StringComparer.OrdinalIgnoreCase)
 			.GroupBy(ImageSeriesKey, StringComparer.OrdinalIgnoreCase)
@@ -1044,6 +1047,121 @@ internal class ComixSource(
 			.Select(x => x.Value)];
 	}
 
+	private static ImportPage[] ExpandLazyPatternPages(HtmlDocument doc, ImportPage[] pages)
+	{
+		var pageCount = ParseReaderPageCount(doc);
+		if (pageCount is null || pageCount <= pages.Length)
+			return pages;
+
+		var sequence = TryFindEncodedPageSequence(pages);
+		if (sequence is null)
+			return pages;
+
+		var output = pages
+			.GroupBy(GetOrdinal)
+			.ToDictionary(x => x.Key, x => x.First());
+
+		for (var pageNumber = 1; pageNumber <= pageCount; pageNumber++)
+		{
+			if (output.ContainsKey(pageNumber))
+				continue;
+
+			var characterIndex = sequence.Offset + (sequence.Step * pageNumber);
+			if (characterIndex < 0 || characterIndex >= ComixUrlAlphabet.Length)
+				continue;
+
+			var url = sequence.Template.ToCharArray();
+			url[sequence.CharacterPosition] = ComixUrlAlphabet[characterIndex];
+
+			var page = new ImportPage(new string(url));
+			page.Headers.Add(new("ordinal", pageNumber.ToString(CultureInfo.InvariantCulture)));
+			ApplyComixImageRequestFlags(page, pageNumber, sequence.IsV3);
+			output[pageNumber] = page;
+		}
+
+		return [..output
+			.Where(x => x.Key <= pageCount)
+			.OrderBy(x => x.Key)
+			.Select(x => x.Value)];
+	}
+
+	private const string ComixUrlAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+	private sealed record EncodedPageSequence(
+		string Template,
+		int CharacterPosition,
+		int Step,
+		int Offset,
+		bool IsV3);
+
+	private static EncodedPageSequence? TryFindEncodedPageSequence(ImportPage[] pages)
+	{
+		var known = pages
+			.Where(x => IsComixImageUrl(x.Page))
+			.Select(x =>
+			{
+				var uri = new Uri(x.Page);
+				return (
+					Ordinal: GetOrdinal(x),
+					Url: uri.GetLeftPart(UriPartial.Path),
+					IsV3: HasQueryParameter(x.Page, "v3"));
+			})
+			.Where(x => x.Ordinal is > 0 and < int.MaxValue)
+			.GroupBy(x => x.Ordinal)
+			.Select(x => x.First())
+			.OrderBy(x => x.Ordinal)
+			.ToArray();
+
+		if (known.Length < 3 || known.Any(x => x.Url.Length != known[0].Url.Length))
+			return null;
+
+		var template = known[0].Url;
+		var varyingPositions = Enumerable.Range(0, template.Length)
+			.Where(position => known.Skip(1).Any(x => x.Url[position] != template[position]))
+			.ToArray();
+
+		// Current Comix reader URLs encode the page number in one base64url character.
+		// Only extrapolate when every known page proves one consistent linear sequence.
+		if (varyingPositions.Length != 1)
+			return null;
+
+		var position = varyingPositions[0];
+		var firstCharacterIndex = ComixUrlAlphabet.IndexOf(template[position], StringComparison.Ordinal);
+		var comparison = known
+			.Skip(1)
+			.Select(x => (Page: x, CharacterIndex: ComixUrlAlphabet.IndexOf(x.Url[position], StringComparison.Ordinal)))
+			.FirstOrDefault(x => x.CharacterIndex >= 0 && x.CharacterIndex != firstCharacterIndex);
+
+		if (firstCharacterIndex < 0 || comparison.Page.Url is null)
+			return null;
+
+		var ordinalDelta = comparison.Page.Ordinal - known[0].Ordinal;
+		var characterDelta = comparison.CharacterIndex - firstCharacterIndex;
+		if (ordinalDelta == 0 || characterDelta % ordinalDelta != 0)
+			return null;
+
+		var step = characterDelta / ordinalDelta;
+		if (step == 0)
+			return null;
+
+		var offset = firstCharacterIndex - (step * known[0].Ordinal);
+		if (known.Any(x =>
+		{
+			var actual = ComixUrlAlphabet.IndexOf(x.Url[position], StringComparison.Ordinal);
+			return actual < 0 || actual != offset + (step * x.Ordinal);
+		}))
+		{
+			return null;
+		}
+
+		return new EncodedPageSequence(
+			Template: template,
+			CharacterPosition: position,
+			Step: step,
+			Offset: offset,
+			IsV3: known.Any(x => x.IsV3));
+	}
+
 	private sealed record EncodedComixImageUrl(
 		string Prefix,
 		string Token,
@@ -1138,6 +1256,11 @@ internal class ComixSource(
 	private static Dictionary<string, string> PrepareComixHeaders(Dictionary<string, string>? headers)
 	{
 		var output = new Dictionary<string, string>(headers ?? [], StringComparer.InvariantCultureIgnoreCase);
+		output.TryAdd("Referer", COMIX_HOME_URL);
+		output.TryAdd("User-Agent", PolyfillExtensions.USER_AGENT);
+		foreach (var (key, value) in PolyfillExtensions.HEADERS_FOR_REFERS)
+			output.TryAdd(key, value);
+
 		if (output.Remove(COMIX_REMOVE_ORIGIN_HEADER))
 			output.Remove("Origin");
 

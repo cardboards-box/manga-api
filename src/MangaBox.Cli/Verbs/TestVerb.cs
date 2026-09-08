@@ -209,7 +209,7 @@ internal class TestVerb(
 	{
 		Task BasicTest(CancellationToken token)
 		{
-			const string URL = "https://comix.to/title/e93mr-tensei-youjo-wa-owabi-cheat-de-isekai-going-my-way";
+			const string URL = "https://comix.to/title/68n8-mizu-mahou-gurai-shika-torie-ga-nai-kedo-gendai-chishiki-ga-areba-juubun-da-yo-ne";
 			return TestSource(_comix, URL, true, token, null);
 		}
 
@@ -246,6 +246,36 @@ internal class TestVerb(
 		}
 
 		return BasicTest(token);
+	}
+
+	public async Task TestComixProxy(CancellationToken token)
+	{
+		const string URL = "https://api.ipify.org";
+		var (endpoint, lease) = await _proxied.Aquire(token);
+		using var _ = lease;
+
+		using var client = endpoint.CreateClient();
+		using var response = await client.GetAsync(URL, token);
+		response.EnsureSuccessStatusCode();
+		var directIp = (await response.Content.ReadAsStringAsync(token)).Trim();
+
+		await using var session = await _flareHtml.CreateSession(endpoint.CreateSolverProxy(), token);
+		var instance = new FlareSolverInstance(session, _logger)
+		{
+			DisableMedia = true,
+			MaxRetries = 0,
+		};
+		var flared = await instance.GetHtml(URL, token);
+		var flaredIp = flared.DocumentNode.InnerText.Trim();
+
+		if (!string.Equals(directIp, flaredIp, StringComparison.Ordinal))
+			throw new InvalidOperationException(
+				$"Proxy egress mismatch for {endpoint.Url}: HTTP={directIp}, FlareSolverr={flaredIp}");
+
+		_logger.LogInformation(
+			"Comix proxy test succeeded through {ProxyUrl}; HTTP and FlareSolverr egress IP: {Ip}",
+			endpoint.Url,
+			directIp);
 	}
 
 	public async Task LoadManga(CancellationToken token)
@@ -331,7 +361,7 @@ internal class TestVerb(
 
 		_logger.LogInformation("Fetched manga from {Name}: {Manga}", name, Serialize(manga));
 
-		var chapter = manga.Chapters.FirstOrDefault();
+		var chapter = manga.Chapters.Random();
 		if (chapter is null)
 		{
 			_logger.LogError("No chapters found for manga ID: {ID} from {Name}", id, name);
@@ -362,11 +392,27 @@ internal class TestVerb(
 		if (!Directory.Exists(downloadDir))
 			Directory.CreateDirectory(downloadDir);
 
+		IDownloadService downloader = source.UseFlareImages
+			? _flare
+			: source.UseProxiedImages
+				? _proxied
+				: _http;
+
 		await Parallel.ForEachAsync(downloadPages, opts, async (page, token) =>
 		{
 			try
 			{
-				using var image = await _flare.Download(page.Page, null, token);
+				var headers = new Dictionary<string, string>(
+					source.Headers ?? [],
+					StringComparer.OrdinalIgnoreCase);
+				if (!string.IsNullOrWhiteSpace(source.UserAgent))
+					headers["User-Agent"] = source.UserAgent;
+				if (!string.IsNullOrWhiteSpace(source.Referer))
+					headers["Referer"] = source.Referer;
+				foreach (var header in page.Headers)
+					headers[header.Name] = header.Value;
+
+				using var image = await source.DownloadImage(downloader, page.Page, headers, token);
 				if (!string.IsNullOrEmpty(image.Error) || image.Stream is null)
 				{
 					_logger.LogError("Error occurred while fetching image: {Error} >> {Page}", image.Error, page.Page);
@@ -374,7 +420,9 @@ internal class TestVerb(
 				}
 
 				var name = image.FileName ?? (page.Page.MD5Hash() + ".jpg");
-				var path = Path.Combine(downloadDir, name);
+				if (Path.GetExtension(name).ForceNull() is null)
+					name += ".jpg";
+                var path = Path.Combine(downloadDir, name);
 				using var io = File.Create(path);
 				await image.Stream.CopyToAsync(io, token);
 				await io.FlushAsync(token);

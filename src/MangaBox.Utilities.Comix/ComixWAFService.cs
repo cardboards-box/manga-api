@@ -19,6 +19,18 @@ public interface IComixWAFService
     /// <param name="token">The cancellation token for the request</param>
     /// <returns>The result of the WAF request</returns>
     Task<ComixWAFVerify> GetCookie(ComixWAF waf, CancellationToken token);
+
+    /// <summary>
+    /// Gets the result of a WAF solver through the given proxy endpoint.
+    /// </summary>
+    /// <param name="waf">The parameters for the request</param>
+    /// <param name="proxy">The proxy endpoint to use</param>
+    /// <param name="token">The cancellation token for the request</param>
+    /// <returns>The result of the WAF request</returns>
+    Task<ComixWAFVerify> GetCookie(
+        ComixWAF waf,
+        MangaBox.Services.Imaging.ProxyEndpoint? proxy,
+        CancellationToken token);
 }
 
 internal class ComixWAFService(
@@ -51,9 +63,16 @@ internal class ComixWAFService(
         };
     }
 
-    public static Action<IHttpBuilder> Request(ComixWAF waf)
+    public static Action<IHttpBuilder> Request(
+        ComixWAF waf,
+        MangaBox.Services.Imaging.ProxyEndpoint? proxy = null)
     {
-        return (c) => c.Message(Message(waf));
+        return c =>
+        {
+            c.Message(Message(waf));
+            if (proxy is not null)
+                c.ClientFactory(_ => proxy.CreateClient());
+        };
     }
 
     public async Task DebugLog<T>(string tag, T result, CancellationToken token)
@@ -88,32 +107,61 @@ internal class ComixWAFService(
 
     public async Task<ComixWAFVerify> GetCookie(ComixWAF waf, CancellationToken token)
     {
-        var generate = await Generate(waf, token);
+        return await GetCookie(waf, null, token);
+    }
+
+    public async Task<ComixWAFVerify> GetCookie(
+        ComixWAF waf,
+        MangaBox.Services.Imaging.ProxyEndpoint? proxy,
+        CancellationToken token)
+    {
+        var generate = await Generate(waf, proxy, token);
         if (generate is null)
             return new(false) { Content = "Failed to generate WAF parameters" };
         await DebugLog("generate", generate, token);
 
         var rotation = GetRotation(generate);
-        var result = await Verify(waf, generate.CaptchaId, rotation, token);
+        var result = await Verify(waf, generate.CaptchaId, rotation, proxy, token);
         await DebugLog("verify", result, token);
         return result;
     }
 
     public Task<ComixWAFGenerate?> Generate(ComixWAF waf, CancellationToken token)
     {
+        return Generate(waf, null, token);
+    }
+
+    public Task<ComixWAFGenerate?> Generate(
+        ComixWAF waf,
+        MangaBox.Services.Imaging.ProxyEndpoint? proxy,
+        CancellationToken token)
+    {
         const string URL = "https://comix.to/@waf/generate";
-        return _api.Get<ComixWAFGenerate>(URL, Request(waf), token: token);
+        return _api.Get<ComixWAFGenerate>(URL, Request(waf, proxy), token: token);
     }
 
     public async Task<ComixWAFVerify> Verify(ComixWAF waf, string id, int angle, CancellationToken token)
     {
+        return await Verify(waf, id, angle, null, token);
+    }
+
+    public async Task<ComixWAFVerify> Verify(
+        ComixWAF waf,
+        string id,
+        int angle,
+        MangaBox.Services.Imaging.ProxyEndpoint? proxy,
+        CancellationToken token)
+    {
         try
         {
             var request = new ComixWAFVerifyRequest(id, angle);
-            var result = await _api.Create("https://comix.to/@waf/verify", null, "POST", token)
+            var builder = _api.Create("https://comix.to/@waf/verify", null, "POST", token)
                 .Body(request)
-                .Message(Message(waf))
-                .Result();
+                .Message(Message(waf));
+            if (proxy is not null)
+                builder.ClientFactory(_ => proxy.CreateClient());
+
+            var result = await builder.Result();
 
             if (result is null)
             {

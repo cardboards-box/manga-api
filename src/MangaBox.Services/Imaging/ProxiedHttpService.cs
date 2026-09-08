@@ -2,6 +2,8 @@ using System.Threading.RateLimiting;
 
 namespace MangaBox.Services.Imaging;
 
+using Utilities.Flare.Models;
+
 using Headers = Dictionary<string, string>;
 using Config = (string[] Urls, int Tokens, double Seconds);
 
@@ -124,6 +126,8 @@ public sealed record ProxyEndpoint(
     SocketsHttpHandler Handler,
     RateLimiter Limiter)
 {
+	private SolverProxy? _solverProxy;
+
     /// <summary>
     /// Creates a new proxy endpoint from the given URL, token limit, and replenishment period
     /// </summary>
@@ -146,11 +150,23 @@ public sealed record ProxyEndpoint(
             AutoReplenishment = true
         });
 
-        var handler = ProxyHandler(
-            WithoutUserInfo(uri),
-            Credentials(uri));
+        var proxyUri = WithoutUserInfo(uri);
+        var credentials = Credentials(uri);
+        var handler = ProxyHandler(proxyUri, credentials);
+        var solverProxy = new SolverProxy
+        {
+            // Chromium expects proxy-server values in scheme://host:port form.
+            // Uri.ToString() appends a trailing slash, which causes Chromium to
+            // return ERR_NO_SUPPORTED_PROXIES for SOCKS proxies.
+            Url = proxyUri.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped),
+            Username = credentials?.UserName,
+            Password = credentials?.Password,
+        };
 
-        return new(Redact(uri), handler, limiter);
+        return new(Redact(uri), handler, limiter)
+        {
+            _solverProxy = solverProxy,
+        };
     }
 
     /// <summary>
@@ -158,6 +174,23 @@ public sealed record ProxyEndpoint(
     /// </summary>
     /// <returns>A new instance of <see cref="HttpClient"/> configured with the proxy handler</returns>
     public HttpClient CreateClient() => new(Handler, false);
+
+    /// <summary>
+    /// Creates the proxy payload expected by FlareSolverr.
+    /// </summary>
+    /// <returns>A proxy payload with credentials separated from the redacted proxy URL.</returns>
+    public SolverProxy CreateSolverProxy()
+    {
+        var proxy = _solverProxy
+            ?? throw new InvalidOperationException("This proxy endpoint was not created by ProxyEndpoint.Create.");
+
+        return new()
+        {
+            Url = proxy.Url,
+            Username = proxy.Username,
+            Password = proxy.Password,
+        };
+    }
 
     private static SocketsHttpHandler ProxyHandler(Uri uri, NetworkCredential? credentials)
     {

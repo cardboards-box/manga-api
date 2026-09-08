@@ -73,7 +73,7 @@ internal class ProxiedFlareImageService(
 
         if (cookies.Length == 0 || string.IsNullOrEmpty(userAgent))
         {
-            var proxy = new SolverProxy { Url = endpoint.Url, };
+            var proxy = endpoint.CreateSolverProxy();
             var result = await instance.GetHtml(url, token, proxy: proxy);
             if (Debug) await DebugLog(url, result, cookies, userAgent, token);
             cookies = result.FlareSolution.Cookies;
