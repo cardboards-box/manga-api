@@ -20,6 +20,7 @@ internal class ComixSource(
 	private const string COMIX_HOME_URL = "https://comix.to";
 	private const string COMIX_REMOVE_ORIGIN_HEADER = "comix-remove-origin";
 	private const string COMIX_FALLBACK_HEADER = "comix-fallback";
+	private const int CHAPTER_PAGE_RETRY_MAX = 3;
 
 	private static readonly JsonSerializerOptions _options = new()
 	{
@@ -119,28 +120,89 @@ internal class ComixSource(
 
 		await DebugLog(id, 1, doc, manga, token);
 
-		for(var page = 2; page <= pagination.TotalPages; page++)
+		for (var page = 2; page <= pagination.TotalPages; page++)
 		{
-			var pageUrl = $"{baseUrl}?page={page}";
-			var next = await GetHtml(pageUrl, token);
-			if (next is null)
+			var chapters = await FetchChapterPage(baseUrl, id, page, token);
+			if (chapters is null)
 			{
-				_logger.LogWarning("Failed to retrieve chapter page {Page} for manga id: {MangaId}", page, id);
-				break;
+				_logger.LogError(
+					"Aborting Comix import for manga {MangaId}; chapter page {Page} could not be loaded after {Attempts} attempts",
+					id,
+					page,
+					CHAPTER_PAGE_RETRY_MAX);
+				return null;
 			}
 
-			var chapters = ParseChapters(next.DocumentNode);
-			await DebugLog(id, page, next, chapters, token);
-			if (chapters is null || chapters.Count == 0)
-				break;
-
 			manga.Chapters.AddRange(chapters);
+		}
+
+		var fetchedChapterCount = manga.Chapters
+			.Select(x => x.Id)
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.Count();
+
+		if (fetchedChapterCount < pagination.TotalItems)
+		{
+			_logger.LogError(
+				"Aborting incomplete Comix import for manga {MangaId}; fetched {Fetched} of {Expected} chapter entries",
+				id,
+				fetchedChapterCount,
+				pagination.TotalItems);
+			return null;
 		}
 
 		manga.Chapters = [..manga.Chapters
 			.DistinctBy(t => t.Number)
 			.OrderBy(t => t.Number)];
 		return manga;
+	}
+
+	private async Task<List<ImportChapter>?> FetchChapterPage(
+		string baseUrl,
+		string mangaId,
+		int page,
+		CancellationToken token)
+	{
+		var pageUrl = $"{baseUrl}?page={page}";
+
+		for (var attempt = 1; attempt <= CHAPTER_PAGE_RETRY_MAX; attempt++)
+		{
+			try
+			{
+				var document = await GetHtml(pageUrl, token);
+				var chapters = ParseChapters(document.DocumentNode);
+				await DebugLog(mangaId, page, document, chapters, token);
+
+				if (chapters.Count > 0)
+					return chapters;
+
+				_logger.LogWarning(
+					"Comix chapter page {Page} for manga {MangaId} contained no chapters (attempt {Attempt}/{MaxAttempts})",
+					page,
+					mangaId,
+					attempt,
+					CHAPTER_PAGE_RETRY_MAX);
+			}
+			catch (OperationCanceledException) when (token.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogWarning(
+					ex,
+					"Failed to load Comix chapter page {Page} for manga {MangaId} (attempt {Attempt}/{MaxAttempts})",
+					page,
+					mangaId,
+					attempt,
+					CHAPTER_PAGE_RETRY_MAX);
+			}
+
+			if (attempt < CHAPTER_PAGE_RETRY_MAX)
+				await Task.Delay(TimeSpan.FromSeconds(attempt), token);
+		}
+
+		return null;
 	}
 
 	public override (bool matches, string? part) MatchesProvider(string url)

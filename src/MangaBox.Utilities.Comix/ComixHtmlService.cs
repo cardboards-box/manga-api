@@ -30,7 +30,11 @@ internal class ComixHtmlService(
     private const int WAF_RETRY_MAX_WAIT = 30;
     private const string DEBUG_DIR = "comix-html";
 
+#if DEBUG
     public static bool DEBUG { get; set; } = true;
+#else
+    public static bool DEBUG { get; set; } = false;
+#endif
 
     private static readonly JsonSerializerOptions _options = new()
     {
@@ -106,8 +110,11 @@ internal class ComixHtmlService(
         }
     }
 
-    public async Task<bool> GetWaf(string url, CancellationToken token)
+    public async Task<bool> GetWaf(string url, CancellationToken token, bool forceRefresh = false)
     {
+        if (forceRefresh)
+            _wafResult = null;
+
         if (_wafResult is not null && _wafResult.Valid)
             return true;
 
@@ -254,10 +261,21 @@ internal class ComixHtmlService(
     public async Task<FlareHtmlDocument> GetHtml(string url, CancellationToken token)
     {
         var result = await Flared(url, token);
-        if (!IsSecurityCheck(result) || !await GetWaf(url, token))
+        if (!IsSecurityCheck(result))
             return result;
 
-        return await Flared(url, token);
+        // A locally unexpired waf_pass can still be rejected by Comix. If that
+        // happens, solve a fresh challenge instead of returning the HTTP 200
+        // security page to callers as though it were the requested document.
+        _logger.LogWarning("Comix returned a security check for {Url}; refreshing the WAF pass", url);
+        if (!await GetWaf(url, token, forceRefresh: true))
+            throw new HttpRequestException($"Failed to solve the Comix security check for {url}.");
+
+        result = await Flared(url, token);
+        if (IsSecurityCheck(result))
+            throw new HttpRequestException($"Comix continued to return a security check for {url} after refreshing the WAF pass.");
+
+        return result;
     }
 
     public void Dispose()
