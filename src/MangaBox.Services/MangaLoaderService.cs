@@ -138,21 +138,45 @@ internal class MangaLoaderService(
 		if (pages.Length == 0)
 			return Boxed.NotFound(nameof(MbChapter), "No pages were found for chapter.");
 
+		var existingImages = result
+			.GetItems<MbImage>()
+			.ToDictionary(x => x.Ordinal);
 		for(var i = 0; i < pages.Length; i++)
 		{
 			token.ThrowIfCancellationRequested();
 			var page = pages[i];
+			var ordinal = i + 1;
+			var urlChanged = existingImages.TryGetValue(ordinal, out var existing) &&
+				!string.Equals(existing.Url, page.Page, StringComparison.OrdinalIgnoreCase);
 			var id = await _db.Image.Upsert(new()
 			{
 				Url = page.Page,
 				MangaId = manga.Id,
 				ChapterId = chapter.Id,
-				Ordinal = i + 1,
+				Ordinal = ordinal,
 				ImageWidth = page.Width,
 				ImageHeight = page.Height,
 				Headers = [..page.Headers.Select(t => new MbHeader { Key = t.Name, Value = t.Value })]
 			});
-			await _publish.NewImages.Publish(new(id, DateTime.UtcNow, false));
+
+			if (urlChanged)
+			{
+				var replacement = await _db.Image.Bust(id);
+				if (replacement is null)
+					return Boxed.Exception($"Failed to replace changed image {id}.");
+				id = replacement.Id;
+			}
+
+			await _publish.NewImages.Publish(new(id, DateTime.UtcNow, force || urlChanged));
+		}
+
+		var staleImages = result
+			.GetItems<MbImage>()
+			.Where(x => x.Ordinal > pages.Length);
+		foreach (var image in staleImages)
+		{
+			token.ThrowIfCancellationRequested();
+			await _db.Image.Delete(image.Id);
 		}
 
 		if (chapter.PageCount != pages.Length && pages.Length > 0)

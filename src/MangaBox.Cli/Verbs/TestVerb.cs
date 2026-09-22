@@ -248,6 +248,53 @@ internal class TestVerb(
 		return BasicTest(token);
 	}
 
+	public async Task TestComixChapter(CancellationToken token)
+	{
+		var chapterId = Guid.Parse("0a268321-6ef2-496c-b8d4-f132ec64b677");
+		const string URL = "https://comix.to/title/0qqxl-the-reincarnated-girl-wants-to-start-from-the-very-first-step/10062673-chapter-21";
+		var stored = await _db.Chapter.FetchWithRelationships(chapterId);
+		var storedImages = stored?.GetItems<MbImage>()?.OrderBy(x => x.Ordinal).ToArray() ?? [];
+		_logger.LogInformation(
+			"Stored chapter {ChapterId}: number={Number}, sourceId={SourceId}, url={StoredUrl}, pages={PageCount}, firstPage={FirstPage}",
+			chapterId,
+			stored?.Entity.Ordinal,
+			stored?.Entity.SourceId,
+			stored?.Entity.Url,
+			storedImages.Length,
+			storedImages.FirstOrDefault()?.Url);
+
+		var pages = await _comix.ChapterPages(URL, token);
+		var legacyPages = await _comix.ChapterPages("0qqxl", "10062673", token);
+		var chapterTwoPages = await _comix.ChapterPages(
+			"https://comix.to/title/0qqxl-the-reincarnated-girl-wants-to-start-from-the-very-first-step/10629603-chapter-2",
+			token);
+		_logger.LogInformation(
+			"Canonical pages={PageCount}, first={FirstPage}; legacy pages={LegacyPageCount}, first={LegacyFirstPage}; chapter 2 pages={ChapterTwoPageCount}, first={ChapterTwoFirstPage}",
+			pages.Length,
+			pages.FirstOrDefault()?.Page,
+			legacyPages.Length,
+			legacyPages.FirstOrDefault()?.Page,
+			chapterTwoPages.Length,
+			chapterTwoPages.FirstOrDefault()?.Page);
+
+		var refresh = await _loader.Pages(chapterId, true, token);
+		if (refresh is not Boxed<MangaBoxType<MbChapter>>)
+			throw new InvalidOperationException($"Failed to refresh Comix chapter: {Serialize(refresh)}");
+
+		var corrected = (await _db.Chapter.FetchWithRelationships(chapterId))?
+			.GetItems<MbImage>()?
+			.OrderBy(x => x.Ordinal)
+			.ToArray() ?? [];
+		var matches = corrected.Length == pages.Length && corrected
+			.Zip(pages)
+			.All(x => x.First.Url.Equals(x.Second.Page, StringComparison.OrdinalIgnoreCase));
+		if (!matches)
+			throw new InvalidOperationException(
+				$"Refreshed chapter pages do not match Comix: expected {pages.Length}, stored {corrected.Length}");
+
+		_logger.LogInformation("Verified {PageCount} corrected pages for chapter {ChapterId}", corrected.Length, chapterId);
+	}
+
 	public async Task TestComixProxy(CancellationToken token)
 	{
 		const string URL = "https://api.ipify.org";
@@ -368,7 +415,9 @@ internal class TestVerb(
 			return;
 		}
 
-		var pages = await source.ChapterPages(id, chapter.Id, token);
+		var pages = source is IMangaUrlSource urlSource
+			? await urlSource.ChapterPages(chapter.Url, token)
+			: await source.ChapterPages(id, chapter.Id, token);
 		if (pages.Length == 0)
 		{
 			_logger.LogError("No pages found for chapter ID: {ChapterId} of manga ID: {ID}", chapter.Id, id);

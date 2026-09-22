@@ -8,7 +8,7 @@ using Services.Imaging;
 using Utilities.Comix;
 using Utilities.Flare;
 
-public interface IComixSource : IMangaSource
+public interface IComixSource : IMangaUrlSource
 {
 
 }
@@ -72,6 +72,11 @@ internal class ComixSource(
 	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
 	{
 		var url = $"{HomeUrl}/title/{mangaId}-mangatitle/{chapterId}-chapter-1";
+		return await ChapterPages(url, token);
+	}
+
+	public async Task<ImportPage[]> ChapterPages(string url, CancellationToken token)
+	{
 		var doc = await GetHtml(url, token);
 		if (doc is null)
 		{
@@ -80,7 +85,7 @@ internal class ComixSource(
 		}
 
 		var pages = ParseChapterPages(doc, doc.FlareSolution.Url);
-		await DebugLog($"{mangaId}-{chapterId}", 0, doc, pages, token);
+		await DebugLog(ParseChapterId(url), 0, doc, pages, token);
 		return pages;
 	}
 
