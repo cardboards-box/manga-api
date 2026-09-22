@@ -163,6 +163,7 @@ WITH input AS (
             END
         ),
         updated_at = CURRENT_TIMESTAMP,
+        deleted_at = NULL,
         legacy_id = COALESCE(EXCLUDED.legacy_id, mb_chapters.legacy_id)
     RETURNING mb_chapters.*, (xmax = 0) AS is_new
 ), pages_in AS (
