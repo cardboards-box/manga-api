@@ -20,7 +20,10 @@ internal class ComixSource(
 	private const string COMIX_HOME_URL = "https://comix.to";
 	private const string COMIX_REMOVE_ORIGIN_HEADER = "comix-remove-origin";
 	private const string COMIX_FALLBACK_HEADER = "comix-fallback";
+	private const string COMIX_PROXY_WORKLOAD = "Comix";
 	private const int CHAPTER_PAGE_RETRY_MAX = 3;
+	private const int IMAGE_RETRY_MAX = 4;
+	private const int IMAGE_RETRY_BASE_SECONDS = 5;
 
 	private static readonly JsonSerializerOptions _options = new()
 	{
@@ -52,21 +55,96 @@ internal class ComixSource(
 		CancellationToken token)
 	{
 		var fallbackEnabled = headers?.ContainsKey(COMIX_FALLBACK_HEADER) == true;
+		var affinity = ImageProxyAffinity(headers, url);
 		var requestHeaders = PrepareComixHeaders(headers);
-		var result = await downloader.Download(url, requestHeaders, token);
 
+		for (var attempt = 1; attempt <= IMAGE_RETRY_MAX; attempt++)
+		{
+			var result = await DownloadWithFallback(
+				downloader,
+				url,
+				requestHeaders,
+				fallbackEnabled,
+				affinity,
+				token);
+			var status = result.Response?.StatusCode;
+			if (status is not HttpStatusCode.TooManyRequests and not HttpStatusCode.ServiceUnavailable ||
+				attempt == IMAGE_RETRY_MAX)
+				return result;
+
+			var delay = RetryDelay(result.Response!, attempt);
+			_logger.LogWarning(
+				"Comix image CDN returned {StatusCode} for {Url}; retrying in {DelaySeconds:F1} seconds ({Attempt}/{MaxAttempts})",
+				(int)status.Value,
+				url,
+				delay.TotalSeconds,
+				attempt,
+				IMAGE_RETRY_MAX);
+			result.Dispose();
+			await Task.Delay(delay, token);
+		}
+
+		throw new InvalidOperationException("Comix image retry loop exited unexpectedly.");
+	}
+
+	private static async Task<DownloadResult> DownloadWithFallback(
+		IDownloadService downloader,
+		string url,
+		Dictionary<string, string> headers,
+		bool fallbackEnabled,
+		string affinity,
+		CancellationToken token)
+	{
+		var result = await DownloadImageRequest(downloader, url, headers, affinity, token);
 		if (result.Response?.StatusCode != HttpStatusCode.NotFound || !fallbackEnabled)
 			return result;
 
 		foreach (var fallbackUrl in ComixFallbackUrls(url))
 		{
 			result.Dispose();
-			result = await downloader.Download(fallbackUrl, requestHeaders, token);
+			result = await DownloadImageRequest(downloader, fallbackUrl, headers, affinity, token);
 			if (result.Response?.StatusCode != HttpStatusCode.NotFound)
 				break;
 		}
 
 		return result;
+	}
+
+	private static Task<DownloadResult> DownloadImageRequest(
+		IDownloadService downloader,
+		string url,
+		Dictionary<string, string> headers,
+		string affinity,
+		CancellationToken token)
+	{
+		return downloader is IProxiedHttpService proxy
+			? proxy.DownloadAffinitized(COMIX_PROXY_WORKLOAD, affinity, url, headers, token)
+			: downloader.Download(url, headers, token);
+	}
+
+	private static string ImageProxyAffinity(Dictionary<string, string>? headers, string url)
+	{
+		if (headers?.GetValueOrDefault(IProxiedHttpService.AFFINITY_HEADER) is { Length: > 0 } affinity)
+			return affinity;
+
+		var fragmentIndex = url.IndexOf('#');
+		var normalizedUrl = fragmentIndex >= 0 ? url[..fragmentIndex] : url;
+		var encoded = TryParseEncodedComixImageUrl(normalizedUrl);
+		return encoded is null
+			? normalizedUrl
+			: $"{encoded.Prefix}{encoded.Suffix}";
+	}
+
+	private static TimeSpan RetryDelay(HttpResponseMessage response, int attempt)
+	{
+		var exponential = TimeSpan.FromSeconds(IMAGE_RETRY_BASE_SECONDS * Math.Pow(2, attempt - 1));
+		var retryAfter = response.Headers.RetryAfter;
+		var requested = retryAfter?.Delta ??
+			(retryAfter?.Date - DateTimeOffset.UtcNow);
+
+		return requested.HasValue && requested.Value > exponential
+			? requested.Value
+			: exponential;
 	}
 
 	public override async Task<ImportPage[]> ChapterPages(string mangaId, string chapterId, CancellationToken token)
@@ -1332,6 +1410,7 @@ internal class ComixSource(
 			output.Remove("Origin");
 
 		output.Remove(COMIX_FALLBACK_HEADER);
+		output.Remove(IProxiedHttpService.AFFINITY_HEADER);
 		return output;
 	}
 

@@ -387,6 +387,9 @@ internal class ImageService(
 			var headers = _http.HeadersFrom(image.Url, source, manga, image);
 			//Determine which downloader to use for the image
 			var downloader = DetermineDownloader(loader, image);
+			if (downloader is IProxiedHttpService &&
+				loader.Service.Provider.Equals("comix-to", StringComparison.OrdinalIgnoreCase))
+				headers[IProxiedHttpService.AFFINITY_HEADER] = manga.Id.ToString("N");
 			//Download the image from the source
 			using var download = await loader.Service.DownloadImage(downloader, image.Url, headers, token);
 			//If the image failed, forward the error

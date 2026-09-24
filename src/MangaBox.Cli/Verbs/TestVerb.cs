@@ -209,7 +209,7 @@ internal class TestVerb(
 	{
 		Task BasicTest(CancellationToken token)
 		{
-			const string URL = "https://comix.to/title/68n8-mizu-mahou-gurai-shika-torie-ga-nai-kedo-gendai-chishiki-ga-areba-juubun-da-yo-ne";
+			const string URL = "https://comix.to/title/0qqxl-the-reincarnated-girl-wants-to-start-from-the-very-first-step";
 			return TestSource(_comix, URL, true, token, null);
 		}
 
