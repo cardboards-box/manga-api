@@ -295,6 +295,12 @@ internal class TestVerb(
 		_logger.LogInformation("Verified {PageCount} corrected pages for chapter {ChapterId}", corrected.Length, chapterId);
 	}
 
+	public async Task TestComixChapterParsing(CancellationToken token)
+	{
+		await ComixChapterPageTests.Run(token);
+		_logger.LogInformation("Comix chapter page parsing and request header regression checks passed");
+	}
+
 	public async Task TestComixProxy(CancellationToken token)
 	{
 		const string URL = "https://api.ipify.org";

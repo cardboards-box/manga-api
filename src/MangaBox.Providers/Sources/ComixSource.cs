@@ -56,7 +56,7 @@ internal class ComixSource(
 	{
 		var fallbackEnabled = headers?.ContainsKey(COMIX_FALLBACK_HEADER) == true;
 		var affinity = ImageProxyAffinity(headers, url);
-		var requestHeaders = PrepareComixHeaders(headers);
+		var requestHeaders = PrepareComixHeaders(headers, url);
 
 		for (var attempt = 1; attempt <= IMAGE_RETRY_MAX; attempt++)
 		{
@@ -1086,8 +1086,18 @@ internal class ComixSource(
 	private static bool IsComixImageUrl(string? url)
 	{
 		return Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
-			Regex.IsMatch(uri.Host, @"(^|\.)wowpic\d+\.store$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
-			Regex.IsMatch(uri.AbsolutePath, @"/i\d+/", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+			(IsPlainComixImageUrl(url) ||
+				Regex.IsMatch(uri.Host, @"(^|\.)wowpic\d+\.store$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
+				Regex.IsMatch(uri.AbsolutePath, @"/i\d+/", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+	}
+
+	private static bool IsPlainComixImageUrl(string? url)
+	{
+		// The current reader rotates CDN domains and serves extensionless, unencrypted
+		// images under /hi/. Recognize the path instead of maintaining a host list.
+		return Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+			uri.Scheme is "https" or "http" &&
+			Regex.IsMatch(uri.AbsolutePath, @"^/hi/[A-Za-z0-9_-]{16,}$", RegexOptions.CultureInvariant);
 	}
 
 	private static string ImageSeriesKey(string url)
@@ -1350,7 +1360,7 @@ internal class ComixSource(
 
 	private static void ApplyComixImageRequestFlags(ImportPage page, int ordinal, bool isV3)
 	{
-		if (!IsComixImageUrl(page.Page))
+		if (!IsComixImageUrl(page.Page) || IsPlainComixImageUrl(page.Page))
 			return;
 
 		page.Headers.Add(new(COMIX_FALLBACK_HEADER, "1"));
@@ -1398,7 +1408,7 @@ internal class ComixSource(
 		return builder.Uri.ToString();
 	}
 
-	private static Dictionary<string, string> PrepareComixHeaders(Dictionary<string, string>? headers)
+	private static Dictionary<string, string> PrepareComixHeaders(Dictionary<string, string>? headers, string url)
 	{
 		var output = new Dictionary<string, string>(headers ?? [], StringComparer.InvariantCultureIgnoreCase);
 		output.TryAdd("Referer", COMIX_HOME_URL);
@@ -1406,8 +1416,12 @@ internal class ComixSource(
 		foreach (var (key, value) in PolyfillExtensions.HEADERS_FOR_REFERS)
 			output.TryAdd(key, value);
 
-		if (output.Remove(COMIX_REMOVE_ORIGIN_HEADER))
+		if (output.Remove(COMIX_REMOVE_ORIGIN_HEADER) || IsPlainComixImageUrl(url))
 			output.Remove("Origin");
+
+		// Match the reader's referrerpolicy="no-referrer" for the new CDN.
+		if (IsPlainComixImageUrl(url))
+			output.Remove("Referer");
 
 		output.Remove(COMIX_FALLBACK_HEADER);
 		output.Remove(IProxiedHttpService.AFFINITY_HEADER);
