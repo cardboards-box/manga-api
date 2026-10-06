@@ -389,7 +389,15 @@ internal class ImageService(
 			var downloader = DetermineDownloader(loader, image);
 			if (downloader is IProxiedHttpService &&
 				loader.Service.Provider.Equals("comix-to", StringComparison.OrdinalIgnoreCase))
+			{
 				headers[IProxiedHttpService.AFFINITY_HEADER] = manga.Id.ToString("N");
+				if (image.ChapterId is Guid chapterId)
+				{
+					var chapter = await _db.Chapter.Fetch(chapterId);
+					if (!string.IsNullOrEmpty(chapter?.Url))
+						headers[IDownloadService.CHAPTER_URL_HEADER] = chapter.Url;
+				}
+			}
 			//Download the image from the source
 			using var download = await loader.Service.DownloadImage(downloader, image.Url, headers, token);
 			//If the image failed, forward the error

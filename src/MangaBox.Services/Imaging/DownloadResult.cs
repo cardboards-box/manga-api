@@ -25,6 +25,8 @@ public record class DownloadResult(
 	string? MimeType = null,
 	long? Length = null) : IDisposable
 {
+	internal HttpRequestError? RequestError { get; init; }
+
 	/// <inheritdoc />
 	public void Dispose()
 	{

@@ -9,6 +9,11 @@ using Headers = Dictionary<string, string>;
 public interface IDownloadService
 {
 	/// <summary>
+	/// Internal metadata identifying the chapter whose image URLs may need refreshing.
+	/// </summary>
+	const string CHAPTER_URL_HEADER = "MangaBox-Chapter-Url";
+
+	/// <summary>
 	/// Attempts to download the given file
 	/// </summary>
 	/// <param name="url">The URL to download</param>

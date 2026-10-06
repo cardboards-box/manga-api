@@ -301,6 +301,12 @@ internal class TestVerb(
 		_logger.LogInformation("Comix chapter page parsing and request header regression checks passed");
 	}
 
+	public async Task TestProxyFailover(CancellationToken token)
+	{
+		await ProxyFailoverTests.Run(_http, token);
+		_logger.LogInformation("Proxy connection failover regression checks passed");
+	}
+
 	public async Task TestComixProxy(CancellationToken token)
 	{
 		const string URL = "https://api.ipify.org";

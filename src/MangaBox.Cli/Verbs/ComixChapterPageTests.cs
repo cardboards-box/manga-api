@@ -109,6 +109,41 @@ internal static class ComixChapterPageTests
             Require(interrupted.RequestCount == 1 && interrupted.DisposedCount == 1,
                 "Cancellation did not release the failed response.");
         }
+
+        var proxy = new ProxyDownloadStub([HttpStatusCode.OK, HttpStatusCode.OK]);
+        var internalHeaders = new Dictionary<string, string>
+        {
+            [IProxiedHttpService.AFFINITY_HEADER] = "same-manga",
+            [IDownloadService.CHAPTER_URL_HEADER] = ChapterUrl,
+            ["ordinal"] = "3"
+        };
+        using (await source.DownloadImage(proxy, pages[2].Page, internalHeaders, token))
+            Require(proxy.AffinityRequests == 0, "Plain images must use normal proxy rotation instead of legacy affinity batches.");
+        using (await source.DownloadImage(proxy, legacy[0].Page, internalHeaders, token))
+            Require(proxy.AffinityRequests == 1 && proxy.LastAffinity == "same-manga",
+                "Legacy images must retain their manga affinity.");
+        Require(proxy.RequestHeaders.All(x => !x.ContainsKey(IDownloadService.CHAPTER_URL_HEADER) &&
+            !x.ContainsKey(IProxiedHttpService.AFFINITY_HEADER)), "Internal chapter metadata was sent to a CDN.");
+
+        var freshHtml = new HtmlStub(html.ToString());
+        var freshSource = new ComixSource(freshHtml, NullLogger<ComixSource>.Instance);
+        var staleHost = new RetryDownloadStub([null, null, HttpStatusCode.OK, HttpStatusCode.OK]);
+        var recoveries = await Task.WhenAll(new[] { 2, 3 }.Select(page => freshSource.DownloadImage(
+            staleHost, $"https://expired.example.site/hi/{ImagePrefix}{tokens[page - 1]}{ImageSuffix}",
+            new Dictionary<string, string> { [IDownloadService.CHAPTER_URL_HEADER] = ChapterUrl, ["ordinal"] = page.ToString() }, token)));
+        foreach (var recovery in recoveries) recovery.Dispose();
+        Require(freshHtml.RequestCount == 1 && staleHost.RequestCount == 4,
+            "Concurrent image failures must share one refreshed reader lookup.");
+        Require(staleHost.Urls.Contains(pages[1].Page) && staleHost.Urls.Contains(pages[2].Page),
+            "Refreshed URLs must preserve each requested page's ordinal.");
+        Require(staleHost.DisposedCount == 4, "Refreshed image responses leaked their download resources.");
+
+        var mirrors = new RetryDownloadStub([null, HttpStatusCode.OK]);
+        using (await freshSource.DownloadImage(mirrors, pages[0].Page,
+            new Dictionary<string, string> { [IDownloadService.CHAPTER_URL_HEADER] = ChapterUrl, ["ordinal"] = "1" }, token))
+            Require(mirrors.Urls.Last() == $"https://{hosts[1]}/hi/{ImagePrefix}{tokens[0]}{ImageSuffix}",
+                "An unchanged failing URL must try another CDN host advertised by the reader.");
+        Require(freshHtml.RequestCount == 1, "Recent reader metadata should be reused for image recovery.");
     }
 
     private static Task<ImportPage[]> Parse(string html, CancellationToken token) =>
@@ -121,8 +156,10 @@ internal static class ComixChapterPageTests
 
     private sealed class HtmlStub(string html) : IComixHtmlService
     {
+        public int RequestCount { get; private set; }
         public Task<FlareHtmlDocument> GetHtml(string url, CancellationToken token)
         {
+            RequestCount++;
             var document = new FlareHtmlDocument { FlareSolution = new SolverSolution { Url = url, Response = html } };
             document.LoadHtml(html);
             return Task.FromResult(document);
@@ -144,21 +181,44 @@ internal static class ComixChapterPageTests
         }
     }
 
-    private sealed class RetryDownloadStub(HttpStatusCode?[] statuses, Action? afterRequest = null) : IDownloadService
+    private class RetryDownloadStub(HttpStatusCode?[] statuses, Action? afterRequest = null) : IDownloadService
     {
-        public int RequestCount { get; private set; }
-        public int DisposedCount { get; private set; }
+        private int _requests;
+        private int _disposed;
+        public int RequestCount => _requests;
+        public int DisposedCount => _disposed;
+        public ConcurrentQueue<string> Urls { get; } = new();
+        public ConcurrentQueue<Dictionary<string, string>> RequestHeaders { get; } = new();
 
         public Task<DownloadResult> Download(string url, Dictionary<string, string>? headers, CancellationToken token)
         {
-            var status = statuses[Math.Min(RequestCount++, statuses.Length - 1)];
+            var index = Interlocked.Increment(ref _requests) - 1;
+            Urls.Enqueue(url);
+            RequestHeaders.Enqueue(headers ?? []);
+            var status = statuses[Math.Min(index, statuses.Length - 1)];
             var response = status is not null ? new HttpResponseMessage(status.Value) : null;
-            var disposables = new List<IDisposable> { new DisposalCallback(() => DisposedCount++) };
+            var disposables = new List<IDisposable> { new DisposalCallback(() => Interlocked.Increment(ref _disposed)) };
             if (response is not null) disposables.Add(response);
             afterRequest?.Invoke();
             return Task.FromResult(new DownloadResult(disposables, url, headers,
                 Error: status == HttpStatusCode.OK ? null : status is null ? "Connection reset" : $"HTTP {(int)status}",
                 Response: response));
+        }
+    }
+
+    private sealed class ProxyDownloadStub(HttpStatusCode?[] statuses) : RetryDownloadStub(statuses), IProxiedHttpService
+    {
+        public int AffinityRequests { get; private set; }
+        public string? LastAffinity { get; private set; }
+        public (string[] Urls, int Tokens, double Seconds) GetConfig() => ([], 10, 10);
+        public Task<(ProxyEndpoint endpoint, System.Threading.RateLimiting.RateLimitLease lease)> Aquire(CancellationToken token) =>
+            throw new NotSupportedException();
+        public Task<DownloadResult> DownloadAffinitized(string workload, string affinity, string url,
+            Dictionary<string, string>? headers, CancellationToken token)
+        {
+            AffinityRequests++;
+            LastAffinity = affinity;
+            return Download(url, headers, token);
         }
     }
 

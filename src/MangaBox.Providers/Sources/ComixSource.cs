@@ -24,6 +24,8 @@ internal class ComixSource(
 	private const int CHAPTER_PAGE_RETRY_MAX = 3;
 	private const int IMAGE_RETRY_MAX = 4;
 	private const int IMAGE_RETRY_BASE_SECONDS = 5;
+	private readonly SemaphoreSlim _imageRefreshLock = new(1, 1);
+	private readonly Dictionary<string, (DateTime RefreshedAt, ImportPage[] Pages)> _imageRefreshes = new();
 
 	private static readonly JsonSerializerOptions _options = new()
 	{
@@ -57,19 +59,28 @@ internal class ComixSource(
 		var fallbackEnabled = headers?.ContainsKey(COMIX_FALLBACK_HEADER) == true;
 		var affinity = ImageProxyAffinity(headers, url);
 		var requestHeaders = PrepareComixHeaders(headers, url);
+		var requestUrl = url;
+		var alternatives = new Queue<string>();
+		var refreshed = false;
+		var chapterUrl = headers?.GetValueOrDefault(IDownloadService.CHAPTER_URL_HEADER);
+		var canRefresh = IsPlainComixImageUrl(url) &&
+			Uri.TryCreate(chapterUrl, UriKind.Absolute, out var chapterUri) &&
+			chapterUri.Scheme == Uri.UriSchemeHttps && chapterUri.Host.Equals("comix.to", StringComparison.OrdinalIgnoreCase) &&
+			chapterUri.AbsolutePath.StartsWith("/title/", StringComparison.Ordinal) &&
+			int.TryParse(headers?.GetValueOrDefault("ordinal"), out var ordinal) && ordinal > 0;
 
 		for (var attempt = 1; attempt <= IMAGE_RETRY_MAX; attempt++)
 		{
 			var result = await DownloadWithFallback(
 				downloader,
-				url,
+				requestUrl,
 				requestHeaders,
 				fallbackEnabled,
 				affinity,
 				token);
 			var status = result.Response?.StatusCode;
 			var retryable = status is not null
-				? ShouldRetryImageResponse(status.Value)
+				? ShouldRetryImageResponse(status.Value) || (canRefresh && status == HttpStatusCode.NotFound)
 				: !string.IsNullOrEmpty(result.Error);
 			if (!retryable || attempt == IMAGE_RETRY_MAX)
 				return result;
@@ -78,15 +89,66 @@ internal class ComixSource(
 			_logger.LogWarning(
 				"Comix image download failed ({Failure}) for {Url}; retrying in {DelaySeconds:F1} seconds ({Attempt}/{MaxAttempts})",
 				status is not null ? ((int)status.Value).ToString(CultureInfo.InvariantCulture) : result.Error,
-				url,
+				requestUrl,
 				delay.TotalSeconds,
 				attempt,
 				IMAGE_RETRY_MAX);
 			result.Dispose();
+			if (canRefresh && !refreshed)
+			{
+				refreshed = true;
+				try
+				{
+					var pages = await RefreshImagePages(chapterUrl!, token);
+					var pageNumber = int.Parse(headers!["ordinal"], CultureInfo.InvariantCulture);
+					if (pageNumber <= pages.Length && IsPlainComixImageUrl(pages[pageNumber - 1].Page))
+					{
+						var freshUri = new Uri(pages[pageNumber - 1].Page);
+						var mirrors = pages.Where(x => IsPlainComixImageUrl(x.Page))
+							.Select(x => new Uri(x.Page).GetLeftPart(UriPartial.Authority))
+							.Distinct(StringComparer.OrdinalIgnoreCase)
+							.Select(origin => origin + freshUri.PathAndQuery);
+						alternatives = new Queue<string>(mirrors.Prepend(freshUri.AbsoluteUri)
+							.Distinct(StringComparer.OrdinalIgnoreCase)
+							.Where(candidate => !candidate.Equals(url, StringComparison.OrdinalIgnoreCase)));
+					}
+				}
+				catch (OperationCanceledException) when (token.IsCancellationRequested)
+				{
+					throw;
+				}
+				catch (Exception ex)
+				{
+					_logger.LogWarning(ex, "Could not refresh Comix image URLs for {ChapterUrl}", chapterUrl);
+				}
+			}
+			if (alternatives.TryDequeue(out var alternative))
+				requestUrl = alternative;
 			await Task.Delay(delay, token);
 		}
 
 		throw new InvalidOperationException("Comix image retry loop exited unexpectedly.");
+	}
+
+	private async Task<ImportPage[]> RefreshImagePages(string chapterUrl, CancellationToken token)
+	{
+		await _imageRefreshLock.WaitAsync(token);
+		try
+		{
+			var cutoff = DateTime.UtcNow.AddMinutes(-1);
+			foreach (var expired in _imageRefreshes.Where(x => x.Value.RefreshedAt < cutoff).Select(x => x.Key).ToArray())
+				_imageRefreshes.Remove(expired);
+			if (_imageRefreshes.TryGetValue(chapterUrl, out var cached))
+				return cached.Pages;
+
+			var pages = await ChapterPages(chapterUrl, token);
+			_imageRefreshes[chapterUrl] = (DateTime.UtcNow, pages);
+			return pages;
+		}
+		finally
+		{
+			_imageRefreshLock.Release();
+		}
 	}
 
 	internal static bool ShouldRetryImageResponse(HttpStatusCode status)
@@ -126,7 +188,9 @@ internal class ComixSource(
 		string affinity,
 		CancellationToken token)
 	{
-		return downloader is IProxiedHttpService proxy
+		// Plain CDN images are interchangeable across proxy IPs. The legacy
+		// affinity batches otherwise leave a 30-page chapter waiting 12 minutes.
+		return !IsPlainComixImageUrl(url) && downloader is IProxiedHttpService proxy
 			? proxy.DownloadAffinitized(COMIX_PROXY_WORKLOAD, affinity, url, headers, token)
 			: downloader.Download(url, headers, token);
 	}
@@ -1434,6 +1498,7 @@ internal class ComixSource(
 
 		output.Remove(COMIX_FALLBACK_HEADER);
 		output.Remove(IProxiedHttpService.AFFINITY_HEADER);
+		output.Remove(IDownloadService.CHAPTER_URL_HEADER);
 		return output;
 	}
 

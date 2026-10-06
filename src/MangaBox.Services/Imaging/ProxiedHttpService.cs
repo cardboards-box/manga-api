@@ -109,7 +109,7 @@ internal class ProxiedHttpService(
 				idleTimeout,
 				token);
 			var endpoint = affinityLease.Endpoint;
-			if (endpoint.IsCoolingDown(workload))
+			if (affinityLease.IsInvalidated || endpoint.IsCoolingDown(workload))
 			{
 				affinityLease.Dispose();
 				continue;
@@ -130,7 +130,7 @@ internal class ProxiedHttpService(
 				throw;
 			}
 
-			if (!requestLease.IsAcquired || endpoint.IsCoolingDown(workload))
+			if (!requestLease.IsAcquired || affinityLease.IsInvalidated || endpoint.IsCoolingDown(workload))
 			{
 				requestLease.Dispose();
 				affinityLease.Dispose();
@@ -167,7 +167,31 @@ internal class ProxiedHttpService(
 				request.ClientFactory(_ => endpoint.CreateClient());
 			}, token);
 
-			if (workload is not null &&
+			if (workload is not null && !token.IsCancellationRequested &&
+				result.RequestError is HttpRequestError.ProxyTunnelError or HttpRequestError.ConnectionError)
+			{
+				var cooldown = FailureCooldown(null);
+				lock (_affinityLock)
+				{
+					endpoint.Cooldown(workload, cooldown);
+					var reservations = _reservedEndpoints.Values
+						.Where(x => ReferenceEquals(x.Endpoint, endpoint) &&
+							x.Workload.Equals(workload, StringComparison.OrdinalIgnoreCase))
+						.ToArray();
+					foreach (var reservation in reservations)
+					{
+						reservation.Invalidated = true;
+						if (_affinities.TryGetValue(reservation.AffinityKey, out var current) && ReferenceEquals(current, reservation))
+							_affinities.Remove(reservation.AffinityKey);
+						if (reservation.ActiveRequests == 0)
+							RemoveAffinityReservation(reservation);
+					}
+				}
+				_logger.LogWarning(
+					"Proxy {ProxyUrl} failed to connect; releasing {Workload} affinity and pausing it for {CooldownSeconds:F1} seconds",
+					endpoint.Url, workload, cooldown.TotalSeconds);
+			}
+			else if (workload is not null &&
 				result.Response?.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable)
 			{
 				var cooldown = FailureCooldown(result.Response);
@@ -201,12 +225,12 @@ internal class ProxiedHttpService(
 		}
 	}
 
-	private TimeSpan FailureCooldown(HttpResponseMessage response)
+	private TimeSpan FailureCooldown(HttpResponseMessage? response)
 	{
 		var configured = TimeSpan.FromSeconds(Math.Max(
 			0.1,
 			_config.GetValue("Proxies:FailureCooldownSeconds", DEFAULT_FAILURE_COOLDOWN_SECONDS)));
-		var retryAfter = response.Headers.RetryAfter;
+		var retryAfter = response?.Headers.RetryAfter;
 		var requested = retryAfter?.Delta ??
 			(retryAfter?.Date - DateTimeOffset.UtcNow);
 
@@ -296,6 +320,11 @@ internal class ProxiedHttpService(
 				reservation.ActiveRequests--;
 			if (reservation.ActiveRequests == 0)
 			{
+				if (reservation.Invalidated)
+				{
+					RemoveAffinityReservation(reservation);
+					return;
+				}
 				var cooldown = reservation.Endpoint.CooldownRemaining(reservation.Workload);
 				var hold = cooldown + reservation.IdleTimeout;
 				reservation.IdleUntilUtc = DateTime.UtcNow + hold;
@@ -314,8 +343,10 @@ internal class ProxiedHttpService(
 
 	private void RemoveAffinityReservation(AffinityReservation reservation)
 	{
-		_affinities.Remove(reservation.AffinityKey);
-		_reservedEndpoints.Remove(reservation.EndpointKey);
+		if (_affinities.TryGetValue(reservation.AffinityKey, out var affinity) && ReferenceEquals(affinity, reservation))
+			_affinities.Remove(reservation.AffinityKey);
+		if (_reservedEndpoints.TryGetValue(reservation.EndpointKey, out var endpoint) && ReferenceEquals(endpoint, reservation))
+			_reservedEndpoints.Remove(reservation.EndpointKey);
 	}
 
 	private static Headers? WithoutInternalHeaders(Headers? headers)
@@ -396,6 +427,7 @@ internal class ProxiedHttpService(
 		ProxyEndpoint Endpoint,
 		TimeSpan IdleTimeout)
 	{
+		public volatile bool Invalidated;
 		public int ActiveRequests { get; set; }
 		public DateTime IdleUntilUtc { get; set; } = DateTime.MaxValue;
 	}
@@ -413,6 +445,7 @@ internal class ProxiedHttpService(
 		}
 
 		public ProxyEndpoint Endpoint { get; }
+		public bool IsInvalidated => _reservation?.Invalidated == true;
 
 		public void Dispose()
 		{
