@@ -73,6 +73,42 @@ internal static class ComixChapterPageTests
             !v3[0].Page.Contains('#'), "Legacy v3 images changed.");
         var unrelated = await Parse("<div class='rpage-page' data-page='1'><img class='rpage-page__img' src='https://example.com/unrelated'></div>", token);
         Require(unrelated.Length == 0, "An unrelated extensionless URL was accepted.");
+
+        foreach (var status in new[] { 429, 500, 502, 503, 504, 520, 521, 522, 523, 524 })
+            Require(ComixSource.ShouldRetryImageResponse((HttpStatusCode)status), $"HTTP {status} should be retried.");
+        foreach (var status in new[] { 200, 400, 401, 403, 404 })
+            Require(!ComixSource.ShouldRetryImageResponse((HttpStatusCode)status), $"HTTP {status} should not be retried.");
+
+        var recovering = new RetryDownloadStub([(HttpStatusCode)520, HttpStatusCode.OK]);
+        using (var recovered = await source.DownloadImage(recovering, pages[0].Page, null, token))
+        {
+            Require(recovering.RequestCount == 2 && recovered.Response?.StatusCode == HttpStatusCode.OK,
+                "A temporary 520 did not recover on retry.");
+            Require(recovering.DisposedCount == 1, "The failed response was not disposed before retry.");
+        }
+        Require(recovering.DisposedCount == 2, "The successful response was not disposed by the caller.");
+
+        var networkRecovery = new RetryDownloadStub([null, HttpStatusCode.OK]);
+        using (var recovered = await source.DownloadImage(networkRecovery, pages[0].Page, null, token))
+            Require(networkRecovery.RequestCount == 2 && recovered.Response?.StatusCode == HttpStatusCode.OK &&
+                networkRecovery.DisposedCount == 1, "A transport failure did not recover on retry.");
+
+        var missing = new RetryDownloadStub([HttpStatusCode.NotFound]);
+        using (await source.DownloadImage(missing, pages[0].Page, null, token))
+            Require(missing.RequestCount == 1, "A missing image was unnecessarily retried.");
+
+        using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var interrupted = new RetryDownloadStub([(HttpStatusCode)520], cancelled.Cancel);
+        try
+        {
+            using var unexpected = await source.DownloadImage(interrupted, pages[0].Page, null, cancelled.Token);
+            throw new InvalidOperationException("Cancellation during retry backoff was ignored.");
+        }
+        catch (OperationCanceledException) when (cancelled.IsCancellationRequested)
+        {
+            Require(interrupted.RequestCount == 1 && interrupted.DisposedCount == 1,
+                "Cancellation did not release the failed response.");
+        }
     }
 
     private static Task<ImportPage[]> Parse(string html, CancellationToken token) =>
@@ -106,5 +142,28 @@ internal static class ComixChapterPageTests
             var response = new HttpResponseMessage(HttpStatusCode.OK);
             return Task.FromResult(new DownloadResult([response], url, headers, Response: response));
         }
+    }
+
+    private sealed class RetryDownloadStub(HttpStatusCode?[] statuses, Action? afterRequest = null) : IDownloadService
+    {
+        public int RequestCount { get; private set; }
+        public int DisposedCount { get; private set; }
+
+        public Task<DownloadResult> Download(string url, Dictionary<string, string>? headers, CancellationToken token)
+        {
+            var status = statuses[Math.Min(RequestCount++, statuses.Length - 1)];
+            var response = status is not null ? new HttpResponseMessage(status.Value) : null;
+            var disposables = new List<IDisposable> { new DisposalCallback(() => DisposedCount++) };
+            if (response is not null) disposables.Add(response);
+            afterRequest?.Invoke();
+            return Task.FromResult(new DownloadResult(disposables, url, headers,
+                Error: status == HttpStatusCode.OK ? null : status is null ? "Connection reset" : $"HTTP {(int)status}",
+                Response: response));
+        }
+    }
+
+    private sealed class DisposalCallback(Action callback) : IDisposable
+    {
+        public void Dispose() => callback();
     }
 }

@@ -68,14 +68,16 @@ internal class ComixSource(
 				affinity,
 				token);
 			var status = result.Response?.StatusCode;
-			if (status is not HttpStatusCode.TooManyRequests and not HttpStatusCode.ServiceUnavailable ||
-				attempt == IMAGE_RETRY_MAX)
+			var retryable = status is not null
+				? ShouldRetryImageResponse(status.Value)
+				: !string.IsNullOrEmpty(result.Error);
+			if (!retryable || attempt == IMAGE_RETRY_MAX)
 				return result;
 
-			var delay = RetryDelay(result.Response!, attempt);
+			var delay = RetryDelay(result.Response, attempt);
 			_logger.LogWarning(
-				"Comix image CDN returned {StatusCode} for {Url}; retrying in {DelaySeconds:F1} seconds ({Attempt}/{MaxAttempts})",
-				(int)status.Value,
+				"Comix image download failed ({Failure}) for {Url}; retrying in {DelaySeconds:F1} seconds ({Attempt}/{MaxAttempts})",
+				status is not null ? ((int)status.Value).ToString(CultureInfo.InvariantCulture) : result.Error,
 				url,
 				delay.TotalSeconds,
 				attempt,
@@ -85,6 +87,13 @@ internal class ComixSource(
 		}
 
 		throw new InvalidOperationException("Comix image retry loop exited unexpectedly.");
+	}
+
+	internal static bool ShouldRetryImageResponse(HttpStatusCode status)
+	{
+		// The CDN also uses Cloudflare's 520-524 responses for temporary origin
+		// failures. Retry server errors before putting an image into cooldown.
+		return status == HttpStatusCode.TooManyRequests || (int)status is >= 500 and <= 599;
 	}
 
 	private static async Task<DownloadResult> DownloadWithFallback(
@@ -135,10 +144,10 @@ internal class ComixSource(
 			: $"{encoded.Prefix}{encoded.Suffix}";
 	}
 
-	private static TimeSpan RetryDelay(HttpResponseMessage response, int attempt)
+	private static TimeSpan RetryDelay(HttpResponseMessage? response, int attempt)
 	{
 		var exponential = TimeSpan.FromSeconds(IMAGE_RETRY_BASE_SECONDS * Math.Pow(2, attempt - 1));
-		var retryAfter = response.Headers.RetryAfter;
+		var retryAfter = response?.Headers.RetryAfter;
 		var requested = retryAfter?.Delta ??
 			(retryAfter?.Date - DateTimeOffset.UtcNow);
 
