@@ -19,6 +19,7 @@ internal class TestOption
 internal class TestVerb(
 	IDbService _db,
 	IComixSource _comix,
+	ICubariSource _cubari,
 	IMangaDexSource _md,
 	IImageService _image,
 	IHttpService _http,
@@ -129,6 +130,18 @@ internal class TestVerb(
 	{
 		const string URL = "https://hyakuro.net/manga/boku-wa-kimitachi-wo-shihai-suru";
 		return TestSource(_hyakuro, URL, false, token);
+	}
+
+	public async Task TestCubari(CancellationToken token)
+	{
+		await CubariSourceTests.RunParsing(token);
+		await CubariSourceTests.RunLive(_cubari, _http, _logger, token);
+	}
+
+	public async Task TestCubariParsing(CancellationToken token)
+	{
+		await CubariSourceTests.RunParsing(token);
+		_logger.LogInformation("Cubari parsing regression checks passed (no database access)");
 	}
 
 	public Task TestLilyManga(CancellationToken token)
