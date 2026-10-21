@@ -228,11 +228,17 @@ internal class ImageService(
 			!string.IsNullOrEmpty(image.MimeType);
 		path = _cache.GetCachePath(image, out hash, false);
 		zipPath = _cache.GetCachePath(image, out _, true);
-		zipped = File.Exists(zipPath);
-		if (File.Exists(path)) 
-			return valid;
-
-		return zipped && valid;
+		zipped = false;
+		if (!valid) return false;
+		foreach (var candidate in _cache.GetImageCachePaths(image))
+		{
+			if (!File.Exists(candidate)) continue;
+			zipped = Path.GetExtension(candidate) == ".gz";
+			if (zipped) zipPath = candidate;
+			else path = candidate;
+			return true;
+		}
+		return false;
 	}
 
 	/// <summary>
@@ -318,10 +324,11 @@ internal class ImageService(
 
 		try
 		{
-			//Check to see if the image exists and get it's various properties
+			// Lock the stable primary key, then recheck every root so concurrent
+			// misses cannot redownload or overwrite a file that was just cached.
+			var primaryPath = _cache.GetCachePath(image, out _, false);
+			using var cacheLock = await _cacheLocks.LockAsync(primaryPath, token);
 			var exists = ImageExists(image, out var path, out var zipPath, out var zipped, out var hash);
-			//Lock the cache so we aren't double writing to it
-			using var cacheLock = await _cacheLocks.LockAsync(path, token);
 			IDisposable readLock;
 
 			//If it exists and isn't zipped, return it as is
@@ -334,7 +341,7 @@ internal class ImageService(
 			//If it exists and is zipped, decompress and return it
 			if (exists && zipped)
 			{
-				readLock = await _readLocks.LockAsync(path, token);
+				readLock = await _readLocks.LockAsync(zipPath, token);
 				var eio = File.OpenRead(zipPath);
 				return new(null, image, 
 					new GZipStream(eio, CompressionMode.Decompress), 
@@ -431,12 +438,12 @@ internal class ImageService(
 
 			//Update the image's metadata in the database
 			await _db.Image.Update(image);
-			//Get a lock for reading the file
-			readLock = await _readLocks.LockAsync(path, token);
-
 			//If compression isn't enabled, return the image as is
 			if (!UseCompression)
+			{
+				readLock = await _readLocks.LockAsync(path, token);
 				return new(null, image, File.OpenRead(path), false, overrideOrdinal, [readLock]);
+			}
 
 			//Compress the image for caching
 			using var zipOut = File.Create(zipPath);
@@ -451,6 +458,7 @@ internal class ImageService(
 			TryDelete(path);
 
 			//Return the decompressed image
+			readLock = await _readLocks.LockAsync(zipPath, token);
 			var outStream = File.OpenRead(zipPath);
 			return new(null, image, 
 				new GZipStream(outStream, CompressionMode.Decompress), 
@@ -515,16 +523,9 @@ internal class ImageService(
 	/// <inheritdoc />
 	public async Task<Boxed> Bust(MangaBoxType<MbImage> image, CancellationToken token)
 	{
-		//Check to see if the image exists and get it's various properties
-		var exists = ImageExists(image.Entity, out var path, out var zipPath, out _, out _);
-		//Lock the cache so we aren't double writing to it
+		var path = _cache.GetCachePath(image.Entity, out _, false);
 		using var cacheLock = await _cacheLocks.LockAsync(path, token);
-		//Delete the cached files
-		if (exists)
-		{
-			TryDelete(path);
-			TryDelete(zipPath);
-		}
+		await RemoveCachedFiles(image.Entity, token);
 
 		var updated = await _db.Image.Bust(image.Entity.Id);
 		if (updated is null)
@@ -535,6 +536,24 @@ internal class ImageService(
             return Boxed.NotFound(nameof(MbImage), "Could not find that image - Full");
 
         return Boxed.Ok(full);
+	}
+
+	/// <summary>
+	/// Removes every raw/compressed copy, including secondary roots and incomplete
+	/// downloads without metadata. The caller holds the primary cache lock. Waits
+	/// for open response streams before deleting; deletion failures propagate so a
+	/// successful bust cannot silently serve an old secondary copy afterward.
+	/// </summary>
+	/// <param name="image">The image whose cache key is invalidated.</param>
+	/// <param name="token">Cancellation while waiting for readers.</param>
+	internal async Task RemoveCachedFiles(MbImage image, CancellationToken token)
+	{
+		foreach (var path in _cache.GetImageCachePaths(image))
+		{
+			token.ThrowIfCancellationRequested();
+			using var readLock = await _readLocks.LockAsync(path, token);
+			if (File.Exists(path)) File.Delete(path);
+		}
 	}
 
 	/// <inheritdoc />
@@ -728,11 +747,12 @@ internal class ImageService(
 		try
 		{
 			var cachePath = _cache.GetCachePath(url, out _);
+			using var cacheLock = await _cacheLocks.LockAsync(cachePath, token);
 			ExternalMeta? meta;
-			if (File.Exists(cachePath) && 
-				(meta = await _cache.FetchMeta(cachePath, token)) is not null)
+			foreach (var candidate in _cache.GetExternalCachePaths(url))
 			{
-				var stream = File.OpenRead(cachePath);
+				if (!File.Exists(candidate) || (meta = await _cache.FetchMeta(candidate, token)) is null) continue;
+				var stream = File.OpenRead(candidate);
 				return new(null, stream, meta.Name, meta.MimeType);
 			}
 

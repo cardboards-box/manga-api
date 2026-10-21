@@ -148,6 +148,9 @@ internal class TestVerb(
 	public Task TestMangaKatana(TestOption options, CancellationToken token) =>
 		MangaKatanaHarness.Run(_mangaKatana, _api, _sql, _http, _logger, options.Url, token);
 
+	/// <summary>Exercises cache root precedence, relocation, writes, ZIPs and invalidation in an isolated directory.</summary>
+	public Task TestImageCacheRoots(CancellationToken token) => ImageCacheHarness.Run(_logger, token);
+
 	/// <summary>Imports the two requested WeebCentral series into the configured database.</summary>
 	public async Task ImportWeebCentral(CancellationToken token)
 	{

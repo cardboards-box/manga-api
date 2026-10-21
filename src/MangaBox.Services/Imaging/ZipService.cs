@@ -55,7 +55,9 @@ internal class ZipService(
 	ICacheService _cache,
 	ILogger<ZipService> _logger) : IZipService
 {
-	private readonly ConcurrentDictionary<string, Task<ZipResult>> _zipDownloads = [];
+	// Only in-flight downloads are shared. Completed physical paths must be
+	// resolved again so directories can move between configured roots.
+	private readonly ConcurrentDictionary<string, Lazy<Task<ZipResult>>> _zipDownloads = [];
 
 	/// <inheritdoc />
 	public string GenerateImageUrl(string url, string filename)
@@ -126,12 +128,11 @@ internal class ZipService(
 	}
 
 	/// <inheritdoc />
-	public Task<ZipResult> DownloadZip(string url, Headers? headers, CancellationToken token)
+	public async Task<ZipResult> DownloadZip(string url, Headers? headers, CancellationToken token)
 	{
-		if (_zipDownloads.TryGetValue(url, out var existing))
-			return existing;
-
-		return _zipDownloads[url] = RawDownloadZip(url, headers, token);
+		var download = _zipDownloads.GetOrAdd(url, _ => new(() => RawDownloadZip(url, headers, token)));
+		try { return await download.Value; }
+		finally { _zipDownloads.TryRemove(new KeyValuePair<string, Lazy<Task<ZipResult>>>(url, download)); }
 	}
 
 	/// <summary>
@@ -152,8 +153,9 @@ internal class ZipService(
 
 		try
 		{
+			foreach (var candidate in _cache.GetZipCachePaths(url))
+				if (File.Exists(candidate)) return FromZip(candidate);
 			var cachePath = _cache.GetZipCachePath(url, out _);
-			if (File.Exists(cachePath)) return FromZip(cachePath);
 
 			using var download = await _http.Download(url, headers, token);
 			if (!string.IsNullOrEmpty(download.Error) || download.Stream is null)
@@ -170,10 +172,6 @@ internal class ZipService(
 		{
 			_logger.LogError(ex, "Failed to read zip cache for {Url}", url);
 			throw;
-		}
-		finally
-		{
-			_zipDownloads.TryRemove(url, out _);
 		}
 	}
 }

@@ -37,3 +37,47 @@ the existing manga index to limit the search. This follows the restitcher's rule
 that slices belong to the original manga's chapter. Cover and slice references
 are still repaired atomically. A chapter refresh continues to persist and queue
 each page, and image downloads remain subject to the provider's rate limiter.
+
+## Multiple image cache roots
+
+`Imaging:CacheDir` remains the primary write location. Configure additional read
+locations in priority order with `Imaging:AdditionalCacheDirs`, for example:
+
+```json
+{
+  "Imaging": {
+    "CacheDir": "H:/manga-cache",
+    "AdditionalCacheDirs": ["G:/manga-cache", "F:/manga-cache"]
+  }
+}
+```
+
+Relative paths and native absolute paths are supported. For containers, use
+paths inside the container and mount each drive there. Restart the application
+after changing its primary root. Omitting the additional list preserves existing
+single-directory behavior.
+
+Reads check the primary first, then each additional root in order. A compressed
+primary copy wins over an uncompressed secondary copy. Within one root, a raw
+`.dat` file takes priority over a `.gz` file. New downloads, compressed images,
+restitches, external metadata, and ZIP files are always saved to the primary.
+Missing secondary roots are skipped and are never created by normal reads.
+
+Move whole `<manga-guid>` directories between roots, retaining their `pages` and
+`covers` layout. The relative key remains the manga ID plus the hash of the image
+URL; no physical location is stored in the database. External images use the
+`external` directory and must move with their `.json` metadata sidecars. ZIPs use
+the `zips` directory. Completed ZIP lookups do not retain physical paths in memory.
+
+Cache busting removes every raw/compressed copy from all configured roots,
+including duplicates and files without complete image metadata. It waits for
+active readers; configured roots need deletion permission for invalidation.
+`compress-cache` still defaults to the primary; use `--directory` to maintain a
+specific archive explicitly.
+
+Run `test TestImageCacheRoots` for an isolated filesystem harness covering root
+order, raw/compressed pages and covers, directory relocation, metadata pairing,
+ZIP rediscovery, concurrent external downloads, primary-only raw/compressed page
+writes, and invalidation while a reader is open. It creates and removes its own
+scratch directory under `temp-env`, uses in-memory HTTP responses, and rejects
+unexpected database access. Existing cache files are not touched.
