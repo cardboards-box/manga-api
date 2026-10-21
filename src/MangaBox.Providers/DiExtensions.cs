@@ -28,6 +28,7 @@ public static class DiExtensions
 			//Register other sources
 			.AddSource<IComixSource, ComixSource>()
 			.AddSource<ICubariSource, CubariSource>()
+			.AddSource<IWeebCentralSource, WeebCentralSource>()
 			.AddSource<IMangakakalotTvSource, MangakakalotTvSource>()
 			.AddSource<IMangakakalotComSource, MangakakalotComSource>()
 			.AddSource<IMangakakalotComAltSource, MangakakalotComAltSource>()

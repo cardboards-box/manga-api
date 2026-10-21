@@ -1,7 +1,7 @@
 using System.Net.Sockets;
 using MangaBox.Services.Imaging;
 
-namespace MangaBox.Cli.Verbs;
+namespace MangaBox.Cli.Verbs.Tests;
 
 internal static class ProxyFailoverTests
 {

@@ -6,7 +6,7 @@ using MangaBox.Utilities.Flare;
 using MangaBox.Utilities.Flare.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace MangaBox.Cli.Verbs;
+namespace MangaBox.Cli.Verbs.Tests;
 
 internal static class ComixChapterPageTests
 {

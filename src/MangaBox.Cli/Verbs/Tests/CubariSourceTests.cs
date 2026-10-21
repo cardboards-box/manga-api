@@ -4,7 +4,7 @@ using MangaBox.Providers.Sources;
 using MangaBox.Services.Imaging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace MangaBox.Cli.Verbs;
+namespace MangaBox.Cli.Verbs.Tests;
 
 /// <summary>Read-only Cubari checks: no source lookup, loader, cache, or database services.</summary>
 internal static class CubariSourceTests

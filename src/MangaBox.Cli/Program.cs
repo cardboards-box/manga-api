@@ -1,5 +1,6 @@
 ﻿using MangaBox.All;
 using MangaBox.Cli.Verbs;
+using MangaBox.Cli.Verbs.Tests;
 using MangaBox.Database.Generation;
 
 var services = new ServiceCollection()

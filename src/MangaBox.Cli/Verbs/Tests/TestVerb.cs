@@ -1,4 +1,4 @@
-﻿namespace MangaBox.Cli.Verbs;
+﻿namespace MangaBox.Cli.Verbs.Tests;
 
 using Database;
 using Models;
@@ -20,6 +20,7 @@ internal class TestVerb(
 	IDbService _db,
 	IComixSource _comix,
 	ICubariSource _cubari,
+	IWeebCentralSource _weebCentral,
 	IMangaDexSource _md,
 	IImageService _image,
 	IHttpService _http,
@@ -130,6 +131,22 @@ internal class TestVerb(
 	{
 		const string URL = "https://hyakuro.net/manga/boku-wa-kimitachi-wo-shihai-suru";
 		return TestSource(_hyakuro, URL, false, token);
+	}
+
+	/// <summary>Validates both requested WeebCentral series and proxied reader images without database writes.</summary>
+	public Task TestWeebCentral(CancellationToken token) =>
+		WeebCentralHarness.Run(_weebCentral, _proxied, _logger, token);
+
+	/// <summary>Imports the two requested WeebCentral series into the configured database.</summary>
+	public async Task ImportWeebCentral(CancellationToken token)
+	{
+		foreach (var url in WeebCentralHarness.SeriesUrls)
+		{
+			var result = await _loader.Load(null, url, false, token);
+			if (result.IsError<MangaBoxType<MbManga>>(out var error, out var data))
+				throw new InvalidOperationException($"WeebCentral import failed: {url}: {error}");
+			_logger.LogInformation("Imported WeebCentral manga {Title}: {Id}", data.Entity.Title, data.Entity.Id);
+		}
 	}
 
 	public async Task TestCubari(CancellationToken token)
