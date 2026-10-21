@@ -13,8 +13,42 @@ Run harnesses with `dotnet run --project src/MangaBox.Cli --no-launch-profile --
   the regular loader. Existing imports are returned without forcing a refresh.
 
 WeebCentral uses the `weebcentral` provider slug and supports series and chapter
-URLs. Its image downloads use the existing proxy pool; configure `Proxies:Urls`
-before running the live harness or downloading pages. No web API changes are required.
+URLs. All metadata, full chapter lists, reader fragments, and image downloads use
+the existing rotating proxy pool; configure `Proxies:Urls` before running the
+live harness or downloading pages. There is no direct HTTP fallback or sticky
+proxy affinity. The proxy service still uses the application's shared HTTP/API
+services underneath. No web API changes are required.
+
+### WeebCentral rate limits
+
+One shared request scheduler paces all WeebCentral source instances in each
+application process, including chapter indexing and image downloads. Defaults:
+
+```json
+{
+  "WeebCentral": {
+    "RequestSpacingSeconds": 2,
+    "InitialBackoffSeconds": 60,
+    "MaxBackoffSeconds": 300,
+    "MaxAttempts": 4
+  }
+}
+```
+
+HTTP 429, server errors, and transport failures retry through the rotating pool
+after exponential waits (60, 120, 240 seconds by default). Local backoff is capped
+at 300 seconds; a longer server `Retry-After` delta or date is always honored.
+The provider pauses all queued requests during backoff instead of immediately
+trying other proxies. Responses are disposed before waiting. Cancellation stops
+waiting promptly, and the shared cooldown remains after cancellation or attempt
+exhaustion so the next chapter cannot trigger another burst. Four attempts means
+one initial request and up to three retries. Ordinary errors such as 404 are not
+retried. Proxy-pool rate limits also remain in effect.
+
+`test TestWeebCentralBackoff` runs the real proxy rotation and provider scheduler
+with simulated HTTP responses and virtual time. It checks metadata/image routing,
+shared pacing, concurrent sources, exponential delays, both `Retry-After` forms,
+retry exhaustion, disposal, and cancellation without network or database access.
 
 ## MangaKatana refresh diagnostics
 

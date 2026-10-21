@@ -144,6 +144,9 @@ internal class TestVerb(
 	public Task TestWeebCentral(CancellationToken token) =>
 		WeebCentralHarness.Run(_weebCentral, _proxied, _logger, token);
 
+	/// <summary>Checks rotating proxies, shared pacing, Retry-After, exhaustion and cancellation without network/database access.</summary>
+	public Task TestWeebCentralBackoff(CancellationToken token) => WeebCentralBackoffHarness.Run(_logger, token);
+
 	/// <summary>Measures MangaKatana requests and inspects cache-bust query plans without changing records.</summary>
 	public Task TestMangaKatana(TestOption options, CancellationToken token) =>
 		MangaKatanaHarness.Run(_mangaKatana, _api, _sql, _http, _logger, options.Url, token);

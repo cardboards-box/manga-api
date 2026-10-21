@@ -1,6 +1,7 @@
 namespace MangaBox.Providers.Sources;
 
 using Models.Types;
+using Services.Imaging;
 
 /// <summary>Reads WeebCentral series, complete chapter lists, and reader images.</summary>
 public interface IWeebCentralSource : IMangaUrlSource { }
@@ -8,10 +9,10 @@ public interface IWeebCentralSource : IMangaUrlSource { }
 /// <summary>
 /// Loads the public HTML fragments used by WeebCentral's reader. Chapter lists
 /// must come from the full-list endpoint because the series page is abbreviated.
-/// Images are downloaded through the application's configured proxy pool.
+/// Metadata and images share rotating proxies, pacing, and rate-limit backoff.
 /// </summary>
-/// <param name="_api">The shared HTTP request service.</param>
-internal class WeebCentralSource(IApiService _api) : BaseMangaSource<WeebCentralSource>, IWeebCentralSource
+/// <param name="_requests">The shared proxied WeebCentral request scheduler.</param>
+internal class WeebCentralSource(IWeebCentralRequestService _requests) : BaseMangaSource<WeebCentralSource>, IWeebCentralSource
 {
     /// <inheritdoc />
     public override string HomeUrl => "https://weebcentral.com";
@@ -42,18 +43,26 @@ internal class WeebCentralSource(IApiService _api) : BaseMangaSource<WeebCentral
         return (id is not null, id);
     }
 
-    /// <summary>Downloads an HTML document through the shared API service.</summary>
+    /// <summary>Downloads HTML through rotating proxies with the same pacing and cooldown as image requests.</summary>
     private async Task<HtmlDocument> Html(string url, CancellationToken token)
     {
-        using var response = await _api.Get(url, request => request
-            .UserAgent(UserAgent ?? string.Empty)
-            .Message(message => message.Headers.Referrer = new Uri(HomeUrl + "/")), token);
-        if (response is null) throw new HttpRequestException($"No WeebCentral response for {url}.");
-        response.EnsureSuccessStatusCode();
+        using var result = await _requests.Download(url, new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["User-Agent"] = UserAgent ?? string.Empty,
+            ["Referer"] = HomeUrl + "/"
+        }, token);
+        result.Response?.EnsureSuccessStatusCode();
+        if (result.Stream is null || !string.IsNullOrEmpty(result.Error))
+            throw new HttpRequestException(result.Error ?? $"No WeebCentral response for {url}.");
+        using var reader = new StreamReader(result.Stream, leaveOpen: true);
         var document = new HtmlDocument();
-        document.LoadHtml(await response.Content.ReadAsStringAsync(token));
+        document.LoadHtml(await reader.ReadToEndAsync(token));
         return document;
     }
+
+    /// <inheritdoc />
+    public override Task<DownloadResult> DownloadImage(IDownloadService downloader, string url,
+        Dictionary<string, string>? headers, CancellationToken token) => _requests.Download(url, headers, token);
 
     /// <inheritdoc />
     public override async Task<ImportManga?> Manga(string id, CancellationToken token)
