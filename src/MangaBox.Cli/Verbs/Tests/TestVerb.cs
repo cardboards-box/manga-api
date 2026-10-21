@@ -14,6 +14,10 @@ internal class TestOption
 {
 	[Value(0, Required = true, HelpText = "The test method to run.")]
 	public string Method { get; set; } = string.Empty;
+
+	/// <summary>Optional provider chapter URL for a live diagnostic harness.</summary>
+	[Option("url", HelpText = "Chapter URL for provider diagnostics; defaults to a stored chapter.")]
+	public string? Url { get; set; }
 }
 
 internal class TestVerb(
@@ -21,6 +25,9 @@ internal class TestVerb(
 	IComixSource _comix,
 	ICubariSource _cubari,
 	IWeebCentralSource _weebCentral,
+	IMangaKatanaSource _mangaKatana,
+	IApiService _api,
+	ISqlService _sql,
 	IMangaDexSource _md,
 	IImageService _image,
 	IHttpService _http,
@@ -136,6 +143,10 @@ internal class TestVerb(
 	/// <summary>Validates both requested WeebCentral series and proxied reader images without database writes.</summary>
 	public Task TestWeebCentral(CancellationToken token) =>
 		WeebCentralHarness.Run(_weebCentral, _proxied, _logger, token);
+
+	/// <summary>Measures MangaKatana requests and inspects cache-bust query plans without changing records.</summary>
+	public Task TestMangaKatana(TestOption options, CancellationToken token) =>
+		MangaKatanaHarness.Run(_mangaKatana, _api, _sql, _http, _logger, options.Url, token);
 
 	/// <summary>Imports the two requested WeebCentral series into the configured database.</summary>
 	public async Task ImportWeebCentral(CancellationToken token)

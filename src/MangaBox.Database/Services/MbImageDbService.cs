@@ -232,9 +232,13 @@ WHERE
         return _sql.Execute("UPDATE mb_images SET indexed = TRUE WHERE id = :id", new { id });
     }
 
-	public Task<MbImage?> Bust(Guid id)
-	{
-		const string QUERY = """
+	/// <summary>
+	/// Replaces an image ID and repairs cover/slice references in one statement.
+	/// Slice searches are restricted to the original manga: RestitcherService only
+	/// accepts images from one original chapter, so its slices share that manga.
+	/// This avoids unnesting the entire image table for every busted page.
+	/// </summary>
+	internal const string BUST_QUERY = """
 			WITH old_image AS (
 				SELECT
 					o.*,
@@ -341,7 +345,9 @@ WHERE
 						CROSS JOIN replacement r
 					), '{}'),
 					updated_at = CURRENT_TIMESTAMP
-				WHERE EXISTS (
+				WHERE mb_images.manga_id = (SELECT manga_id FROM old_image)
+				AND cardinality(mb_images.slices) > 0
+				AND EXISTS (
 					SELECT 1
 					FROM unnest(mb_images.slices) AS u(
 						image_id,
@@ -357,8 +363,8 @@ WHERE
 			FROM replacement;
 			""";
 
-		return Fetch(QUERY, new { id });
-	}
+	/// <inheritdoc />
+	public Task<MbImage?> Bust(Guid id) => Fetch(BUST_QUERY, new { id });
 
 	public Task<MbImage[]> NotIndexed(DateTime failedBuffer)
 	{
