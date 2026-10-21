@@ -143,13 +143,19 @@ internal static class ImageCacheHarness
 
         // Exercise actual page downloads/compression with metadata updates kept in
         // memory. Unexpected database operations still fail immediately.
-        var imageDb = Controlled<IMbImageDbService>((method, _) => method.Name == "Update"
-            ? Task.FromResult(1) : throw new InvalidOperationException("Unexpected image database operation."));
+        var metadataUpdates = 0;
+        var imageDb = Controlled<IMbImageDbService>((method, _) =>
+        {
+            if (method.Name != "Update") throw new InvalidOperationException("Unexpected image database operation.");
+            metadataUpdates++;
+            return Task.FromResult(1);
+        });
         var database = Controlled<IDbService>((method, _) => method.Name == "get_Image"
             ? imageDb : throw new InvalidOperationException("Unexpected database service."));
         var provider = new CubariSource(new ApiService(transport, json), NullLogger<CubariSource>.Instance);
+        var providerAvailable = true;
         var sources = Controlled<ISourceService>((method, _) => method.Name == "FindById"
-            ? Task.FromResult<LoaderSource?>(new(new MbSource(), provider))
+            ? Task.FromResult<LoaderSource?>(providerAvailable ? new(new MbSource(), provider) : null)
             : throw new InvalidOperationException("Unexpected source lookup."));
         var downloading = new ImageService(database, zip, http, cache, config, sources,
             Forbidden<IFlareImageService>(), Forbidden<IProxiedHttpService>(), Forbidden<IMangaLoaderService>(),
@@ -175,6 +181,47 @@ internal static class ImageCacheHarness
             Require(cachedPage.Error is null && cachedPage.FromCache, "The downloaded page was not cached.");
         }
 
+        // Missing providers are deployment failures, not broken image content.
+        // They must not accumulate failures or delete covers before deployment.
+        config["Imaging:IgnoreFailures"] = "false";
+        var unavailableCover = new MbImage
+        {
+            Id = Guid.NewGuid(), MangaId = Guid.NewGuid(),
+            Url = "https://cache.test/new-page.png?cover-recovery"
+        };
+        providerAvailable = false;
+        var beforeUpdates = metadataUpdates;
+        var beforeRequests = transport.Requests;
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            using var unavailable = await downloading.Get(new MbSource(), new MbManga(), unavailableCover, null, token);
+            Require(unavailable.Error == "Could not find source provider for image" && unavailableCover.FailedCount == 0 &&
+                unavailableCover.LastFailedAt is null, "An unavailable provider poisoned a cover's failure state.");
+        }
+        Require(metadataUpdates == beforeUpdates && transport.Requests == beforeRequests,
+            "Unavailable source lookups must not update/delete image records or issue requests.");
+        providerAvailable = true;
+        unavailableCover.LastFailedAt = DateTime.UtcNow;
+        unavailableCover.FailedCount = 3;
+        unavailableCover.FailedReason = "Could not find source provider for image\nCould not find source provider for image";
+        using (var recovered = await downloading.Get(new MbSource(), new MbManga(), unavailableCover, null, token))
+        {
+            Require(recovered.Error is null && recovered.Stream is not null && unavailableCover.FailedCount == 0 &&
+                unavailableCover.LastFailedAt is null && unavailableCover.FailedReason is null,
+                "A newly available provider must bypass only its old missing-source cooldown and clear failure state after download.");
+            using var bitmap = SkiaSharp.SKBitmap.Decode(recovered.Stream);
+            Require(bitmap?.Width == 2 && bitmap.Height == 3, "Recovered cover bytes were invalid.");
+        }
+        var throttledCover = new MbImage
+        {
+            Id = Guid.NewGuid(), MangaId = Guid.NewGuid(), Url = "https://cache.test/new-page.png?still-throttled",
+            LastFailedAt = DateTime.UtcNow, FailedCount = 1, FailedReason = "HTTP 429"
+        };
+        beforeRequests = transport.Requests;
+        using (var throttled = await downloading.Get(new MbSource(), new MbManga(), throttledCover, null, token))
+            Require(throttled.Error?.StartsWith("Image is in cooldown period") == true && transport.Requests == beforeRequests &&
+                throttledCover.FailedCount == 1, "Real network/image failure cooldowns must remain enforced.");
+
         // Invalidation waits for readers, then removes every format in every root.
         foreach (var path in paths.Take(6)) await Write(path, "old copy", path.EndsWith(".gz"), token);
         var open = await images.Get(new MbSource(), new MbManga(), image, null, token);
@@ -190,7 +237,7 @@ internal static class ImageCacheHarness
             { ["Imaging:CacheDir"] = primary }).Build(), NullLogger<CacheService>.Instance);
         Require(legacy.StoragePaths.Count == 1 && legacy.GetCachePath(image, out _, false) == write,
             "Single-root configuration is no longer compatible.");
-        logger.LogInformation("Image cache harness passed: primary/fallback order, raw/gzip, covers, relocation, external metadata, ZIPs, concurrent misses and invalidation; no database or network access");
+        logger.LogInformation("Image cache harness passed: primary/fallback order, raw/gzip, covers, source recovery, relocation, external metadata, ZIPs, concurrent misses and invalidation; no database or network access");
     }
 
     /// <summary>Reads through the production image service; forbidden dependencies enforce a cache hit.</summary>

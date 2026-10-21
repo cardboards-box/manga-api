@@ -44,6 +44,8 @@ internal static class WeebCentralHarness
                 ?? throw new InvalidOperationException($"No metadata returned for {url}.");
             if (manga.Chapters.Count <= 9 || manga.Authors.Length == 0 || manga.Cover.Length == 0 || string.IsNullOrEmpty(manga.Description))
                 throw new InvalidOperationException("Expected complete metadata and the full chapter list.");
+            foreach (var cover in manga.Cover)
+                await Image(source, proxy, logger, cover, token);
             foreach (var chapter in new[] { manga.Chapters[0], manga.Chapters[^1] })
             {
                 var pages = await source.ChapterPages(chapter.Url, token);

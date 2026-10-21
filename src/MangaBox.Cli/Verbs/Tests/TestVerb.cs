@@ -151,6 +151,18 @@ internal class TestVerb(
 	public Task TestWeebCentralImage(TestOption options, CancellationToken token) =>
 		WeebCentralHarness.Image(_weebCentral, _proxied, _logger, options.Url, token);
 
+	/// <summary>Inspects stored WeebCentral covers and verifies downloads using their actual persisted request metadata.</summary>
+	public Task TestWeebCentralCovers(CancellationToken token) =>
+		WeebCentralCoverHarness.Inspect(_weebCentral, _sql, _db, _http, _proxied, _logger, token);
+
+	/// <summary>Downloads stored covers through the same image/cache service as the website, updating cache metadata.</summary>
+	public Task TestWeebCentralCoverServing(CancellationToken token) =>
+		WeebCentralCoverHarness.Serve(_sql, _db, _image, _logger, false, token);
+
+	/// <summary>Verifies stored cover bytes through the website image path and clears stale failure state on verified covers.</summary>
+	public Task RepairWeebCentralCovers(CancellationToken token) =>
+		WeebCentralCoverHarness.Serve(_sql, _db, _image, _logger, true, token);
+
 	/// <summary>Measures MangaKatana requests and inspects cache-bust query plans without changing records.</summary>
 	public Task TestMangaKatana(TestOption options, CancellationToken token) =>
 		MangaKatanaHarness.Run(_mangaKatana, _api, _sql, _http, _logger, options.Url, token);

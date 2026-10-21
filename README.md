@@ -7,7 +7,7 @@ Run harnesses with `dotnet run --project src/MangaBox.Cli --no-launch-profile --
 
 - `TestWeebCentral`: reads metadata and complete chapter lists for Magi Craft Meister
   and The Transfer Destination Was a World With Few Pharmacists. Checks the first
-  and latest chapters and decodes sample images through the configured `Proxies`
+  and latest chapters and decodes covers and sample pages through the configured `Proxies`
   pool. This harness does not write to the database.
 - `ImportWeebCentral`: imports those two manga into the configured database using
   the regular loader. Existing imports are returned without forcing a refresh.
@@ -69,6 +69,25 @@ SOCKS reset check. `test TestWeebCentralImage` downloads and decodes the image f
 the reported tunnel-reset log through the real rotating proxy and retry path;
 pass `--url <image-url>` to check another image. Neither command writes manga or
 image records to the database.
+
+### WeebCentral cover recovery
+
+`test TestWeebCentralCovers` reads stored cover status, including failed/deleted
+records, and verifies active cover downloads using their stored request metadata.
+It does not write to the database. `test TestWeebCentralCoverServing` exercises
+the same image service as the website, including source lookup, cooldowns and
+cache reads/writes; successful downloads update the usual image metadata.
+`test RepairWeebCentralCovers` additionally clears stale failure state only after
+the returned cover bytes decode. Existing image IDs, URLs and list references
+remain unchanged. It does not revive deleted records or bypass real network errors.
+
+A missing/disabled source provider is an application availability problem. It no
+longer increments an image's failure count or deletes a cover. Images previously
+marked with `Could not find source provider for image` can retry once that source
+is available, without waiting out the old image cooldown. Actual image/network
+failures retain their cooldowns, and a successful download clears its old failure
+history. The isolated `TestImageCacheRoots` harness checks this recovery behavior
+with failure ignoring disabled, alongside its filesystem scenarios.
 
 ## MangaKatana refresh diagnostics
 

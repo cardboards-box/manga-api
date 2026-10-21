@@ -101,6 +101,7 @@ internal class ImageService(
     ILogger<ImageService> _logger) : IImageService
 {
 	private const int BUFFER_SIZE = 81920;
+	private const string SOURCE_UNAVAILABLE = "Could not find source provider for image";
 	private int? _failures;
 	private TimeSpan? _waitPeriod;
 
@@ -131,6 +132,15 @@ internal class ImageService(
 	/// How long to wait between requesting failed images
 	/// </summary>
 	public TimeSpan ErrorWaitPeriod => _waitPeriod ??= TimeSpan.FromSeconds(ErrorWaitPeriodSeconds);
+
+	/// <summary>Clears stale failure metadata after source recovery or a successful image download.</summary>
+	/// <param name="image">The image that can be retried or was downloaded successfully.</param>
+	private static void ClearFailures(MbImage image)
+	{
+		image.LastFailedAt = null;
+		image.FailedCount = 0;
+		image.FailedReason = null;
+	}
 
 	/// <summary>
 	/// Handles image errors
@@ -348,17 +358,24 @@ internal class ImageService(
 					true, overrideOrdinal, [eio, readLock]);
 			}
 
-			//If the image failed to fetch recently, don't try it again yet
+			// Provider availability is an application/deployment condition, not
+			// evidence of a broken image. Do not poison image cooldowns or delete
+			// covers when their source has not been deployed/enabled yet.
+			var loader = await _sources.FindById(source.Id, token);
+			if (loader is null)
+				return new(SOURCE_UNAVAILABLE, image, OverrideOrdinal: overrideOrdinal);
+			if (image.FailedReason?.EndsWith(SOURCE_UNAVAILABLE, StringComparison.Ordinal) == true)
+			{
+				_logger.LogInformation("Retrying image {Id} after its source became available", image.Id);
+				ClearFailures(image);
+			}
+
+			// Actual image/network failures retain the ordinary cooldown.
 			if (!IgnoreFailures && image.LastFailedAt is not null && image.LastFailedAt.Value + ErrorWaitPeriod > DateTime.UtcNow)
 			{
 				var waitTime = (image.LastFailedAt.Value + ErrorWaitPeriod) - DateTime.UtcNow;
 				return new($"Image is in cooldown period. Retry after {waitTime.TotalSeconds:F0} seconds", image, OverrideOrdinal: overrideOrdinal);
 			}
-
-			//If the source provider is not found, return an error
-			var loader = await _sources.FindById(source.Id, token);
-			if (loader is null)
-				return await HandleError("Could not find source provider for image");
 
 			//If the image is a slicer image, stitch it together and return it
 			if (image.Slices.Length > 0)
@@ -386,6 +403,7 @@ internal class ImageService(
 			var zipResult = await _zip.Get(source, manga, image, path, hash, overrideOrdinal, token);
 			if (zipResult is not null)
 			{
+				if (string.IsNullOrEmpty(zipResult.Error) && zipResult.Stream is not null) ClearFailures(image);
 				await _db.Image.Update(image);
 				return await ForwardError(zipResult);
 			}
@@ -437,6 +455,7 @@ internal class ImageService(
 			}
 
 			//Update the image's metadata in the database
+			ClearFailures(image);
 			await _db.Image.Update(image);
 			//If compression isn't enabled, return the image as is
 			if (!UseCompression)
