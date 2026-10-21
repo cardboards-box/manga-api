@@ -76,6 +76,21 @@ internal static class WeebCentralBackoffHarness
                     "Retry temporary service/transport failures but never ordinary 404s.");
         }
 
+        foreach (var error in new[] { HttpRequestError.ProxyTunnelError, HttpRequestError.ConnectionError })
+        {
+            rig = Create((_, call) => call == 1 ? new(null, RequestError: error) : new(HttpStatusCode.OK));
+            var recovered = new WeebCentralSource(rig.Requests).DownloadImage(new RejectDownload(), "https://images.test/page.jpg", null, token);
+            await Complete(recovered, rig.Clock, token);
+            using (recovered.Result)
+                Require(recovered.Result.Error is null && rig.Http.Times[1] - rig.Http.Times[0] == TimeSpan.FromSeconds(2),
+                    "A broken proxy should retry images on a healthy endpoint after the short transport wait.");
+            var following = rig.Requests.Download(Url, null, token);
+            await Complete(following, rig.Clock, token);
+            following.Result.Dispose();
+            Require(rig.ProxyLog.Downloads.SequenceEqual([FirstProxy, SecondProxy, SecondProxy]) && rig.Http.Disposed == 3,
+                "Recovered image requests must dispose failures and subsequent requests must skip the broken tunnel.");
+        }
+
         // A 429 must pause independent providers and both request types together.
         rig = Create((_, call) => new(call == 1 ? HttpStatusCode.TooManyRequests : HttpStatusCode.OK));
         var first = new WeebCentralSource(rig.Requests).ChapterPages(Url, token);
@@ -169,7 +184,7 @@ internal static class WeebCentralBackoffHarness
     private sealed record Rig(WeebCentralRequestService Requests, HttpStub Http, ProxyLog ProxyLog, VirtualTime Clock);
 
     /// <summary>A scripted status or transport failure with an optional server retry deadline.</summary>
-    public sealed record Reply(HttpStatusCode? Status, RetryConditionHeaderValue? RetryAfter = null);
+    public sealed record Reply(HttpStatusCode? Status, RetryConditionHeaderValue? RetryAfter = null, HttpRequestError? RequestError = null);
 
     /// <summary>Supplies response bodies to the actual proxy service and records virtual send times.</summary>
     public class HttpStub : DispatchProxy
@@ -196,7 +211,7 @@ internal static class WeebCentralBackoffHarness
             var owned = new List<IDisposable> { stream, new OnDispose(() => Disposed++) };
             if (response is not null) owned.Add(response);
             return Task.FromResult(new DownloadResult(owned, (string)args[0]!, Error: reply.Status == HttpStatusCode.OK ? null : "Temporary failure",
-                Response: response, Stream: reply.Status == HttpStatusCode.OK ? stream : null));
+                Response: response, Stream: reply.Status == HttpStatusCode.OK ? stream : null) { RequestError = reply.RequestError });
         }
     }
 

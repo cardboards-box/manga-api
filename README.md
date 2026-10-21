@@ -28,6 +28,7 @@ application process, including chapter indexing and image downloads. Defaults:
 {
   "WeebCentral": {
     "RequestSpacingSeconds": 2,
+    "TransportRetrySeconds": 2,
     "InitialBackoffSeconds": 60,
     "MaxBackoffSeconds": 300,
     "MaxAttempts": 4
@@ -35,7 +36,7 @@ application process, including chapter indexing and image downloads. Defaults:
 }
 ```
 
-HTTP 429, server errors, and transport failures retry through the rotating pool
+HTTP 429 and server errors retry through the rotating pool
 after exponential waits (60, 120, 240 seconds by default). Local backoff is capped
 at 300 seconds; a longer server `Retry-After` delta or date is always honored.
 The provider pauses all queued requests during backoff instead of immediately
@@ -45,10 +46,29 @@ exhaustion so the next chapter cannot trigger another burst. Four attempts means
 one initial request and up to three retries. Ordinary errors such as 404 are not
 retried. Proxy-pool rate limits also remain in effect.
 
+Connection failures before an HTTP response use shorter transport retry waits
+(2, 4, 8 seconds by default, capped at 30 seconds). A SOCKS tunnel reset does not
+mean that WeebCentral has rate-limited the application. The rotating proxy pool
+excludes endpoints reporting tunnel/connection failures for
+`Proxies:FailureCooldownSeconds` (120 seconds by default) and selects healthy
+endpoints for retries and subsequent requests. Recovered proxies return after
+cooldown. If every endpoint is unavailable, acquisition waits cancellably for a
+recovery window instead of repeatedly contacting them. Cancellation does not
+quarantine an endpoint, and HTTP responses such as 429 do not mark its tunnel as
+broken. Proxy/connection failures are logged as warnings; a failed attempt can
+still recover through another proxy within the provider's retry budget.
+
 `test TestWeebCentralBackoff` runs the real proxy rotation and provider scheduler
 with simulated HTTP responses and virtual time. It checks metadata/image routing,
 shared pacing, concurrent sources, exponential delays, both `Retry-After` forms,
 retry exhaustion, disposal, and cancellation without network or database access.
+It also checks fast image recovery from typed tunnel/connection errors.
+`test TestProxyFailover` exercises both affinity and normal rotating proxy health,
+recovery, all-endpoints-unavailable waits, and cancellation, including a local
+SOCKS reset check. `test TestWeebCentralImage` downloads and decodes the image from
+the reported tunnel-reset log through the real rotating proxy and retry path;
+pass `--url <image-url>` to check another image. Neither command writes manga or
+image records to the database.
 
 ## MangaKatana refresh diagnostics
 

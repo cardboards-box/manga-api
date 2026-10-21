@@ -52,6 +52,9 @@ internal class ProxiedHttpService(
 	ILogger<ProxiedHttpService> _logger) : IProxiedHttpService
 {
 	private const double DEFAULT_FAILURE_COOLDOWN_SECONDS = 120;
+	// Normal rotation shares connection health across hosts. Unlike an origin
+	// HTTP error, a reset SOCKS tunnel means this endpoint cannot carry requests.
+	private const string ROTATING_CONNECTION_WORKLOAD = "rotating-proxy-connection";
 
 	private ProxyEndpoint[]? _endpoints;
 	private readonly SemaphoreSlim _endpointLock = new(1, 1);
@@ -166,6 +169,16 @@ internal class ProxiedHttpService(
 			{
 				request.ClientFactory(_ => endpoint.CreateClient());
 			}, token);
+
+			if (workload is null && !token.IsCancellationRequested &&
+				result.RequestError is HttpRequestError.ProxyTunnelError or HttpRequestError.ConnectionError)
+			{
+				var cooldown = FailureCooldown(null);
+				endpoint.Cooldown(ROTATING_CONNECTION_WORKLOAD, cooldown);
+				_logger.LogWarning(
+					"Proxy {ProxyUrl} failed to connect; excluding it from rotation for {CooldownSeconds:F1} seconds",
+					endpoint.Url, cooldown.TotalSeconds);
+			}
 
 			if (workload is not null && !token.IsCancellationRequested &&
 				result.RequestError is HttpRequestError.ProxyTunnelError or HttpRequestError.ConnectionError)
@@ -394,21 +407,38 @@ internal class ProxiedHttpService(
 		ProxyEndpoint[] endpoints,
 		CancellationToken token)
 	{
-		var start = NextIndex(endpoints.Length);
-
-		for (var i = 0; i < endpoints.Length; i++)
+		while (true)
 		{
-			var endpoint = endpoints[(start + i) % endpoints.Length];
-			var lease = endpoint.Limiter.AttemptAcquire(1);
-			if (lease.IsAcquired)
-				return (endpoint, lease);
+			token.ThrowIfCancellationRequested();
+			var start = NextIndex(endpoints.Length);
+			ProxyEndpoint? fallback = null;
+			for (var i = 0; i < endpoints.Length; i++)
+			{
+				var endpoint = endpoints[(start + i) % endpoints.Length];
+				if (endpoint.IsCoolingDown(ROTATING_CONNECTION_WORKLOAD)) continue;
+				fallback ??= endpoint;
+				var lease = endpoint.Limiter.AttemptAcquire(1);
+				if (lease.IsAcquired)
+				{
+					if (!endpoint.IsCoolingDown(ROTATING_CONNECTION_WORKLOAD)) return (endpoint, lease);
+					lease.Dispose();
+					continue;
+				}
+				lease.Dispose();
+			}
 
-			lease.Dispose();
+			if (fallback is null)
+			{
+				// All tunnels are unavailable. Wait for the first recovery window
+				// rather than repeatedly contacting broken endpoints or busy-looping.
+				var delay = endpoints.Select(endpoint => endpoint.CooldownRemaining(ROTATING_CONNECTION_WORKLOAD)).Min();
+				if (delay > TimeSpan.Zero) await Task.Delay(delay, token);
+				continue;
+			}
+			var acquired = await fallback.Limiter.AcquireAsync(1, token);
+			if (!fallback.IsCoolingDown(ROTATING_CONNECTION_WORKLOAD)) return (fallback, acquired);
+			acquired.Dispose();
 		}
-
-		var fallback = endpoints[start];
-		var acquired = await fallback.Limiter.AcquireAsync(1, token);
-		return (fallback, acquired);
 	}
 
 	private int NextIndex(int length)

@@ -153,7 +153,10 @@ internal class HttpService(
 		}
 		catch (Exception ex)
 		{
-			_logger.LogError(ex, "Failed to download external stream >> {URL}", url);
+			if (ex is HttpRequestException { HttpRequestError: HttpRequestError.ProxyTunnelError or HttpRequestError.ConnectionError })
+				_logger.LogWarning("Temporary proxy/connection failure >> {URL} >> {Error}", url, ex.Message);
+			else
+				_logger.LogError(ex, "Failed to download external stream >> {URL}", url);
 			return new(disposables, url, headers, ex.Message)
 			{
 				RequestError = (ex as HttpRequestException)?.HttpRequestError

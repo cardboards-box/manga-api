@@ -6,6 +6,20 @@ namespace MangaBox.Cli.Verbs.Tests;
 /// <summary>Exercises the requested live series and the configured image proxy pool.</summary>
 internal static class WeebCentralHarness
 {
+    /// <summary>Checks the exact image from the reported tunnel-reset log, or a caller-supplied image URL.</summary>
+    public static async Task Image(IWeebCentralSource source, IProxiedHttpService proxy, ILogger logger, string? url, CancellationToken token)
+    {
+        url ??= "https://scans.lastation.us/manga/The-Transfer-Destination-Was-a-World-with-few-Pharmacists/0035-004.png";
+        using var download = await source.DownloadImage(proxy, url,
+            new() { ["Referer"] = source.HomeUrl + "/", ["User-Agent"] = source.UserAgent! }, token);
+        if (download.Error is not null || download.Stream is null)
+            throw new InvalidOperationException($"WeebCentral image failed after retry: {download.Error}");
+        using var bitmap = SkiaSharp.SKBitmap.Decode(download.Stream);
+        if (bitmap is null || bitmap.Width == 0 || bitmap.Height == 0) throw new InvalidDataException("Invalid image data.");
+        logger.LogInformation("WeebCentral image decoded through rotating proxies: {Width}x{Height}, {Url} (no database writes)",
+            bitmap.Width, bitmap.Height, url);
+    }
+
     /// <summary>The series requested for import; shared by validation and the explicit import command.</summary>
     internal static readonly string[] SeriesUrls =
     [

@@ -37,11 +37,15 @@ internal sealed class WeebCentralRequestService(
         ? response.StatusCode == HttpStatusCode.TooManyRequests || (int)response.StatusCode is >= 500 and <= 599
         : !string.IsNullOrEmpty(result.Error);
 
-    /// <summary>Computes capped exponential backoff; server Retry-After values are a lower bound and are never shortened.</summary>
+    /// <summary>
+    /// Uses short waits for failures before an HTTP response, allowing a healthy
+    /// proxy to take over. Origin errors retain the longer site-wide backoff;
+    /// server Retry-After values are a lower bound and are never shortened.
+    /// </summary>
     private TimeSpan Backoff(HttpResponseMessage? response, int attempt)
     {
-        var initial = Seconds("InitialBackoffSeconds", 60);
-        var maximum = Math.Max(initial, Seconds("MaxBackoffSeconds", 300));
+        var initial = response is null ? Seconds("TransportRetrySeconds", 2) : Seconds("InitialBackoffSeconds", 60);
+        var maximum = response is null ? Math.Max(initial, 30) : Math.Max(initial, Seconds("MaxBackoffSeconds", 300));
         var delay = TimeSpan.FromSeconds(Math.Min(maximum, initial * Math.Pow(2, attempt - 1)));
         var retryAfter = response?.Headers.RetryAfter;
         var requested = retryAfter?.Delta ?? (retryAfter?.Date - _clock.GetUtcNow());
@@ -74,7 +78,7 @@ internal sealed class WeebCentralRequestService(
                     delay = _nextRequest - _clock.GetUtcNow();
                     _logger.LogWarning(
                         "WeebCentral {Failure} for {Url}; provider paused for {BackoffSeconds:F1} seconds ({Attempt}/{MaxAttempts})",
-                        result.Response is { } response ? $"HTTP {(int)response.StatusCode}" : result.Error,
+                        result.Response is { } response ? $"HTTP {(int)response.StatusCode}" : $"proxy/transport failure: {result.Error}",
                         url, delay.TotalSeconds, attempt, attempts);
                 }
                 // Record a received rate limit before checking cancellation: a

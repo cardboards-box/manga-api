@@ -19,6 +19,68 @@ internal static class ProxyFailoverTests
         await CheckCancellation(token);
         await CheckOriginError(token);
         await CheckAllUnavailable(token);
+        foreach (var error in new[] { HttpRequestError.ProxyTunnelError, HttpRequestError.ConnectionError })
+            await CheckRotatingFailover(error, token);
+        await CheckRotatingUnavailable(token);
+        await CheckRotatingRecovery(token);
+        await CheckRotatingCancellation(token);
+        await CheckRotatingOriginError(token);
+    }
+
+    /// <summary>A broken tunnel is skipped by subsequent rotating calls until it recovers.</summary>
+    private static async Task CheckRotatingFailover(HttpRequestError error, CancellationToken token)
+    {
+        var (service, log) = Create(call => Task.FromResult(call == 1 ? Failure(error) : Success()));
+        for (var i = 0; i < 3; i++) using (await service.Download(Url, null, token)) { }
+        Require(log.Downloads.SequenceEqual([FirstProxy, SecondProxy, SecondProxy]),
+            "Normal rotation reused a failed tunnel instead of the healthy endpoint.");
+    }
+
+    /// <summary>An unavailable rotating pool waits cancellably instead of hammering broken endpoints.</summary>
+    private static async Task CheckRotatingUnavailable(CancellationToken token)
+    {
+        var (service, log) = Create(_ => Task.FromResult(Failure(HttpRequestError.ProxyTunnelError)));
+        using (await service.Download(Url, null, token)) { }
+        using (await service.Download(Url, null, token)) { }
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromMilliseconds(250));
+        await ExpectCancellation(() => service.Download(Url, null, timeout.Token));
+        Require(log.Downloads.SequenceEqual([FirstProxy, SecondProxy]), "Unavailable rotating endpoints were repeatedly contacted.");
+    }
+
+    /// <summary>Recovered proxies return to rotation after the configured connection cooldown.</summary>
+    private static async Task CheckRotatingRecovery(CancellationToken token)
+    {
+        var (service, log) = Create(call => Task.FromResult(call == 1 ? Failure(HttpRequestError.ProxyTunnelError) : Success()), 0.1);
+        using (await service.Download(Url, null, token)) { }
+        await Task.Delay(TimeSpan.FromMilliseconds(150), token);
+        using (await service.Download(Url, null, token)) { }
+        using (await service.Download(Url, null, token)) { }
+        Require(log.Downloads.SequenceEqual([FirstProxy, SecondProxy, FirstProxy]), "A recovered proxy never reentered rotation.");
+    }
+
+    /// <summary>Caller cancellation cannot quarantine a healthy rotating endpoint.</summary>
+    private static async Task CheckRotatingCancellation(CancellationToken token)
+    {
+        using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var (service, log) = Create(call =>
+        {
+            if (call != 1) return Task.FromResult(Success());
+            cancelled.Cancel();
+            return Task.FromResult(Failure(HttpRequestError.ConnectionError));
+        });
+        using (await service.Download(Url, null, cancelled.Token)) { }
+        using (await service.Download(Url, null, token)) { }
+        using (await service.Download(Url, null, token)) { }
+        Require(log.Downloads.SequenceEqual([FirstProxy, SecondProxy, FirstProxy]), "Cancellation quarantined a healthy rotating endpoint.");
+    }
+
+    /// <summary>Origin HTTP failures are handled by providers and do not quarantine working tunnels.</summary>
+    private static async Task CheckRotatingOriginError(CancellationToken token)
+    {
+        var (service, log) = Create(call => Task.FromResult(Success(call == 1 ? HttpStatusCode.TooManyRequests : HttpStatusCode.OK)));
+        for (var i = 0; i < 3; i++) using (await service.Download(Url, null, token)) { }
+        Require(log.Downloads.SequenceEqual([FirstProxy, SecondProxy, FirstProxy]), "An origin response was misclassified as a broken tunnel.");
     }
 
     private static async Task CheckTunnelFailureClassification(IHttpService http, CancellationToken token)
@@ -139,7 +201,7 @@ internal static class ProxyFailoverTests
         return new([response], Url, Response: response);
     }
 
-    private static (ProxiedHttpService Service, ProxyLog Log) Create(Func<int, Task<DownloadResult>> response)
+    private static (ProxiedHttpService Service, ProxyLog Log) Create(Func<int, Task<DownloadResult>> response, double cooldown = 60)
     {
         var http = DispatchProxy.Create<IHttpService, HttpStub>();
         ((HttpStub)http).Response = response;
@@ -147,7 +209,7 @@ internal static class ProxyFailoverTests
         {
             ["Proxies:Urls:0"] = FirstProxy,
             ["Proxies:Urls:1"] = SecondProxy,
-            ["Proxies:FailureCooldownSeconds"] = "60",
+            ["Proxies:FailureCooldownSeconds"] = cooldown.ToString(CultureInfo.InvariantCulture),
             ["Proxies:Affinity:Comix:RequestSpacingSeconds"] = "0.1",
             ["Proxies:Affinity:Comix:IdleSeconds"] = "30",
             ["Proxies:Affinity:Comix:BatchSize"] = "20",
