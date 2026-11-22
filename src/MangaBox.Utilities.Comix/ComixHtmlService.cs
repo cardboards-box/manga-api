@@ -189,7 +189,7 @@ internal class ComixHtmlService(
         if (_proxyEndpoint is not null)
             request.ClientFactory(_ => _proxyEndpoint.CreateClient());
 
-        var result = await request.Result();
+        using var result = await request.Result();
         if (result is null) return null;
 
         var content = await result.Content.ReadAsStringAsync(token);

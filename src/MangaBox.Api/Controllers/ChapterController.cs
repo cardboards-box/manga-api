@@ -60,11 +60,11 @@ public class ChapterController(
 	[HttpPost, Route("chapter/{id}/restitch")]
 	[ProducesBox<MangaBoxType<MbChapter>>, ProducesError(400), ProducesError(404)]
 	public Task<IActionResult> Restitch([FromRoute] string id, [FromBody] ImageSliceImage[] slices, CancellationToken token) => Box(async () =>
-	{
-		if (!this.IsAdmin())
-			return Boxed.NotFound(nameof(MbChapter), "Chapter was not found");
+    {
+        if (!this.GetProfileId().HasValue)
+            return Boxed.NotFound(nameof(MbChapter), "Chapter was not found");
 
-		if (!Guid.TryParse(id, out var cid))
+        if (!Guid.TryParse(id, out var cid))
 			return Boxed.Bad("Chapter ID is not a valid GUID.");
 
 		return await _restitcher.Restitch(new(cid, slices), token);

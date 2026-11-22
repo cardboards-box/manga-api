@@ -170,6 +170,9 @@ internal class TestVerb(
 	/// <summary>Exercises cache root precedence, relocation, writes, ZIPs and invalidation in an isolated directory.</summary>
 	public Task TestImageCacheRoots(CancellationToken token) => ImageCacheHarness.Run(_logger, token);
 
+	/// <summary>Checks response disposal and bounded log memory without external services.</summary>
+	public Task TestMemoryRetention(CancellationToken token) => MemoryRetentionHarness.Run(_logger, token);
+
 	/// <summary>Imports the two requested WeebCentral series into the configured database.</summary>
 	public async Task ImportWeebCentral(CancellationToken token)
 	{

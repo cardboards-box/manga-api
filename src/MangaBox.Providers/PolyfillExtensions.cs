@@ -91,7 +91,7 @@ public static class PolyfillExtensions
 		Action<HttpRequestMessage>? config = null, CancellationToken token = default)
 	{
 		var json = new SystemTextJsonService(new JsonSerializerOptions());
-		var req = await ((IHttpBuilder)api.Create(url, json, "GET")
+		using var req = await ((IHttpBuilder)api.Create(url, json, "GET")
 			.Accept("text/html")
 			.With(c => c.Message(c =>
 			{
@@ -124,7 +124,7 @@ public static class PolyfillExtensions
 	public static async Task<HtmlDocument> PostHtml(this IApiService api, string url, 
 		Action<HttpRequestMessage>? config = null, CancellationToken token = default)
 	{
-		var req = await ((IHttpBuilder)api.Create(url, _json, "POST")
+		using var req = await ((IHttpBuilder)api.Create(url, _json, "POST")
 			.Accept("*/*")
 			.With(c => c.Message(c =>
 			{
@@ -146,7 +146,7 @@ public static class PolyfillExtensions
 	public static async Task<HtmlDocument> PostHtml(this IApiService api, string url, (string, string)[] formData, 
 		Action<HttpRequestMessage>? config = null, CancellationToken token = default)
 	{
-		var req = await ((IHttpBuilder)api.Create(url, _json, "POST")
+		using var req = await ((IHttpBuilder)api.Create(url, _json, "POST")
 			.Body(formData)
 			.Accept("*/*")
 			.With(c => c.Message(c =>
