@@ -28,6 +28,8 @@ internal class ComixHtmlService(
     private const int WAF_RETRY_MAX = 3;
     private const int WAF_RETRY_MIN_WAIT = 10;
     private const int WAF_RETRY_MAX_WAIT = 30;
+	private const int HTML_REQUEST_MAX = 4;
+	private const int HTML_RETRY_BASE_SECONDS = 2;
     private const string DEBUG_DIR = "comix-html";
 
 #if DEBUG
@@ -48,6 +50,7 @@ internal class ComixHtmlService(
     private SolverSession? _session;
     private ProxyEndpoint? _proxyEndpoint;
     private readonly SemaphoreSlim _instanceLock = new(1, 1);
+	private readonly SemaphoreSlim _requestLock = new(1, 1);
 
     private SolverCookie? _flareCookie => _flareResult?.Cookies.FirstOrDefault(t => t.Name.EqualsIc("cf_clearance"));
 
@@ -97,6 +100,8 @@ internal class ComixHtmlService(
 
             _instance = new FlareSolverInstance(_session, _logger)
             {
+				// Comix owns retries so a failed session can move to another proxy.
+				MaxRetries = 0,
                 MaxRequestsBeforePauseMin = 5,
                 MaxRequestsBeforePauseMax = 15,
                 ResponseWait = TimeSpan.FromSeconds(2),
@@ -258,38 +263,106 @@ internal class ComixHtmlService(
         return error is not null;
     }
 
-    public async Task<FlareHtmlDocument> GetHtml(string url, CancellationToken token)
-    {
-        var result = await Flared(url, token);
-        if (!IsSecurityCheck(result))
-            return result;
+	public async Task<FlareHtmlDocument> GetHtml(string url, CancellationToken token)
+	{
+		// Browser cookies and WAF passes belong to one proxy-bound session. Keep
+		// requests serialized while a failed session is discarded and replaced.
+		await _requestLock.WaitAsync(token);
+		try
+		{
+			return await GetHtmlWithRecovery(url, token);
+		}
+		finally
+		{
+			_requestLock.Release();
+		}
+	}
 
-        // A locally unexpired waf_pass can still be rejected by Comix. If that
-        // happens, solve a fresh challenge instead of returning the HTTP 200
-        // security page to callers as though it were the requested document.
-        _logger.LogWarning("Comix returned a security check for {Url}; refreshing the WAF pass", url);
-        if (!await GetWaf(url, token, forceRefresh: true))
-            throw new HttpRequestException($"Failed to solve the Comix security check for {url}.");
+	private async Task<FlareHtmlDocument> GetHtmlWithRecovery(string url, CancellationToken token)
+	{
+		for (var attempt = 1; attempt <= HTML_REQUEST_MAX; attempt++)
+		{
+			try
+			{
+				return await GetHtmlCore(url, token);
+			}
+			catch (HttpRequestException ex) when (!token.IsCancellationRequested)
+			{
+				var proxyUrl = _proxyEndpoint?.Url;
+				await ResetSession();
+				if (attempt == HTML_REQUEST_MAX)
+					throw;
 
-        result = await Flared(url, token);
-        if (IsSecurityCheck(result))
-            throw new HttpRequestException($"Comix continued to return a security check for {url} after refreshing the WAF pass.");
+				var delay = TimeSpan.FromSeconds(HTML_RETRY_BASE_SECONDS * Math.Pow(2, attempt - 1));
+				_logger.LogWarning(ex,
+					"Comix HTML failed through proxy {ProxyUrl}; creating a new session after {DelaySeconds} seconds ({Attempt}/{MaxAttempts}): {Url}",
+					proxyUrl, delay.TotalSeconds, attempt, HTML_REQUEST_MAX, url);
+				await Task.Delay(delay, token);
+			}
+		}
 
-        return result;
-    }
+		throw new InvalidOperationException("Comix HTML retry loop exited unexpectedly.");
+	}
+
+	private async Task ResetSession()
+	{
+		var session = _session;
+		_wafResult = null;
+		_flareResult = null;
+		_instance = null;
+		_proxyEndpoint = null;
+		_session = null;
+		if (session is null)
+			return;
+
+		try
+		{
+			await session.DisposeAsync();
+		}
+		catch (Exception ex)
+		{
+			// A restarted solver may already have lost this session. Cleanup must
+			// not prevent recovery or hide the original browser/proxy failure.
+			_logger.LogWarning(ex, "Could not remove the discarded Comix FlareSolverr session");
+		}
+	}
+
+	private async Task<FlareHtmlDocument> GetHtmlCore(string url, CancellationToken token)
+	{
+		var result = await Flared(url, token);
+		if (!IsSecurityCheck(result))
+			return result;
+
+		// A locally unexpired waf_pass can still be rejected by Comix. If that
+		// happens, solve a fresh challenge instead of returning the HTTP 200
+		// security page to callers as though it were the requested document.
+		_logger.LogWarning("Comix returned a security check for {Url}; refreshing the WAF pass", url);
+		if (!await GetWaf(url, token, forceRefresh: true))
+			throw new HttpRequestException($"Failed to solve the Comix security check for {url}.");
+
+		result = await Flared(url, token);
+		if (IsSecurityCheck(result))
+			throw new HttpRequestException(
+				$"Comix continued to return a security check for {url} after refreshing the WAF pass.");
+
+		return result;
+	}
 
     public void Dispose()
     {
         DisposeAsync().AsTask().Wait();
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        _wafResult = null;
-        _flareResult = null;
-        _instance = null;
-        _proxyEndpoint = null;
-        await (_session?.DisposeAsync() ?? ValueTask.CompletedTask);
-        _session = null;
-    }
+	public async ValueTask DisposeAsync()
+	{
+		await _requestLock.WaitAsync();
+		try
+		{
+			await ResetSession();
+		}
+		finally
+		{
+			_requestLock.Release();
+		}
+	}
 }

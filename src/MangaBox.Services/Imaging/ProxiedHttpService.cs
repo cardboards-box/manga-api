@@ -23,6 +23,17 @@ public interface IProxiedHttpService : IDownloadService
 	/// <returns>The proxy configuration</returns>
 	Config GetConfig();
 
+	/// <summary>
+	/// Downloads through the rotating pool, excluding endpoints temporarily blocked for this workload.
+	/// HTTP 403, 429, and 503 responses cool down only this workload; connection failures affect all rotation.
+	/// </summary>
+	/// <param name="workload">The origin or provider workload sharing blocked-endpoint health.</param>
+	/// <param name="url">The resource URL.</param>
+	/// <param name="headers">The request headers.</param>
+	/// <param name="token">The cancellation token for acquisition and downloading.</param>
+	/// <returns>The download result, whose resources belong to the caller.</returns>
+	Task<DownloadResult> DownloadRotating(string workload, string url, Headers? headers, CancellationToken token);
+
     /// <summary>
     /// Acquires a proxy endpoint and its associated rate limit lease
     /// </summary>
@@ -75,6 +86,21 @@ internal class ProxiedHttpService(
 	{
 		var (endpoint, lease) = await Aquire(token);
 		return await Download(endpoint, lease, url, headers, null, false, null, token);
+	}
+
+	public async Task<DownloadResult> DownloadRotating(
+		string workload,
+		string url,
+		Headers? headers,
+		CancellationToken token)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(workload);
+		var endpoints = await Endpoints(token);
+		if (endpoints.Length == 0)
+			throw new InvalidOperationException("No proxies configured");
+
+		var (endpoint, lease) = await Aquire(endpoints, workload, token);
+		return await Download(endpoint, lease, url, headers, workload, false, null, token);
 	}
 
 	public async Task<DownloadResult> DownloadAffinitized(
@@ -170,7 +196,7 @@ internal class ProxiedHttpService(
 				request.ClientFactory(_ => endpoint.CreateClient());
 			}, token);
 
-			if (workload is null && !token.IsCancellationRequested &&
+			if (!releaseLeaseWithResult && !token.IsCancellationRequested &&
 				result.RequestError is HttpRequestError.ProxyTunnelError or HttpRequestError.ConnectionError)
 			{
 				var cooldown = FailureCooldown(null);
@@ -180,7 +206,7 @@ internal class ProxiedHttpService(
 					endpoint.Url, cooldown.TotalSeconds);
 			}
 
-			if (workload is not null && !token.IsCancellationRequested &&
+			if (releaseLeaseWithResult && workload is not null && !token.IsCancellationRequested &&
 				result.RequestError is HttpRequestError.ProxyTunnelError or HttpRequestError.ConnectionError)
 			{
 				var cooldown = FailureCooldown(null);
@@ -204,16 +230,18 @@ internal class ProxiedHttpService(
 					"Proxy {ProxyUrl} failed to connect; releasing {Workload} affinity and pausing it for {CooldownSeconds:F1} seconds",
 					endpoint.Url, workload, cooldown.TotalSeconds);
 			}
-			else if (workload is not null &&
-				result.Response?.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable)
+			else if (workload is not null && !token.IsCancellationRequested &&
+				(result.Response?.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable ||
+					(!releaseLeaseWithResult && result.Response?.StatusCode == HttpStatusCode.Forbidden)))
 			{
 				var cooldown = FailureCooldown(result.Response);
 				endpoint.Cooldown(workload, cooldown);
 				_logger.LogWarning(
-					"Proxy {ProxyUrl} received {StatusCode} from {Host}; pausing it for {CooldownSeconds:F1} seconds",
+					"Proxy {ProxyUrl} received {StatusCode} from {Host}; pausing {Workload} for {CooldownSeconds:F1} seconds",
 					endpoint.Url,
 					(int)result.Response.StatusCode,
 					Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : url,
+					workload,
 					cooldown.TotalSeconds);
 			}
 
@@ -381,7 +409,7 @@ internal class ProxiedHttpService(
             throw new InvalidOperationException("No proxies configured");
         }
 
-		return await Aquire(endpoints, token);
+		return await Aquire(endpoints, null, token);
     }
 
 	private async Task<ProxyEndpoint[]> Endpoints(CancellationToken token)
@@ -405,6 +433,7 @@ internal class ProxiedHttpService(
 
 	private async Task<(ProxyEndpoint endpoint, RateLimitLease lease)> Aquire(
 		ProxyEndpoint[] endpoints,
+		string? workload,
 		CancellationToken token)
 	{
 		while (true)
@@ -415,12 +444,12 @@ internal class ProxiedHttpService(
 			for (var i = 0; i < endpoints.Length; i++)
 			{
 				var endpoint = endpoints[(start + i) % endpoints.Length];
-				if (endpoint.IsCoolingDown(ROTATING_CONNECTION_WORKLOAD)) continue;
+				if (RotatingCooldown(endpoint, workload) > TimeSpan.Zero) continue;
 				fallback ??= endpoint;
 				var lease = endpoint.Limiter.AttemptAcquire(1);
 				if (lease.IsAcquired)
 				{
-					if (!endpoint.IsCoolingDown(ROTATING_CONNECTION_WORKLOAD)) return (endpoint, lease);
+					if (RotatingCooldown(endpoint, workload) <= TimeSpan.Zero) return (endpoint, lease);
 					lease.Dispose();
 					continue;
 				}
@@ -431,14 +460,21 @@ internal class ProxiedHttpService(
 			{
 				// All tunnels are unavailable. Wait for the first recovery window
 				// rather than repeatedly contacting broken endpoints or busy-looping.
-				var delay = endpoints.Select(endpoint => endpoint.CooldownRemaining(ROTATING_CONNECTION_WORKLOAD)).Min();
+				var delay = endpoints.Select(endpoint => RotatingCooldown(endpoint, workload)).Min();
 				if (delay > TimeSpan.Zero) await Task.Delay(delay, token);
 				continue;
 			}
 			var acquired = await fallback.Limiter.AcquireAsync(1, token);
-			if (!fallback.IsCoolingDown(ROTATING_CONNECTION_WORKLOAD)) return (fallback, acquired);
+			if (RotatingCooldown(fallback, workload) <= TimeSpan.Zero) return (fallback, acquired);
 			acquired.Dispose();
 		}
+	}
+
+	private static TimeSpan RotatingCooldown(ProxyEndpoint endpoint, string? workload)
+	{
+		var connection = endpoint.CooldownRemaining(ROTATING_CONNECTION_WORKLOAD);
+		var origin = workload is null ? TimeSpan.Zero : endpoint.CooldownRemaining(workload);
+		return connection > origin ? connection : origin;
 	}
 
 	private int NextIndex(int length)

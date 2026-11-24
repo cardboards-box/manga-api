@@ -9,6 +9,7 @@
 
 	<ItemGroup>
 		<Compile Include="./../global.cs" />
+		<InternalsVisibleTo Include="MangaBox.Cli" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -21,6 +21,7 @@ internal class ComixSource(
 	private const string COMIX_REMOVE_ORIGIN_HEADER = "comix-remove-origin";
 	private const string COMIX_FALLBACK_HEADER = "comix-fallback";
 	private const string COMIX_PROXY_WORKLOAD = "Comix";
+	private const string COMIX_IMAGE_PROXY_WORKLOAD = "ComixImages";
 	private const int CHAPTER_PAGE_RETRY_MAX = 3;
 	private const int IMAGE_RETRY_MAX = 4;
 	private const int IMAGE_RETRY_BASE_SECONDS = 5;
@@ -98,7 +99,9 @@ internal class ComixSource(
 				attempt,
 				IMAGE_RETRY_MAX);
 			result.Dispose();
-			if (canRefresh && !refreshed && !blockedProxy)
+			// Give a transient proxy/CDN failure one ordinary retry before making
+			// image recovery depend on the browser. A 404 still refreshes immediately.
+			if (canRefresh && !refreshed && !blockedProxy && (status == HttpStatusCode.NotFound || attempt > 1))
 			{
 				refreshed = true;
 				try
@@ -192,11 +195,14 @@ internal class ComixSource(
 		string affinity,
 		CancellationToken token)
 	{
-		// Plain CDN images are interchangeable across proxy IPs. The legacy
-		// affinity batches otherwise leave a 30-page chapter waiting 12 minutes.
-		return !IsPlainComixImageUrl(url) && downloader is IProxiedHttpService proxy
-			? proxy.DownloadAffinitized(COMIX_PROXY_WORKLOAD, affinity, url, headers, token)
-			: downloader.Download(url, headers, token);
+		if (downloader is not IProxiedHttpService proxy)
+			return downloader.Download(url, headers, token);
+
+		// Plain images can rotate freely. Keep blocked-IP health across CDN
+		// domains without imposing the legacy reader's affinity batches.
+		return IsPlainComixImageUrl(url)
+			? proxy.DownloadRotating(COMIX_IMAGE_PROXY_WORKLOAD, url, headers, token)
+			: proxy.DownloadAffinitized(COMIX_PROXY_WORKLOAD, affinity, url, headers, token);
 	}
 
 	private static string ImageProxyAffinity(Dictionary<string, string>? headers, string url)

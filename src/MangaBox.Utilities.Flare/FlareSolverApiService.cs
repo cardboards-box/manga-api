@@ -125,7 +125,7 @@ internal class FlareSolverApiService(
             WaitInSeconds = waitInSeconds,
             ReturnScreenshot = returnScreenshot,
         };
-        return _api.Post<SolverResponse, SolverRequest>(ServerUrl, request, token: token);
+		return Send<SolverResponse>(request, token);
     }
 
     public Task<SolverResponse?> Post(string url, 
@@ -154,7 +154,7 @@ internal class FlareSolverApiService(
 			WaitInSeconds = waitInSeconds,
 			ReturnScreenshot = returnScreenshot,
 		};
-        return _api.Post<SolverResponse, SolverRequest>(ServerUrl, request, token: token);
+		return Send<SolverResponse>(request, token);
     }
 
     public Task<SolverSessionCreate?> SessionCreate(string? sessionId, SolverProxy? proxy, CancellationToken token)
@@ -165,7 +165,7 @@ internal class FlareSolverApiService(
             SessionId = sessionId,
             Proxy = proxy
         };
-        return _api.Post<SolverSessionCreate, SolverRequest>(ServerUrl, request, token: token);
+		return Send<SolverSessionCreate>(request, token);
     }
 
     public Task<SolverSessionDestroy?> SessionDestroy(string sessionId, CancellationToken token)
@@ -175,7 +175,7 @@ internal class FlareSolverApiService(
             Command = SolverRequest.CMD_SESSION_DESTROY,
             SessionId = sessionId,
         };
-        return _api.Post<SolverSessionDestroy, SolverRequest>(ServerUrl, request, token: token);
+		return Send<SolverSessionDestroy>(request, token);
     }
 
     public Task<SolverSessionList?> SessionList(CancellationToken token)
@@ -184,6 +184,60 @@ internal class FlareSolverApiService(
         {
             Command = SolverRequest.CMD_SESSION_LIST
         };
-        return _api.Post<SolverSessionList, SolverRequest>(ServerUrl, request, token: token);
+		return Send<SolverSessionList>(request, token);
     }
+
+	private async Task<T?> Send<T>(SolverRequest request, CancellationToken token)
+		where T : SolverBaseResponse
+	{
+		try
+		{
+			var response = await _api.Post<T, SolverRequest>(ServerUrl, request, token: token);
+			if (response?.Status.Equals("error", StringComparison.OrdinalIgnoreCase) == true)
+				throw new HttpRequestException($"FlareSolverr {request.Command} failed: {SummarizeError(response.Message)}");
+
+			return response;
+		}
+		catch (HttpInvalidCodeException ex)
+		{
+			var detail = ErrorMessage(ex.Body);
+			throw new HttpRequestException(
+				$"FlareSolverr {request.Command} failed (HTTP {ex.Code}): {detail}",
+				ex,
+				(HttpStatusCode)ex.Code);
+		}
+	}
+
+	private static string ErrorMessage(string? body)
+	{
+		if (string.IsNullOrWhiteSpace(body))
+			return "The solver returned no JSON error message.";
+
+		try
+		{
+			using var document = JsonDocument.Parse(body);
+			if (document.RootElement.ValueKind == JsonValueKind.Object &&
+				document.RootElement.TryGetProperty("message", out var message) &&
+				message.ValueKind == JsonValueKind.String)
+				return SummarizeError(message.GetString());
+		}
+		catch (JsonException)
+		{
+			// Non-JSON gateway errors do not contain a solver diagnostic to extract.
+		}
+
+		return "The solver returned no JSON error message.";
+	}
+
+	private static string SummarizeError(string? message)
+	{
+		const int MAX_ERROR_LENGTH = 512;
+		if (string.IsNullOrWhiteSpace(message))
+			return "The solver returned no error message.";
+
+		// Selenium appends a browser stack trace. Keep its first diagnostic line,
+		// rather than logging full response bodies that may contain session data.
+		var firstLine = message.Split(["\r", "\n", "\\n"], StringSplitOptions.None)[0];
+		return firstLine[..Math.Min(firstLine.Length, MAX_ERROR_LENGTH)];
+	}
 }

@@ -57,7 +57,7 @@ public class FlareSolverInstance(
 	} = 35;
 
 	/// <summary>
-	/// The maximum number of retries for a request
+	/// The maximum number of additional retries after the initial request. Zero makes exactly one attempt.
 	/// </summary>
 	public int MaxRetries { get; set; } = 4;
 
@@ -183,46 +183,65 @@ public class FlareSolverInstance(
 	/// <param name="count">The number of retry attempts</param>
 	/// <param name="proxy">The optional proxy to use for the request</param>
 	/// <returns>The raw response from the URL</returns>
-	private async Task<SolverResponse> DoRequest(string url, bool get, NameValueCollection? body, CancellationToken token, SolverProxy? proxy = null, int count = 0)
+	private async Task<SolverResponse> DoRequest(
+		string url,
+		bool get,
+		NameValueCollection? body,
+		SolverProxy? proxy,
+		int count,
+		CancellationToken token)
 	{
-		try
+		for (var attempt = count; ; attempt++)
 		{
-			_logger.LogInformation("Getting data from {url}", url);
-			var data = get 
-				? await _flare.Get(url, _cookies, timeout: 30_000, 
-					waitInSeconds: ResponseWaitSeconds, 
-					returnScreenshot: ReturnScreenshot, 
-					disableMedia: DisableMedia, 
-					token: token,
-					proxy: proxy)
-				: await _flare.Post(url, body ?? [], _cookies, timeout: 30_000, 
-					waitInSeconds: ResponseWaitSeconds, 
-					returnScreenshot: ReturnScreenshot, 
-					disableMedia: DisableMedia, 
-					token: token,
-					proxy: proxy);
-			if (data is null || data.Solution is null) throw new Exception("Failed to get data");
-
-			if (data.Solution.Status < 200 || data.Solution.Status >= 300)
-				throw new Exception($"Failed to get data: {data.Solution.Status}");
-
-			_cookies = data.Solution.Cookies;
-			_userAgent = data.Solution.UserAgent;
-			_logger.LogInformation("Got data from {url}", url);
-			return data;
+			token.ThrowIfCancellationRequested();
+			try
+			{
+				return await RequestOnce(url, get, body, proxy, token);
+			}
+			catch (Exception ex) when (ex is not OperationCanceledException &&
+				!token.IsCancellationRequested && attempt < MaxRetries)
+			{
+				ClearCookies();
+				var delay = Random.Shared.Next(PauseDurationSecondsMin, PauseDurationSecondsMax);
+				_logger.LogWarning(ex,
+					"Failed to get data for url {Attempt}/{MaxRetries}, retrying after {DelaySeconds} seconds: {Url}",
+					attempt + 1, MaxRetries, delay, url);
+				await Task.Delay(TimeSpan.FromSeconds(delay), token);
+			}
 		}
-		catch (Exception ex)
-		{
-			if (count > MaxRetries) throw;
+	}
 
-			count++;
-			ClearCookies();
-			var delay = Random.Shared.Next(PauseDurationSecondsMin, PauseDurationSecondsMax);
-			_logger.LogError(ex, "Failed to get data for url {count}/{max}, retrying after {delay} seconds: {url}", count, MaxRetries, delay, url);
-			await Task.Delay(delay * 1000, token);
-			_logger.LogInformation("Retrying request");
-			return await DoRequest(url, get, body, token, proxy, count);
-		}
+	private async Task<SolverResponse> RequestOnce(
+		string url,
+		bool get,
+		NameValueCollection? body,
+		SolverProxy? proxy,
+		CancellationToken token)
+	{
+		_logger.LogInformation("Getting data from {Url}", url);
+		var data = get
+			? await _flare.Get(url, _cookies, timeout: 30_000,
+				waitInSeconds: ResponseWaitSeconds,
+				returnScreenshot: ReturnScreenshot,
+				disableMedia: DisableMedia,
+				token: token,
+				proxy: proxy)
+			: await _flare.Post(url, body ?? [], _cookies, timeout: 30_000,
+				waitInSeconds: ResponseWaitSeconds,
+				returnScreenshot: ReturnScreenshot,
+				disableMedia: DisableMedia,
+				token: token,
+				proxy: proxy);
+		if (data?.Solution is null)
+			throw new HttpRequestException("FlareSolverr returned no solution.");
+
+		if (data.Solution.Status < 200 || data.Solution.Status >= 300)
+			throw new HttpRequestException($"FlareSolverr returned upstream HTTP {data.Solution.Status} for {url}.");
+
+		_cookies = data.Solution.Cookies;
+		_userAgent = data.Solution.UserAgent;
+		_logger.LogInformation("Got data from {Url}", url);
+		return data;
 	}
 
 	/// <summary>
@@ -250,7 +269,7 @@ public class FlareSolverInstance(
 	/// <returns>The raw response from the URL</returns>
 	public virtual Task<SolverResponse> Get(string url, CancellationToken token, SolverProxy? proxy = null, int count = 0)
 	{
-		return DoRequest(url, true, null, token, proxy, count);
+		return DoRequest(url, true, null, proxy, count, token);
 	}
 
 	/// <summary>
@@ -264,7 +283,7 @@ public class FlareSolverInstance(
 	/// <returns>The raw response from the URL</returns>
 	public virtual Task<SolverResponse> Post(string url, NameValueCollection body, CancellationToken token, SolverProxy? proxy = null, int count = 0)
 	{
-		return DoRequest(url, false, body, token, proxy, count);
+		return DoRequest(url, false, body, proxy, count, token);
 	}
 
 	/// <summary>
@@ -281,7 +300,7 @@ public class FlareSolverInstance(
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;
 
-		var resp = await DoRequest(url, true, null, token, proxy);
+		var resp = await DoRequest(url, true, null, proxy, 0, token);
 		var page = FromResponse(resp);
 		if (cache) _pageCache[url] = page;
 		return page;
@@ -302,7 +321,7 @@ public class FlareSolverInstance(
 		if (_pageCache.TryGetValue(url, out var doc))
 			return doc;
 
-		var resp = await DoRequest(url, false, body, token, proxy);
+		var resp = await DoRequest(url, false, body, proxy, 0, token);
 		var page = FromResponse(resp);
 		if (cache) _pageCache[url] = page;
 		return page;

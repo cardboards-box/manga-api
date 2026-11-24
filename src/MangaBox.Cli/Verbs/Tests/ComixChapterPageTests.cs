@@ -127,18 +127,18 @@ internal static class ComixChapterPageTests
 
         var freshHtml = new HtmlStub(html.ToString());
         var freshSource = new ComixSource(freshHtml, NullLogger<ComixSource>.Instance);
-        var staleHost = new RetryDownloadStub([null, null, HttpStatusCode.OK, HttpStatusCode.OK]);
+        var staleHost = new RetryDownloadStub([null, null, null, null, HttpStatusCode.OK, HttpStatusCode.OK]);
         var recoveries = await Task.WhenAll(new[] { 2, 3 }.Select(page => freshSource.DownloadImage(
             staleHost, $"https://expired.example.site/hi/{ImagePrefix}{tokens[page - 1]}{ImageSuffix}",
             new Dictionary<string, string> { [IDownloadService.CHAPTER_URL_HEADER] = ChapterUrl, ["ordinal"] = page.ToString() }, token)));
         foreach (var recovery in recoveries) recovery.Dispose();
-        Require(freshHtml.RequestCount == 1 && staleHost.RequestCount == 4,
+        Require(freshHtml.RequestCount == 1 && staleHost.RequestCount == 6,
             "Concurrent image failures must share one refreshed reader lookup.");
         Require(staleHost.Urls.Contains(pages[1].Page) && staleHost.Urls.Contains(pages[2].Page),
             "Refreshed URLs must preserve each requested page's ordinal.");
-        Require(staleHost.DisposedCount == 4, "Refreshed image responses leaked their download resources.");
+        Require(staleHost.DisposedCount == 6, "Refreshed image responses leaked their download resources.");
 
-        var mirrors = new RetryDownloadStub([null, HttpStatusCode.OK]);
+        var mirrors = new RetryDownloadStub([null, null, HttpStatusCode.OK]);
         using (await freshSource.DownloadImage(mirrors, pages[0].Page,
             new Dictionary<string, string> { [IDownloadService.CHAPTER_URL_HEADER] = ChapterUrl, ["ordinal"] = "1" }, token))
             Require(mirrors.Urls.Last() == $"https://{hosts[1]}/hi/{ImagePrefix}{tokens[0]}{ImageSuffix}",
@@ -169,6 +169,14 @@ internal static class ComixChapterPageTests
 				"Recovery must keep the valid image URL and release the blocked response before retrying.");
 		}
 		Require(proxy.DisposedCount == 2, "Recovered image resources were not released.");
+
+		foreach (var failure in new HttpStatusCode?[] { null, HttpStatusCode.ServiceUnavailable })
+		{
+			var transient = new ProxyDownloadStub([failure, HttpStatusCode.OK]);
+			using var result = await source.DownloadImage(transient, plainUrl, headers, token);
+			Require(result.Response?.StatusCode == HttpStatusCode.OK && transient.RequestCount == 2 &&
+				html.RequestCount == 0, "A first transient image failure must retry before depending on FlareSolverr.");
+		}
 
 		var legacy = new ProxyDownloadStub([HttpStatusCode.Forbidden, HttpStatusCode.OK]);
 		using (var result = await source.DownloadImage(legacy, legacyUrl, headers, token))
@@ -264,6 +272,8 @@ internal static class ComixChapterPageTests
         public int AffinityRequests { get; private set; }
         public string? LastAffinity { get; private set; }
         public (string[] Urls, int Tokens, double Seconds) GetConfig() => ([], 10, 10);
+		public Task<DownloadResult> DownloadRotating(string workload, string url,
+			Dictionary<string, string>? headers, CancellationToken token) => Download(url, headers, token);
         public Task<(ProxyEndpoint endpoint, System.Threading.RateLimiting.RateLimitLease lease)> Aquire(CancellationToken token) =>
             throw new NotSupportedException();
         public Task<DownloadResult> DownloadAffinitized(string workload, string affinity, string url,

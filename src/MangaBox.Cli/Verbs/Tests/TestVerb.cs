@@ -14,10 +14,6 @@ internal class TestOption
 {
 	[Value(0, Required = true, HelpText = "The test method to run.")]
 	public string Method { get; set; } = string.Empty;
-
-	/// <summary>Optional provider chapter URL for a live diagnostic harness.</summary>
-	[Option("url", HelpText = "Chapter URL for provider diagnostics; defaults to a stored chapter.")]
-	public string? Url { get; set; }
 }
 
 internal class TestVerb(
@@ -147,10 +143,6 @@ internal class TestVerb(
 	/// <summary>Checks rotating proxies, shared pacing, Retry-After, exhaustion and cancellation without network/database access.</summary>
 	public Task TestWeebCentralBackoff(CancellationToken token) => WeebCentralBackoffHarness.Run(_logger, token);
 
-	/// <summary>Downloads and decodes the reported failing image (or --url) through the production proxy/retry path.</summary>
-	public Task TestWeebCentralImage(TestOption options, CancellationToken token) =>
-		WeebCentralHarness.Image(_weebCentral, _proxied, _logger, options.Url, token);
-
 	/// <summary>Inspects stored WeebCentral covers and verifies downloads using their actual persisted request metadata.</summary>
 	public Task TestWeebCentralCovers(CancellationToken token) =>
 		WeebCentralCoverHarness.Inspect(_weebCentral, _sql, _db, _http, _proxied, _logger, token);
@@ -162,10 +154,6 @@ internal class TestVerb(
 	/// <summary>Verifies stored cover bytes through the website image path and clears stale failure state on verified covers.</summary>
 	public Task RepairWeebCentralCovers(CancellationToken token) =>
 		WeebCentralCoverHarness.Serve(_sql, _db, _image, _logger, true, token);
-
-	/// <summary>Measures MangaKatana requests and inspects cache-bust query plans without changing records.</summary>
-	public Task TestMangaKatana(TestOption options, CancellationToken token) =>
-		MangaKatanaHarness.Run(_mangaKatana, _api, _sql, _http, _logger, options.Url, token);
 
 	/// <summary>Exercises cache root precedence, relocation, writes, ZIPs and invalidation in an isolated directory.</summary>
 	public Task TestImageCacheRoots(CancellationToken token) => ImageCacheHarness.Run(_logger, token);
@@ -365,6 +353,31 @@ internal class TestVerb(
 	{
 		await ComixChapterPageTests.Run(token);
 		_logger.LogInformation("Comix chapter page parsing and request header regression checks passed");
+	}
+
+	/// <summary>Checks solver diagnostics, browser-session failover, retry limits, and cancellation without networking.</summary>
+	/// <param name="token">The cancellation token for the regression harness.</param>
+	/// <returns>A task that completes when all recovery checks pass.</returns>
+	public async Task TestComixHtmlRecovery(CancellationToken token)
+	{
+		await ComixHtmlRecoveryTests.Run(token);
+		_logger.LogInformation("Comix HTML session recovery regression checks passed");
+	}
+
+	/// <summary>Checks the reported reader refresh and stored images without writing image records or caches.</summary>
+	/// <param name="token">The cancellation token for reader requests, downloads, and retries.</param>
+	/// <returns>A task that completes after the reader loads and every stored page decodes.</returns>
+	public async Task TestComixChapterRecovery(CancellationToken token)
+	{
+		var chapterId = Guid.Parse("cbffa7b6-5a6c-4ff9-8925-013384c8b6f2");
+		var stored = await _db.Chapter.Fetch(chapterId)
+			?? throw new InvalidOperationException("Reported Comix chapter was not found.");
+		var pages = await _comix.ChapterPages(stored.Url!, token);
+		if (pages.Length != stored.PageCount)
+			throw new InvalidDataException($"Reader returned {pages.Length} pages; expected {stored.PageCount}.");
+
+		_logger.LogInformation("Comix reader refresh succeeded: {PageCount} pages", pages.Length);
+		await ComixChapterImageHarness.Run(_db, _comix, _http, _proxied, _logger, chapterId, token);
 	}
 
 	public async Task TestProxyFailover(CancellationToken token)

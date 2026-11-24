@@ -25,7 +25,73 @@ internal static class ProxyFailoverTests
         await CheckRotatingRecovery(token);
         await CheckRotatingCancellation(token);
         await CheckRotatingOriginError(token);
+		await CheckWorkloadBlocks(token);
+		await CheckWorkloadUnavailable(token);
+		await CheckWorkloadRecovery(token);
+		await CheckWorkloadCancellation(token);
     }
+
+	/// <summary>Origin blocks skip an endpoint across a provider's CDN hosts without affecting other providers.</summary>
+	private static async Task CheckWorkloadBlocks(CancellationToken token)
+	{
+		foreach (var status in new[] { HttpStatusCode.Forbidden, HttpStatusCode.TooManyRequests, HttpStatusCode.ServiceUnavailable })
+		{
+			var (service, log) = Create(call => Task.FromResult(Success(call == 1 ? status : HttpStatusCode.OK)));
+			using (await service.DownloadRotating("ComixImages", Url, null, token)) { }
+			using (await service.DownloadRotating("ComixImages", "https://mirror.test/page.webp", null, token)) { }
+			using (await service.DownloadRotating("ComixImages", Url, null, token)) { }
+			using (await service.DownloadRotating("OtherProvider", Url, null, token)) { }
+			using (await service.Download(Url, null, token)) { }
+			Require(log.Downloads.SequenceEqual([FirstProxy, SecondProxy, SecondProxy, SecondProxy, FirstProxy]),
+				"Origin blocks must persist across CDN hosts within the workload and leave ordinary rotation available.");
+		}
+		var (connection, connectionLog) = Create(call =>
+			Task.FromResult(call == 1 ? Failure(HttpRequestError.ProxyTunnelError) : Success()));
+		using (await connection.DownloadRotating("ComixImages", Url, null, token)) { }
+		using (await connection.Download(Url, null, token)) { }
+		using (await connection.Download(Url, null, token)) { }
+		Require(connectionLog.Downloads.SequenceEqual([FirstProxy, SecondProxy, SecondProxy]),
+			"A real tunnel failure in a workload must still exclude the endpoint from all rotating requests.");
+	}
+
+	/// <summary>A wholly blocked workload waits cancellably for a recovery window.</summary>
+	private static async Task CheckWorkloadUnavailable(CancellationToken token)
+	{
+		var (service, log) = Create(_ => Task.FromResult(Success(HttpStatusCode.Forbidden)));
+		using (await service.DownloadRotating("ComixImages", Url, null, token)) { }
+		using (await service.DownloadRotating("ComixImages", Url, null, token)) { }
+		using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(token);
+		cancelled.CancelAfter(TimeSpan.FromMilliseconds(250));
+		await ExpectCancellation(() => service.DownloadRotating("ComixImages", Url, null, cancelled.Token));
+		Require(log.Downloads.SequenceEqual([FirstProxy, SecondProxy]), "Blocked workload endpoints were repeatedly contacted.");
+	}
+
+	/// <summary>Origin-block cooldowns expire so an endpoint can recover without restarting the API.</summary>
+	private static async Task CheckWorkloadRecovery(CancellationToken token)
+	{
+		var (service, log) = Create(call => Task.FromResult(Success(call == 1 ? HttpStatusCode.Forbidden : HttpStatusCode.OK)), 0.1);
+		using (await service.DownloadRotating("ComixImages", Url, null, token)) { }
+		await Task.Delay(TimeSpan.FromMilliseconds(150), token);
+		using (await service.DownloadRotating("ComixImages", Url, null, token)) { }
+		using (await service.DownloadRotating("ComixImages", Url, null, token)) { }
+		Require(log.Downloads.SequenceEqual([FirstProxy, SecondProxy, FirstProxy]), "A blocked endpoint never returned after cooldown.");
+	}
+
+	/// <summary>Cancellation cannot mark an endpoint as blocked for the workload.</summary>
+	private static async Task CheckWorkloadCancellation(CancellationToken token)
+	{
+		using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(token);
+		var (service, log) = Create(call =>
+		{
+			if (call == 1)
+				cancelled.Cancel();
+			return Task.FromResult(Success(call == 1 ? HttpStatusCode.Forbidden : HttpStatusCode.OK));
+		});
+		using (await service.DownloadRotating("ComixImages", Url, null, cancelled.Token)) { }
+		using (await service.DownloadRotating("ComixImages", Url, null, token)) { }
+		using (await service.DownloadRotating("ComixImages", Url, null, token)) { }
+		Require(log.Downloads.SequenceEqual([FirstProxy, SecondProxy, FirstProxy]), "Cancellation quarantined an origin endpoint.");
+	}
 
     /// <summary>A broken tunnel is skipped by subsequent rotating calls until it recovers.</summary>
     private static async Task CheckRotatingFailover(HttpRequestError error, CancellationToken token)
