@@ -144,7 +144,57 @@ internal static class ComixChapterPageTests
             Require(mirrors.Urls.Last() == $"https://{hosts[1]}/hi/{ImagePrefix}{tokens[0]}{ImageSuffix}",
                 "An unchanged failing URL must try another CDN host advertised by the reader.");
         Require(freshHtml.RequestCount == 1, "Recent reader metadata should be reused for image recovery.");
+
+		await CheckForbiddenRecovery(pages[0].Page, legacy[0].Page, token);
     }
+
+	/// <summary>Blocked plain CDN requests rotate without depending on a reader refresh or legacy affinity.</summary>
+	private static async Task CheckForbiddenRecovery(string plainUrl, string legacyUrl, CancellationToken token)
+	{
+		var html = new HtmlStub("");
+		var source = new ComixSource(html, NullLogger<ComixSource>.Instance);
+		var headers = new Dictionary<string, string>
+		{
+			[IDownloadService.CHAPTER_URL_HEADER] = ChapterUrl,
+			["ordinal"] = "1"
+		};
+		var proxy = new ProxyDownloadStub([HttpStatusCode.Forbidden, HttpStatusCode.OK]);
+		using (var result = await source.DownloadImage(proxy, plainUrl, headers, token))
+		{
+			Require(result.Response?.StatusCode == HttpStatusCode.OK && proxy.RequestCount == 2,
+				"A blocked proxy must retry the plain image through normal rotation.");
+			Require(proxy.AffinityRequests == 0 && html.RequestCount == 0,
+				"Proxy blocks must not depend on legacy affinity or a FlareSolverr reader refresh.");
+			Require(proxy.Urls.All(url => url == plainUrl) && proxy.DisposedCount == 1,
+				"Recovery must keep the valid image URL and release the blocked response before retrying.");
+		}
+		Require(proxy.DisposedCount == 2, "Recovered image resources were not released.");
+
+		var legacy = new ProxyDownloadStub([HttpStatusCode.Forbidden, HttpStatusCode.OK]);
+		using (var result = await source.DownloadImage(legacy, legacyUrl, headers, token))
+			Require(result.Response?.StatusCode == HttpStatusCode.Forbidden && legacy.RequestCount == 1,
+				"Legacy affinity images must retain their existing forbidden-response behavior.");
+
+		var exhausted = new ProxyDownloadStub([HttpStatusCode.Forbidden]);
+		using (var result = await source.DownloadImage(exhausted, plainUrl, headers, token))
+			Require(result.Response?.StatusCode == HttpStatusCode.Forbidden && exhausted.RequestCount == 4 &&
+				exhausted.DisposedCount == 3, "Forbidden retries must stop at the existing four-attempt limit.");
+		Require(exhausted.DisposedCount == 4 && html.RequestCount == 0,
+			"Exhausted retries leaked resources or tried to refresh valid reader links.");
+
+		using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(token);
+		var interrupted = new ProxyDownloadStub([HttpStatusCode.Forbidden], cancelled.Cancel);
+		try
+		{
+			using var result = await source.DownloadImage(interrupted, plainUrl, headers, cancelled.Token);
+			throw new InvalidOperationException("Cancellation during forbidden retry backoff was ignored.");
+		}
+		catch (OperationCanceledException) when (cancelled.IsCancellationRequested)
+		{
+			Require(interrupted.RequestCount == 1 && interrupted.DisposedCount == 1,
+				"Cancelled forbidden retries must release the blocked response and stop immediately.");
+		}
+	}
 
     private static Task<ImportPage[]> Parse(string html, CancellationToken token) =>
         new ComixSource(new HtmlStub(html), NullLogger<ComixSource>.Instance).ChapterPages(ChapterUrl, token);
@@ -206,7 +256,10 @@ internal static class ComixChapterPageTests
         }
     }
 
-    private sealed class ProxyDownloadStub(HttpStatusCode?[] statuses) : RetryDownloadStub(statuses), IProxiedHttpService
+	private sealed class ProxyDownloadStub(
+		HttpStatusCode?[] statuses,
+		Action? afterRequest = null)
+		: RetryDownloadStub(statuses, afterRequest), IProxiedHttpService
     {
         public int AffinityRequests { get; private set; }
         public string? LastAffinity { get; private set; }

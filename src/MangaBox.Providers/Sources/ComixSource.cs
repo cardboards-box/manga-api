@@ -63,7 +63,8 @@ internal class ComixSource(
 		var alternatives = new Queue<string>();
 		var refreshed = false;
 		var chapterUrl = headers?.GetValueOrDefault(IDownloadService.CHAPTER_URL_HEADER);
-		var canRefresh = IsPlainComixImageUrl(url) &&
+		var plainImage = IsPlainComixImageUrl(url);
+		var canRefresh = plainImage &&
 			Uri.TryCreate(chapterUrl, UriKind.Absolute, out var chapterUri) &&
 			chapterUri.Scheme == Uri.UriSchemeHttps && chapterUri.Host.Equals("comix.to", StringComparison.OrdinalIgnoreCase) &&
 			chapterUri.AbsolutePath.StartsWith("/title/", StringComparison.Ordinal) &&
@@ -79,8 +80,11 @@ internal class ComixSource(
 				affinity,
 				token);
 			var status = result.Response?.StatusCode;
+			// Cloudflare can block one proxy IP while the same plain image works
+			// through the rest of the rotating pool. Fresh reader links do not fix it.
+			var blockedProxy = plainImage && status == HttpStatusCode.Forbidden;
 			var retryable = status is not null
-				? ShouldRetryImageResponse(status.Value) || (canRefresh && status == HttpStatusCode.NotFound)
+				? blockedProxy || ShouldRetryImageResponse(status.Value) || (canRefresh && status == HttpStatusCode.NotFound)
 				: !string.IsNullOrEmpty(result.Error);
 			if (!retryable || attempt == IMAGE_RETRY_MAX)
 				return result;
@@ -94,7 +98,7 @@ internal class ComixSource(
 				attempt,
 				IMAGE_RETRY_MAX);
 			result.Dispose();
-			if (canRefresh && !refreshed)
+			if (canRefresh && !refreshed && !blockedProxy)
 			{
 				refreshed = true;
 				try
