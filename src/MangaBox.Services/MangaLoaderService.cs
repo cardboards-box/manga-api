@@ -159,7 +159,7 @@ internal class MangaLoaderService(
 				Headers = [..page.Headers.Select(t => new MbHeader { Key = t.Name, Value = t.Value })]
 			});
 
-			if (urlChanged)
+			if (force || urlChanged)
 			{
 				var replacement = await _db.Image.Bust(id);
 				if (replacement is null)

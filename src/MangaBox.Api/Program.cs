@@ -73,6 +73,4 @@ app.UseAuthorization();
 app.MapPrometheusScrapingEndpoint();
 app.MapControllers();
 
-app.UseResponseCaching();
-
 app.Run();

@@ -386,6 +386,15 @@ internal class TestVerb(
 		_logger.LogInformation("Proxy connection failover regression checks passed");
 	}
 
+	/// <summary>Checks forced chapter refresh cache keys and queued replacement IDs without external dependencies.</summary>
+	/// <param name="token">The cancellation token for the regression checks.</param>
+	/// <returns>A task that completes after the chapter refresh checks pass.</returns>
+	public async Task TestChapterRefresh(CancellationToken token)
+	{
+		await ChapterRefreshTests.Run(token);
+		_logger.LogInformation("Chapter refresh replacement-ID regression checks passed");
+	}
+
 	public async Task TestComixProxy(CancellationToken token)
 	{
 		const string URL = "https://api.ipify.org";
