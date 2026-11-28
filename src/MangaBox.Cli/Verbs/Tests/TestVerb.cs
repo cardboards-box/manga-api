@@ -209,6 +209,32 @@ internal class TestVerb(
 		return TestSource(_nhentaiNet, URL, true, token);
 	}
 
+	/// <summary>Checks nhentai.net age confirmation and cookie recovery without database or network access.</summary>
+	/// <param name="token">The cancellation token for the regression checks.</param>
+	/// <returns>A task that completes after the age-gate checks pass.</returns>
+	public async Task TestNhentaiNetAgeGate(CancellationToken token)
+	{
+		await NhentaiAgeGateTests.Run(token);
+		_logger.LogInformation("NHentai.net age-gate regression checks passed");
+	}
+
+	/// <summary>Checks age-gate recovery against the live source without downloading images or importing records.</summary>
+	/// <param name="token">The cancellation token for metadata requests.</param>
+	/// <returns>A task that completes after gallery metadata and chapter pages load.</returns>
+	public async Task TestNhentaiNetAgeGateLive(CancellationToken token)
+	{
+		const string GALLERY_ID = "655680";
+		var manga = await _nhentaiNet.Manga(GALLERY_ID, token);
+		if (manga is null || string.IsNullOrWhiteSpace(manga.Title))
+			throw new InvalidDataException("NHentai.net did not return gallery metadata after age confirmation.");
+
+		var pages = await _nhentaiNet.ChapterPages(GALLERY_ID, GALLERY_ID, token);
+		if (pages.Length == 0)
+			throw new InvalidDataException("NHentai.net did not return chapter pages after age confirmation.");
+
+		_logger.LogInformation("NHentai.net age confirmation passed: metadata and {PageCount} page links loaded", pages.Length);
+	}
+
 	public async Task TestNhentaiNetSearch(CancellationToken token)
 	{
 		NhentaiNetQuery[] query =

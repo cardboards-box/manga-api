@@ -31,6 +31,8 @@ public sealed record NhentaiNetQuery(
 public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSource
 {
 	private const string DEFAULT_CHAPTER_TITLE = "Chapter 1";
+	private const string AGE_VERIFIED_COOKIE = "age_verified";
+	private const int AGE_GATE_ATTEMPTS = 2;
 	private static readonly ConcurrentDictionary<string, RateLimiter> _limiters = new(StringComparer.InvariantCultureIgnoreCase);
 	private static RateLimiter? _globalLimiter;
 
@@ -43,6 +45,7 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 	private readonly IDbService _db;
 	private readonly IHttpService _http;
 	private readonly IProxiedHttpService _proxy;
+	private readonly SemaphoreSlim _htmlLock = new(1, 1);
 
 	public NhentaiNetSource(
 		IDbService db,
@@ -326,16 +329,67 @@ public class NhentaiNetSource : BaseMangaSource<NhentaiNetSource>, INhentaiNetSo
 		}
 	}
 
-	public Task<FlareHtmlDocument> GetHtml(string url, CancellationToken token)
+	/// <summary>Fetches HTML with the age confirmation produced by entering the birthday 10-10-1990.</summary>
+	/// <param name="url">The nhentai.net URL to fetch.</param>
+	/// <param name="token">The cancellation token for waiting and requests.</param>
+	/// <returns>The requested HTML after the site's age gate is cleared.</returns>
+	/// <exception cref="HttpRequestException">The site continues to return its age gate after confirmation.</exception>
+	public async Task<FlareHtmlDocument> GetHtml(string url, CancellationToken token)
 	{
+		await _htmlLock.WaitAsync(token);
+		try
+		{
+			return await GetVerifiedHtml(url, token);
+		}
+		finally
+		{
+			_htmlLock.Release();
+		}
+	}
+
+	private async Task<FlareHtmlDocument> GetVerifiedHtml(string url, CancellationToken token)
+	{
+		var proxy = NextHtmlProxy();
+		for (var attempt = 0; attempt < AGE_GATE_ATTEMPTS; attempt++)
+		{
+			token.ThrowIfCancellationRequested();
+			ApplyAgeConfirmation();
+			var document = await _api.GetHtml(url, token, false, proxy);
+			if (document.DocumentNode.SelectSingleNode("//input[@id='age-year']") is null)
+				return document;
+		}
+
+		throw new HttpRequestException($"NHentai.net did not accept the age confirmation for {url}.");
+	}
+
+	private void ApplyAgeConfirmation()
+	{
+		// The form validates 10-10-1990 locally and sets this cookie; no birthday
+		// is posted. Reapply it because FlareSolver retries may clear its cookies.
+		_api.SetCookie(AGE_VERIFIED_COOKIE, "1");
+		var cookie = _api.Cookies.First(cookie => cookie.Name == AGE_VERIFIED_COOKIE);
+		cookie.Domain = "nhentai.net";
+		cookie.Path = "/";
+		cookie.Secure = true;
+		cookie.SameSite = "Lax";
+		cookie.Expires = DateTimeOffset.UtcNow.AddYears(1).ToUnixTimeSeconds();
+	}
+
+	private SolverProxy? NextHtmlProxy()
+	{
+		if (!UseProxy)
+			return null;
+
 		var urls = _proxy.GetConfig().Urls;
+		if (urls.Length == 0)
+			throw new InvalidOperationException("NHentai.net HTML proxying is enabled, but no proxies are configured.");
+
 		var next = Interlocked.Increment(ref _proxyIndex);
 		if (next < 0)
 			next = Interlocked.Exchange(ref _proxyIndex, 0);
 
 		next %= urls.Length;
-		var proxy = UseProxy ? new SolverProxy { Url = urls[next] } : null;
-		return _api.GetHtml(url, token, false, proxy);
+		return new SolverProxy { Url = urls[next] };
 	}
 
 	private string[] IndexQueries()
